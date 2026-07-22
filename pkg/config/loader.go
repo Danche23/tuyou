@@ -2,21 +2,16 @@ package config
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/spf13/viper"
-	"log"
+	"os"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 var globalConfig *Config
 
 // Load 加载配置文件
 func Load(configPath string) (*Config, error) {
-
-	//加载.env文件
-	if err := godotenv.Load(".env"); err != nil {
-		log.Println("Warning: .env file not found, using environment variables")
-	}
 	v := viper.New()
 
 	// 设置配置文件路径
@@ -43,6 +38,17 @@ func Load(configPath string) (*Config, error) {
 	config := &Config{}
 	if err := v.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	// 从环境变量覆盖敏感配置
+	if val := os.Getenv("MYSQL_PASSWORD"); val != "" {
+		config.Database.MySQL.Password = val
+	}
+	if val := os.Getenv("REDIS_PASSWORD"); val != "" {
+		config.Database.Redis.Password = val
+	}
+	if val := os.Getenv("JWT_SECRET"); val != "" {
+		config.JWT.Secret = val
 	}
 
 	globalConfig = config

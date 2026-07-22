@@ -13,8 +13,6 @@ import (
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
-	"tuyou/pkg/websocket"
-
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -28,7 +26,6 @@ type App struct {
 	redis   *redis.Client
 	router  *api.Router
 	server  *http.Server
-	wsPool  *websocket.ConnectionPool
 }
 
 // NewApp 创建应用实例
@@ -127,8 +124,6 @@ func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
 	// userRepo := repository.NewUserRepository(a.mysqlDB)
 
-	// ========== 创建 WebSocket 连接池 ==========
-	a.wsPool = websocket.NewConnectionPool()
 
 	// ========== 创建 Service ==========
 	// userSvc := service.NewUserService(userRepo)
@@ -191,11 +186,6 @@ func (a *App) gracefulShutdown() {
 	// 关闭 HTTP 服务器
 	if err := a.server.Shutdown(ctx); err != nil {
 		logger.Error("服务器关闭失败", zap.Error(err))
-	}
-
-	// 关闭 WebSocket 连接池
-	if a.wsPool != nil {
-		a.wsPool.CloseAll()
 	}
 
 	// 关闭路由连接
