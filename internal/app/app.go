@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tuyou/internal/api"
+	"tuyou/internal/model/entity"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -100,14 +101,44 @@ func (a *App) initDatabase() error {
 
 	// 自动迁移数据库表
 	logger.Info("开始数据库迁移...")
-	// ========== 在这里添加你的 Entity ==========
-	// if err := a.mysqlDB.AutoMigrate(
-	//     &entity.User{},
-	// ); err != nil {
-	//     logger.Warn("数据库迁移警告", zap.Error(err))
-	// } else {
-	//     logger.Info("数据库迁移完成")
-	// }
+	if err := a.mysqlDB.AutoMigrate(
+		// 用户模块（2张）
+		&entity.Member{},
+		&entity.SysAdmin{},
+		// 权限模块（5张）
+		&entity.SysRole{},
+		&entity.SysMenu{},
+		&entity.SysPermission{},
+		&entity.SysRoleMenu{},
+		&entity.SysRolePerm{},
+		// 活动模块（2张）
+		&entity.Activity{},
+		&entity.ActivityJoin{},
+		// 内容模块（11张）
+		&entity.Note{},
+		&entity.Strategy{},
+		&entity.Tag{},
+		&entity.NoteTag{},
+		&entity.StrategyTag{},
+		&entity.NoteLike{},
+		&entity.NoteCollect{},
+		&entity.StrategyLike{},
+		&entity.StrategyCollect{},
+		&entity.NoteImage{},
+		&entity.StrategyImage{},
+		// 消息通知模块（3张）
+		&entity.MsgTemplate{},
+		&entity.MsgInfo{},
+		&entity.MsgUserRecord{},
+		// 社交模块（3张）
+		&entity.Comment{},
+		&entity.CommentLike{},
+		&entity.Follow{},
+	); err != nil {
+		logger.Warn("数据库迁移警告", zap.Error(err))
+	} else {
+		logger.Info("数据库迁移完成")
+	}
 
 	// 初始化 Redis（可选，失败不影响核心功能）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
