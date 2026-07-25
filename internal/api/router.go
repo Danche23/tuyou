@@ -1,6 +1,7 @@
 package api
 
 import (
+	"tuyou/internal/api/v1/note"
 	"tuyou/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -8,20 +9,13 @@ import (
 
 // Router 路由
 type Router struct {
-	// ========== 在这里添加你的 Controller 字段 ==========
-	// userCtrl  *user.Controller
-	// authCtrl  *auth.Controller
+	noteCtrl *note.Controller
 }
 
 // NewRouter 创建路由
-func NewRouter(
-// ========== 在这里添加你的 Service 参数（依赖注入） ==========
-// userService service.UserService,
-// authService service.AuthService,
-) *Router {
+func NewRouter(noteCtrl *note.Controller) *Router {
 	return &Router{
-		// userCtrl: user.NewController(userService),
-		// authCtrl: auth.NewController(authService),
+		noteCtrl: noteCtrl,
 	}
 }
 
@@ -44,10 +38,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	// API 路由组
 	apiGroup := engine.Group("/api")
 	{
-		_ = apiGroup
-		// ========== 在这里注册你的路由 ==========
-		// r.authCtrl.RegisterRoutes(apiGroup)
-		// r.userCtrl.RegisterRoutes(apiGroup)
+		r.noteCtrl.RegisterRoutes(apiGroup)
 	}
 }
 

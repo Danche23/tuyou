@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"tuyou/internal/api"
+	"tuyou/internal/api/v1/note"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
+	"tuyou/internal/service"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -153,14 +156,16 @@ func (a *App) initDatabase() error {
 // initDependencies 初始化依赖注入
 func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
-	// userRepo := repository.NewUserRepository(a.mysqlDB)
-
+	noteRepo := repository.NewNoteRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	// userSvc := service.NewUserService(userRepo)
+	noteSvc := service.NewNoteService(noteRepo, a.mysqlDB)
+
+	// ========== 创建 Controller ==========
+	noteCtrl := note.NewController(noteSvc)
 
 	// ========== 创建 Router ==========
-	// a.router = api.NewRouter(userSvc, authSvc)
+	a.router = api.NewRouter(noteCtrl)
 }
 
 // initRouter 初始化路由
