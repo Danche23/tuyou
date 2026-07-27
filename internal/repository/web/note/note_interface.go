@@ -1,7 +1,7 @@
-package repository
+package note
 
 import (
-	"tuyou/internal/model/dto/response"
+	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
@@ -22,7 +22,7 @@ type NoteRepository interface {
 	CreateNoteImages(tx *gorm.DB, noteID uint, imageURLs []string) error
 
 	// GetAuthor 获取作者简要信息
-	GetAuthor(memberID uint) (*response.AuthorInfo, error)
+	GetAuthor(memberID uint) (*responseNote.AuthorInfo, error)
 
 	// IncrPublishCount 发布计数 +1
 	IncrPublishCount(tx *gorm.DB, memberID uint) error

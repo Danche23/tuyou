@@ -1,7 +1,7 @@
-package repository
+package note
 
 import (
-	"tuyou/internal/model/dto/response"
+	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
@@ -56,12 +56,12 @@ func (r *noteRepository) CreateNoteImages(tx *gorm.DB, noteID uint, imageURLs []
 }
 
 // GetAuthor 获取作者简要信息
-func (r *noteRepository) GetAuthor(memberID uint) (*response.AuthorInfo, error) {
+func (r *noteRepository) GetAuthor(memberID uint) (*responseNote.AuthorInfo, error) {
 	var member entity.Member
 	if err := r.db.First(&member, memberID).Error; err != nil {
 		return nil, err
 	}
-	return &response.AuthorInfo{
+	return &responseNote.AuthorInfo{
 		ID:       member.ID,
 		Nickname: member.Nickname,
 		Avatar:   member.Avatar,

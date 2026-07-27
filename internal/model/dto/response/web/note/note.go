@@ -1,4 +1,4 @@
-package response
+package note
 
 // AuthorInfo 作者简要信息
 type AuthorInfo struct {
@@ -7,8 +7,8 @@ type AuthorInfo struct {
 	Avatar   string `json:"avatar"`
 }
 
-// NoteResponse 笔记响应
-type NoteResponse struct {
+// CreateNoteResponse 发布笔记响应
+type CreateNoteResponse struct {
 	ID           uint        `json:"id"`
 	Type         string      `json:"type"`
 	Author       *AuthorInfo `json:"author"`

@@ -9,18 +9,18 @@ import (
 	"syscall"
 	"time"
 
-	"tuyou/internal/api"
-	"tuyou/internal/api/v1/note"
-	"tuyou/internal/model/entity"
-	"tuyou/internal/repository"
-	"tuyou/internal/service"
-	"tuyou/pkg/config"
-	"tuyou/pkg/database"
-	"tuyou/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"tuyou/internal/api"
+	"tuyou/internal/api/v1/web/note"
+	"tuyou/internal/model/entity"
+	repoNote "tuyou/internal/repository/web/note"
+	serviceNote "tuyou/internal/service/web/note"
+	"tuyou/pkg/config"
+	"tuyou/pkg/database"
+	"tuyou/pkg/logger"
 )
 
 // App 应用结构体
@@ -156,10 +156,10 @@ func (a *App) initDatabase() error {
 // initDependencies 初始化依赖注入
 func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
-	noteRepo := repository.NewNoteRepository(a.mysqlDB)
+	noteRepo := repoNote.NewNoteRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	noteSvc := service.NewNoteService(noteRepo, a.mysqlDB)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 
 	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)

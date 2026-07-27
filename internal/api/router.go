@@ -1,7 +1,7 @@
 package api
 
 import (
-	"tuyou/internal/api/v1/note"
+	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -36,7 +36,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	})
 
 	// API 路由组
-	apiGroup := engine.Group("/api")
+	apiGroup := engine.Group("/api/v1")
 	{
 		r.noteCtrl.RegisterRoutes(apiGroup)
 	}

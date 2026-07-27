@@ -1,4 +1,4 @@
-package request
+package note
 
 // CreateNoteRequest 发布笔记请求
 type CreateNoteRequest struct {

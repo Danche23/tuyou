@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"tuyou/internal/middleware"
-	"tuyou/internal/model/dto/request"
-	"tuyou/internal/service"
+	requestNote "tuyou/internal/model/dto/request/web/note"
+	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -13,11 +13,11 @@ import (
 
 // Controller 笔记控制器
 type Controller struct {
-	noteSvc service.NoteService
+	noteSvc serviceNote.NoteService
 }
 
 // NewController 创建控制器实例
-func NewController(noteSvc service.NoteService) *Controller {
+func NewController(noteSvc serviceNote.NoteService) *Controller {
 	return &Controller{noteSvc: noteSvc}
 }
 
@@ -30,7 +30,7 @@ func (c *Controller) Create(ctx *gin.Context) {
 		return
 	}
 
-	var req request.CreateNoteRequest
+	var req requestNote.CreateNoteRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.Error(ctx, http.StatusBadRequest, "参数校验失败: "+err.Error())
 		return

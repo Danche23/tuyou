@@ -1,29 +1,29 @@
-package service
+package note
 
 import (
 	"time"
 
-	"tuyou/internal/model/dto/request"
-	"tuyou/internal/model/dto/response"
+	requestNote "tuyou/internal/model/dto/request/web/note"
+	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
-	"tuyou/internal/repository"
+	repoNote "tuyou/internal/repository/web/note"
 	"tuyou/pkg/errors"
 
 	"gorm.io/gorm"
 )
 
 type noteService struct {
-	noteRepo repository.NoteRepository
+	noteRepo repoNote.NoteRepository
 	db       *gorm.DB
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repository.NoteRepository, db *gorm.DB) NoteService {
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB) NoteService {
 	return &noteService{noteRepo: noteRepo, db: db}
 }
 
 // Create 发布笔记
-func (s *noteService) Create(memberID uint, req *request.CreateNoteRequest) (*response.NoteResponse, error) {
+func (s *noteService) Create(memberID uint, req *requestNote.CreateNoteRequest) (*responseNote.CreateNoteResponse, error) {
 	// ========== 输入校验（事务外，快失败） ==========
 
 	// 校验图片/视频互斥
@@ -95,7 +95,7 @@ func (s *noteService) Create(memberID uint, req *request.CreateNoteRequest) (*re
 	if len(req.Images) > 0 {
 		coverImg = req.Images[0]
 	}
-	return &response.NoteResponse{
+	return &responseNote.CreateNoteResponse{
 		ID:           note.ID,
 		Type:         "note",
 		Author:       author,
