@@ -1,9 +1,5 @@
 package response
 
-import (
-	"tuyou/internal/model/entity"
-)
-
 // AuthorInfo 作者简要信息
 type AuthorInfo struct {
 	ID       uint   `json:"id"`
@@ -31,32 +27,4 @@ type NoteResponse struct {
 	Tags         []string    `json:"tags"`
 	Status       int         `json:"status"`
 	PublishTime  string      `json:"publishTime"`
-}
-
-// ToNoteResponse 组装 NoteResponse
-func ToNoteResponse(note *entity.Note, author *AuthorInfo, tags []string, images []string) *NoteResponse {
-	coverImg := ""
-	if len(images) > 0 {
-		coverImg = images[0]
-	}
-	return &NoteResponse{
-		ID:           note.ID,
-		Type:         "note",
-		Author:       author,
-		Title:        note.Title,
-		CoverImg:     coverImg,
-		Images:       images,
-		VideoURL:     note.VideoURL,
-		Content:      note.Content,
-		ViewCount:    note.ViewCount,
-		LikeCount:    note.LikeCount,
-		CollectCount: note.CollectCount,
-		CommentCount: note.CommentCount,
-		IsLiked:      false,
-		IsFavorited:  false,
-		Category:     note.Category,
-		Tags:         tags,
-		Status:       note.Status,
-		PublishTime:  note.PublishTime.Format("2006-01-02 15:04:05"),
-	}
 }

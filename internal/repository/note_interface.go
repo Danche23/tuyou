@@ -12,8 +12,8 @@ type NoteRepository interface {
 	// Create 创建笔记
 	Create(tx *gorm.DB, note *entity.Note) error
 
-	// FindOrCreateTags 根据标签名查找或创建标签
-	FindOrCreateTags(tx *gorm.DB, tagNames []string) ([]entity.Tag, error)
+	// FindTags 根据标签名查找
+	FindTags(tx *gorm.DB, tagNames []string) ([]entity.Tag, error)
 
 	// CreateNoteTags 批量创建笔记-标签关联
 	CreateNoteTags(tx *gorm.DB, noteID uint, tagIDs []uint) error

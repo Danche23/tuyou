@@ -21,21 +21,11 @@ func (r *noteRepository) Create(tx *gorm.DB, note *entity.Note) error {
 	return tx.Create(note).Error
 }
 
-// FindOrCreateTags 根据标签名查找或创建标签
-func (r *noteRepository) FindOrCreateTags(tx *gorm.DB, tagNames []string) ([]entity.Tag, error) {
-	tags := make([]entity.Tag, 0, len(tagNames))
-	for _, name := range tagNames {
-		var tag entity.Tag
-		err := tx.Where("tag_name = ?", name).First(&tag).Error
-		if err == gorm.ErrRecordNotFound {
-			tag = entity.Tag{TagName: name, Status: 1}
-			if err := tx.Create(&tag).Error; err != nil {
-				return nil, err
-			}
-		} else if err != nil {
-			return nil, err
-		}
-		tags = append(tags, tag)
+// FindTags 根据标签名查找
+func (r *noteRepository) FindTags(tx *gorm.DB, tagNames []string) ([]entity.Tag, error) {
+	var tags []entity.Tag
+	if err := tx.Where("tag_name IN ? AND status = 1", tagNames).Find(&tags).Error; err != nil {
+		return nil, err
 	}
 	return tags, nil
 }
