@@ -1,29 +1,34 @@
 package note
 
 import (
+	"context"
+	"strconv"
 	"time"
 
 	requestNote "tuyou/internal/model/dto/request/web/note"
 	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	repoNote "tuyou/internal/repository/web/note"
+	"tuyou/internal/stream"
 	"tuyou/pkg/errors"
 
 	"gorm.io/gorm"
 )
 
 type noteService struct {
-	noteRepo repoNote.NoteRepository
-	db       *gorm.DB
+	noteRepo  repoNote.NoteRepository
+	db        *gorm.DB
+	redisRepo repository.RedisRepository
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db}
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, redisRepo repository.RedisRepository) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, redisRepo: redisRepo}
 }
 
-// Create 发布笔记
-func (s *noteService) Create(memberID uint, req *requestNote.CreateNoteRequest) (*responseNote.CreateNoteResponse, error) {
+// CreateNote 发布笔记
+func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteRequest) (*responseNote.CreateNoteResponse, error) {
 	// ========== 输入校验（事务外，快失败） ==========
 
 	// 校验图片/视频互斥
@@ -86,9 +91,15 @@ func (s *noteService) Create(memberID uint, req *requestNote.CreateNoteRequest) 
 
 	// ========== 组装响应（事务外，避免长事务） ==========
 
-	author, err := s.noteRepo.GetAuthor(memberID)
+	member, err := s.noteRepo.GetAuthor(memberID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取作者信息失败", err)
+	}
+
+	authorInfo := &responseNote.AuthorInfo{
+		ID:       strconv.FormatUint(uint64(member.ID), 10),
+		Nickname: member.Nickname,
+		Avatar:   member.Avatar,
 	}
 
 	coverImg := ""
@@ -96,9 +107,9 @@ func (s *noteService) Create(memberID uint, req *requestNote.CreateNoteRequest) 
 		coverImg = req.Images[0]
 	}
 	return &responseNote.CreateNoteResponse{
-		ID:           note.ID,
+		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
-		Author:       author,
+		Author:       authorInfo,
 		Title:        note.Title,
 		CoverImg:     coverImg,
 		Images:       req.Images,
@@ -112,6 +123,109 @@ func (s *noteService) Create(memberID uint, req *requestNote.CreateNoteRequest) 
 		IsFavorited:  false,
 		Category:     note.Category,
 		Tags:         req.Tags,
+		Status:       note.Status,
+		PublishTime:  note.PublishTime.Format("2006-01-02 15:04:05"),
+	}, nil
+}
+
+// GetNoteDetail 获取笔记详情
+func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.NoteDetailResponse, error) {
+	// 1. 查笔记主表
+	note, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeNotFound, "笔记不存在", err)
+	}
+
+	// 2. 非作者本人，浏览量 +1（优先 Redis Stream，失败降级直写 DB）
+	if note.MemberID != memberID {
+		msg := map[string]interface{}{
+			"type": "note",
+			"id":   noteID,
+		}
+		if err := s.redisRepo.XAdd(context.Background(), stream.ViewStreamKey, msg); err != nil {
+			// 降级：Redis 不可用 → 直写 DB
+			_ = s.noteRepo.IncrViewCount(noteID)
+		}
+		note.ViewCount++ // 当前响应立即 +1
+	}
+
+	// 3. 查作者
+	member, err := s.noteRepo.GetAuthor(note.MemberID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取作者信息失败", err)
+	}
+	authorInfo := &responseNote.AuthorInfo{
+		ID:       strconv.FormatUint(uint64(member.ID), 10),
+		Nickname: member.Nickname,
+		Avatar:   member.Avatar,
+	}
+
+	// 4. 查图片
+	noteImages, err := s.noteRepo.FindImagesByNoteID(noteID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询图片失败", err)
+	}
+	images := make([]string, 0, len(noteImages))
+	for _, img := range noteImages {
+		images = append(images, img.URL)
+	}
+
+	// 5. 查标签
+	tags, err := s.noteRepo.FindTagsByNoteID(noteID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询标签失败", err)
+	}
+	tagNames := make([]string, 0, len(tags))
+	for _, t := range tags {
+		tagNames = append(tagNames, t.TagName)
+	}
+
+	// 6. 是否已点赞
+	isLiked, err := s.noteRepo.ExistsLike(noteID, memberID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
+	}
+
+	// 7. 是否已收藏
+	isFavorited, err := s.noteRepo.ExistsCollect(noteID, memberID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
+	}
+
+	// 8. 是否关注作者（自己不能关注自己）
+	isFollowed := false
+	if note.MemberID != memberID {
+		isFollowed, err = s.noteRepo.ExistsFollow(memberID, note.MemberID)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询关注状态失败", err)
+		}
+	}
+
+	// 9. 封面图
+	coverImg := ""
+	if len(images) > 0 {
+		coverImg = images[0]
+	}
+
+	// 10. 组装响应
+	return &responseNote.NoteDetailResponse{
+		ID:           strconv.FormatUint(uint64(note.ID), 10),
+		Type:         "note",
+		Author:       authorInfo,
+		IsFollowed:   isFollowed,
+		Title:        note.Title,
+		CoverImg:     coverImg,
+		Images:       images,
+		VideoURL:     note.VideoURL,
+		Content:      note.Content,
+		ViewCount:    note.ViewCount,
+		LikeCount:    note.LikeCount,
+		CollectCount: note.CollectCount,
+		CommentCount: note.CommentCount,
+		IsLiked:      isLiked,
+		IsFavorited:  isFavorited,
+		Category:     note.Category,
+		Tags:         tagNames,
 		Status:       note.Status,
 		PublishTime:  note.PublishTime.Format("2006-01-02 15:04:05"),
 	}, nil
