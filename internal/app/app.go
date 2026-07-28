@@ -16,7 +16,9 @@ import (
 	"tuyou/internal/api"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	repoNote "tuyou/internal/repository/web/note"
+	"tuyou/internal/stream"
 	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
@@ -28,8 +30,9 @@ type App struct {
 	cfg     *config.Config
 	mysqlDB *gorm.DB
 	redis   *redis.Client
-	router  *api.Router
-	server  *http.Server
+	router   *api.Router
+	server   *http.Server
+	consumer *stream.ViewConsumer
 }
 
 // NewApp 创建应用实例
@@ -155,17 +158,24 @@ func (a *App) initDatabase() error {
 
 // initDependencies 初始化依赖注入
 func (a *App) initDependencies() {
+	// ========== 创建 Redis 仓储 ==========
+	redisRepo := repository.NewRedisRepository(a.redis)
+
 	// ========== 创建 Repository ==========
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, redisRepo)
 
 	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)
 
 	// ========== 创建 Router ==========
 	a.router = api.NewRouter(noteCtrl)
+
+	// ========== 启动浏览量消费者 ==========
+	a.consumer = stream.NewViewConsumer(redisRepo, a.mysqlDB)
+	a.consumer.Start()
 }
 
 // initRouter 初始化路由
@@ -222,6 +232,11 @@ func (a *App) gracefulShutdown() {
 	// 关闭 HTTP 服务器
 	if err := a.server.Shutdown(ctx); err != nil {
 		logger.Error("服务器关闭失败", zap.Error(err))
+	}
+
+	// 停止后台消费者（在关闭 DB/Redis 之前）
+	if a.consumer != nil {
+		a.consumer.Stop()
 	}
 
 	// 关闭路由连接
