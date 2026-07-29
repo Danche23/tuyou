@@ -2,6 +2,7 @@ package note
 
 import (
 	"net/http"
+	"strconv"
 
 	"tuyou/internal/middleware"
 	requestNote "tuyou/internal/model/dto/request/web/note"
@@ -36,7 +37,31 @@ func (c *Controller) Create(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := c.noteSvc.Create(memberID, &req)
+	resp, err := c.noteSvc.CreateNote(memberID, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// GetNoteDetail 笔记详情
+// GET /api/v1/notes/:id
+func (c *Controller) GetNoteDetail(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	noteID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.Error(ctx, http.StatusBadRequest, "参数错误: id格式不正确")
+		return
+	}
+
+	resp, err := c.noteSvc.GetNoteDetail(uint(noteID), memberID)
 	if err != nil {
 		response.BizError(ctx, err)
 		return

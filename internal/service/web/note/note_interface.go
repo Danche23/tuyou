@@ -7,6 +7,9 @@ import (
 
 // NoteService 笔记服务接口
 type NoteService interface {
-	// Create 发布笔记
-	Create(memberID uint, req *requestNote.CreateNoteRequest) (*responseNote.CreateNoteResponse, error)
+	// CreateNote 发布笔记
+	CreateNote(memberID uint, req *requestNote.CreateNoteRequest) (*responseNote.CreateNoteResponse, error)
+
+	// GetNoteDetail 获取笔记详情
+	GetNoteDetail(noteID uint, memberID uint) (*responseNote.NoteDetailResponse, error)
 }

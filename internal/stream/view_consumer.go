@@ -19,7 +19,7 @@ import (
 const (
 	ViewStreamKey     = "stream:view_counts"
 	ViewConsumerGroup = "cg:view_counts"
-	ViewConsumerName  = "consumer:view_counts"
+	ViewConsumerName  = "consumer:counts"
 	ViewBatchMaxSize  = 50
 	ViewBatchInterval = 5 * time.Second
 	ViewStreamMaxLen  = 10000

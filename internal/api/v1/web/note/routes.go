@@ -12,5 +12,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	notes.Use(middleware.Auth())
 	{
 		notes.POST("", c.Create)
+		notes.GET("/:id", c.GetNoteDetail)
 	}
 }
