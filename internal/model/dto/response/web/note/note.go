@@ -57,3 +57,8 @@ type LikeToggleResponse struct {
 	IsLiked   bool  `json:"isLiked"`
 	LikeCount int64 `json:"likeCount"`
 }
+
+// CollectToggleResponse 笔记收藏/未收藏响应
+type CollectToggleResponse struct {
+	IsFavorited bool `json:"isFavorited"`
+}

@@ -94,3 +94,28 @@ func (c *Controller) ToggleLike(ctx *gin.Context) {
 
 	response.Success(ctx, resp)
 }
+
+// ToggleCollect 收藏/取消收藏
+// POST /api/v1/notes/:id/favorite
+func (c *Controller) ToggleCollect(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	noteID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.Error(ctx, http.StatusBadRequest, "参数错误: id格式不正确")
+		return
+	}
+
+	resp, err := c.noteSvc.ToggleCollectNote(uint(noteID), memberID)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, resp)
+}

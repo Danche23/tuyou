@@ -15,4 +15,7 @@ type NoteService interface {
 
 	// ToggleLikeNote 点赞/取消点赞
 	ToggleLikeNote(noteID uint, memberID uint) (*responseNote.LikeToggleResponse, error)
+
+	// ToggleCollectNote 收藏/取消收藏
+	ToggleCollectNote(noteID uint, memberID uint) (*responseNote.CollectToggleResponse, error)
 }

@@ -199,10 +199,19 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		}
 	}
 
-	//7.收藏数
-	isFavorited, err := s.noteRepo.ExistsCollect(noteID, memberID)
+	// 7. 是否已收藏（Redis 优先，失败查 MySQL 并回填）
+	collectKey := fmt.Sprintf("note:collects:%d", noteID)
+	var isFavorited bool
+	isFavorited, err = s.redisRepo.SIsMember(ctx, collectKey, memberID)
 	if err != nil {
-		return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
+		isFavorited, err = s.noteRepo.ExistsCollect(noteID, memberID)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
+		}
+		// 回填 Redis
+		if isFavorited {
+			_ = s.redisRepo.SAdd(ctx, collectKey, memberID)
+		}
 	}
 
 	// 8. 是否关注（自己不能关注自己）
@@ -320,5 +329,65 @@ func (s *noteService) ToggleLikeNote(noteID uint, memberID uint) (*responseNote.
 	return &responseNote.LikeToggleResponse{
 		IsLiked:   !liked,
 		LikeCount: likeCount,
+	}, nil
+}
+
+// ToggleCollectNote 收藏/取消收藏（MySQL 最终存储 + Redis 缓存）
+func (s *noteService) ToggleCollectNote(noteID uint, memberID uint) (*responseNote.CollectToggleResponse, error) {
+	ctx := context.Background()
+
+	// 查询笔记是否存在
+	_, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeNotFound, "笔记不存在", err)
+	}
+
+	key := fmt.Sprintf("note:collects:%d", noteID)
+
+	// Redis 判断收藏状态
+	favorite, err := s.redisRepo.SIsMember(ctx, key, memberID)
+	if err != nil {
+		// Redis异常，降级MySQL
+		favorite, err = s.noteRepo.ExistsCollect(noteID, memberID)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
+		}
+		// 回填Redis
+		if favorite {
+			_ = s.redisRepo.SAdd(ctx, key, memberID)
+		}
+	}
+
+	// MySQL事务（note_collect + collect_count）
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if favorite {
+			if err := s.noteRepo.DeleteCollect(tx, noteID, memberID); err != nil {
+				return err
+			}
+			return s.noteRepo.DecrCollectCount(tx, noteID)
+		}
+		if err := s.noteRepo.CreateCollect(tx, noteID, memberID); err != nil {
+			return err
+		}
+		return s.noteRepo.IncrCollectCount(tx, noteID)
+	})
+	if err != nil {
+		logger.Errorf("收藏事务失败 noteID=%d memberID=%d err=%v", noteID, memberID, err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "收藏操作失败", err)
+	}
+
+	// 同步 Redis 缓存
+	if favorite {
+		if err := s.redisRepo.SRem(ctx, key, memberID); err != nil {
+			logger.Errorf("同步 Redis 缓存失败（取消收藏）: %v", err)
+		}
+	} else {
+		if err := s.redisRepo.SAdd(ctx, key, memberID); err != nil {
+			logger.Errorf("同步 Redis 缓存失败（收藏）: %v", err)
+		}
+	}
+
+	return &responseNote.CollectToggleResponse{
+		IsFavorited: !favorite,
 	}, nil
 }

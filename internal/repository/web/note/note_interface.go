@@ -40,10 +40,17 @@ type NoteRepository interface {
 
 	// ExistsCollect 检查用户是否已收藏该笔记
 	ExistsCollect(noteID uint, memberID uint) (bool, error)
+
 	// CreateCollect 创建收藏记录
 	CreateCollect(tx *gorm.DB, noteID uint, memberID uint) error
+
 	// DeleteCollect 删除收藏记录（硬删除）
 	DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error
+	// IncrCollectCount 笔记收藏数 +1
+	IncrCollectCount(tx *gorm.DB, noteID uint) error
+
+	// DecrCollectCount 笔记收藏数 -1
+	DecrCollectCount(tx *gorm.DB, noteID uint) error
 
 	// ExistsFollow 检查用户是否已关注该作者
 	ExistsFollow(followerID uint, followeeID uint) (bool, error)

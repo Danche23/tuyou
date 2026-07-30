@@ -123,6 +123,28 @@ func (r *noteRepository) ExistsCollect(noteID uint, memberID uint) (bool, error)
 	return count > 0, nil
 }
 
+// CreateCollect 创建收藏记录
+func (r *noteRepository) CreateCollect(tx *gorm.DB, noteID uint, memberID uint) error {
+	return tx.Create(&entity.NoteCollect{NoteID: noteID, MemberID: memberID}).Error
+}
+
+// DeleteCollect 硬删除收藏记录
+func (r *noteRepository) DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error {
+	return tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteCollect{}).Error
+}
+
+// IncrCollectCount 笔记收藏数 +1
+func (r *noteRepository) IncrCollectCount(tx *gorm.DB, noteID uint) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("collect_count", gorm.Expr("collect_count + 1")).Error
+}
+
+// DecrCollectCount 笔记收藏数 -1
+func (r *noteRepository) DecrCollectCount(tx *gorm.DB, noteID uint) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error
+}
+
 // ExistsFollow 检查当前用户是否已关注该作者
 func (r *noteRepository) ExistsFollow(followerID uint, followeeID uint) (bool, error) {
 	var count int64
