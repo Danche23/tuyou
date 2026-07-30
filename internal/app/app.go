@@ -32,7 +32,7 @@ type App struct {
 	redis   *redis.Client
 	router   *api.Router
 	server   *http.Server
-	consumer *stream.ViewConsumer
+	consumer *stream.Consumer
 }
 
 // NewApp 创建应用实例
@@ -174,7 +174,7 @@ func (a *App) initDependencies() {
 	a.router = api.NewRouter(noteCtrl)
 
 	// ========== 启动浏览量消费者 ==========
-	a.consumer = stream.NewViewConsumer(redisRepo, a.mysqlDB)
+	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
 	a.consumer.Start()
 }
 

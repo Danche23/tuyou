@@ -28,4 +28,9 @@ type RedisRepository interface {
 	XAck(ctx context.Context, stream, group string, ids ...string) error
 	// XTrimMaxLen 截断 Stream 到指定最大长度（非精确修剪）
 	XTrimMaxLen(ctx context.Context, stream string, maxLen int64) error
+
+	// SAdd Set 操作（点赞/收藏成员集合）
+	SAdd(ctx context.Context, key string, members ...interface{}) error
+	SRem(ctx context.Context, key string, members ...interface{}) error
+	SIsMember(ctx context.Context, key string, member interface{}) (bool, error)
 }

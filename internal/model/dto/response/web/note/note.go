@@ -51,3 +51,9 @@ type NoteDetailResponse struct {
 	Status       int         `json:"status"`
 	PublishTime  string      `json:"publishTime"`
 }
+
+// LikeToggleResponse 笔记点赞/未点赞响应
+type LikeToggleResponse struct {
+	IsLiked   bool  `json:"isLiked"`
+	LikeCount int64 `json:"likeCount"`
+}

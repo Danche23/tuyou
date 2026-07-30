@@ -105,3 +105,25 @@ func (r *redisRepository) XTrimMaxLen(ctx context.Context, stream string, maxLen
 	}
 	return r.redis.XTrimMaxLen(ctx, stream, maxLen).Err()
 }
+
+func (r *redisRepository) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	if r.redis == nil {
+		return redis.Nil
+	}
+	return r.redis.SAdd(ctx, key, members...).Err()
+}
+
+func (r *redisRepository) SRem(ctx context.Context, key string, members ...interface{}) error {
+	if r.redis == nil {
+		return redis.Nil
+	}
+	return r.redis.SRem(ctx, key, members...).Err()
+}
+
+func (r *redisRepository) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
+	if r.redis == nil {
+		return false, redis.Nil
+	}
+	return r.redis.SIsMember(ctx, key, member).Result()
+}
+

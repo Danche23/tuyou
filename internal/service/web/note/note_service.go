@@ -2,6 +2,7 @@ package note
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	repoNote "tuyou/internal/repository/web/note"
 	"tuyou/internal/stream"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/logger"
 
 	"gorm.io/gorm"
 )
@@ -130,6 +132,8 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 
 // GetNoteDetail 获取笔记详情
 func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.NoteDetailResponse, error) {
+	ctx := context.Background()
+
 	// 1. 查笔记主表
 	note, err := s.noteRepo.FindByID(noteID)
 	if err != nil {
@@ -142,7 +146,7 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 			"type": "note",
 			"id":   noteID,
 		}
-		if err := s.redisRepo.XAdd(context.Background(), stream.ViewStreamKey, msg); err != nil {
+		if err := s.redisRepo.XAdd(ctx, stream.StreamKey, msg); err != nil {
 			// 降级：Redis 不可用 → 直写 DB
 			_ = s.noteRepo.IncrViewCount(noteID)
 		}
@@ -180,19 +184,28 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		tagNames = append(tagNames, t.TagName)
 	}
 
-	// 6. 是否已点赞
-	isLiked, err := s.noteRepo.ExistsLike(noteID, memberID)
+	// 6. 是否已点赞（Redis 优先，失败查 MySQL 并回填）
+	key := fmt.Sprintf("note:likes:%d", noteID)
+	var isLiked bool
+	isLiked, err = s.redisRepo.SIsMember(ctx, key, memberID)
 	if err != nil {
-		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
+		isLiked, err = s.noteRepo.ExistsLike(noteID, memberID)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
+		}
+		// 回填 Redis
+		if isLiked {
+			_ = s.redisRepo.SAdd(ctx, key, memberID)
+		}
 	}
 
-	// 7. 是否已收藏
+	//7.收藏数
 	isFavorited, err := s.noteRepo.ExistsCollect(noteID, memberID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
 	}
 
-	// 8. 是否关注作者（自己不能关注自己）
+	// 8. 是否关注（自己不能关注自己）
 	isFollowed := false
 	if note.MemberID != memberID {
 		isFollowed, err = s.noteRepo.ExistsFollow(memberID, note.MemberID)
@@ -228,5 +241,84 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		Tags:         tagNames,
 		Status:       note.Status,
 		PublishTime:  note.PublishTime.Format("2006-01-02 15:04:05"),
+	}, nil
+}
+
+// ToggleLikeNote 点赞/取消点赞（MySQL 最终存储 + Redis 缓存）
+func (s *noteService) ToggleLikeNote(noteID uint, memberID uint) (*responseNote.LikeToggleResponse, error) {
+	ctx := context.Background()
+	// 查询笔记
+	note, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeNotFound, "笔记不存在", err)
+	}
+	key := fmt.Sprintf("note:likes:%d", noteID)
+	// Redis 判断点赞状态
+	liked, err := s.redisRepo.SIsMember(ctx, key, memberID)
+
+	if err != nil {
+		// Redis异常，降级MySQL
+		liked, err = s.noteRepo.ExistsLike(noteID, memberID)
+
+		if err != nil {
+			return nil, errors.NewWithErr(
+				errors.CodeInternalError,
+				"查询点赞状态失败",
+				err,
+			)
+		}
+		// 回填Redis
+		if liked {
+			_ = s.redisRepo.SAdd(ctx, key, memberID)
+		}
+	}
+	// 当前点赞数量
+	likeCount := note.LikeCount
+	// MySQL事务（note_like + like_count）
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if liked {
+			if err := s.noteRepo.DeleteLike(tx, noteID, memberID); err != nil {
+				return err
+			}
+
+			if err := s.noteRepo.DecrLikeCount(tx, noteID); err != nil {
+				return err
+			}
+
+			likeCount--
+			return nil
+		}
+
+		if err := s.noteRepo.CreateLike(tx, noteID, memberID); err != nil {
+			return err
+		}
+
+		if err := s.noteRepo.IncrLikeCount(tx, noteID); err != nil {
+			return err
+		}
+
+		likeCount++
+		return nil
+	})
+
+	if err != nil {
+		logger.Errorf("点赞事务失败 noteID=%d memberID=%d err=%v", noteID, memberID, err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "点赞操作失败", err)
+	}
+
+	// 同步 Redis 缓存
+	if liked {
+		if err := s.redisRepo.SRem(ctx, key, memberID); err != nil {
+			logger.Errorf("同步 Redis 缓存失败（取消点赞）: %v", err)
+		}
+	} else {
+		if err := s.redisRepo.SAdd(ctx, key, memberID); err != nil {
+			logger.Errorf("同步 Redis 缓存失败（点赞）: %v", err)
+		}
+	}
+
+	return &responseNote.LikeToggleResponse{
+		IsLiked:   !liked,
+		LikeCount: likeCount,
 	}, nil
 }

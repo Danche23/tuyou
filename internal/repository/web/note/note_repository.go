@@ -134,6 +134,28 @@ func (r *noteRepository) ExistsFollow(followerID uint, followeeID uint) (bool, e
 	return count > 0, nil
 }
 
+// CreateLike 创建点赞记录
+func (r *noteRepository) CreateLike(tx *gorm.DB, noteID uint, memberID uint) error {
+	return tx.Create(&entity.NoteLike{NoteID: noteID, MemberID: memberID}).Error
+}
+
+// DeleteLike 删除点赞记录（硬删除，不需要软删除）
+func (r *noteRepository) DeleteLike(tx *gorm.DB, noteID uint, memberID uint) error {
+	return tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteLike{}).Error
+}
+
+// IncrLikeCount 笔记点赞数 +1
+func (r *noteRepository) IncrLikeCount(tx *gorm.DB, noteID uint) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+}
+
+// DecrLikeCount 笔记点赞数 -1
+func (r *noteRepository) DecrLikeCount(tx *gorm.DB, noteID uint) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
+}
+
 // IncrViewCount 浏览量 +1
 func (r *noteRepository) IncrViewCount(noteID uint) error {
 	return r.db.Model(&entity.Note{}).Where("id = ?", noteID).

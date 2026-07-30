@@ -12,4 +12,7 @@ type NoteService interface {
 
 	// GetNoteDetail 获取笔记详情
 	GetNoteDetail(noteID uint, memberID uint) (*responseNote.NoteDetailResponse, error)
+
+	// ToggleLikeNote 点赞/取消点赞
+	ToggleLikeNote(noteID uint, memberID uint) (*responseNote.LikeToggleResponse, error)
 }
