@@ -3,21 +3,23 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
 	"tuyou/internal/api"
+	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository/web/auth"
+	serviceAuth "tuyou/internal/service/web/auth"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 // App 应用结构体
@@ -153,14 +155,17 @@ func (a *App) initDatabase() error {
 // initDependencies 初始化依赖注入
 func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
-	// userRepo := repository.NewUserRepository(a.mysqlDB)
-
+	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	// userSvc := service.NewUserService(userRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo)
+
+	// ========== 创建 Handler ==========
+	authHandler := handlerAuth.NewAuthHandler(authSvc)
 
 	// ========== 创建 Router ==========
-	// a.router = api.NewRouter(userSvc, authSvc)
+	a.router = api.NewRouter(authHandler)
+
 }
 
 // initRouter 初始化路由
