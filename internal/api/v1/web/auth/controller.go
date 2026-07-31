@@ -3,18 +3,17 @@ package auth
 import (
 	"github.com/gin-gonic/gin"
 	request "tuyou/internal/model/dto/request/web/auth"
-	"tuyou/internal/service/sms"
 	"tuyou/internal/service/web/auth"
 	"tuyou/pkg/response"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authSvc auth.AuthService
+	authSvc auth.WebAuthService
 }
 
 // NewAuthHandler 创建认证处理器
-func NewAuthHandler(authSvc auth.AuthService) *AuthHandler {
+func NewAuthHandler(authSvc auth.WebAuthService) *AuthHandler {
 	return &AuthHandler{authSvc: authSvc}
 }
 
@@ -63,7 +62,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	resp, err := sms.Send(req.Phone)
+	resp, err := h.authSvc.SendCode(c.Request.Context(), &req)
 	if err != nil {
 		response.BizError(c, err)
 		return

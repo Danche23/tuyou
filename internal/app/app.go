@@ -12,21 +12,19 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"tuyou/internal/api"
+	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/model/entity"
-	"tuyou/internal/repository/web/auth"
-	serviceAuth "tuyou/internal/service/web/auth"
 	"tuyou/internal/repository"
+	repoAdmin "tuyou/internal/repository/admin/auth"
+	"tuyou/internal/repository/web/auth"
 	repoNote "tuyou/internal/repository/web/note"
-	"tuyou/internal/stream"
+	serviceAdmin "tuyou/internal/service/admin/auth"
+	serviceAuth "tuyou/internal/service/web/auth"
 	serviceNote "tuyou/internal/service/web/note"
+	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -34,9 +32,9 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg     *config.Config
-	mysqlDB *gorm.DB
-	redis   *redis.Client
+	cfg      *config.Config
+	mysqlDB  *gorm.DB
+	redis    *redis.Client
 	router   *api.Router
 	server   *http.Server
 	consumer *stream.Consumer
@@ -170,22 +168,23 @@ func (a *App) initDependencies() {
 
 	// ========== 创建 Repository ==========
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
+	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
+	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
+	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, redisRepo)
 
 	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(authHandler)
-
-	a.router = api.NewRouter(noteCtrl)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

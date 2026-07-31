@@ -64,4 +64,5 @@ var (
 	ErrPhoneNotRegistered = NewDefault(CodePhoneNotRegistered)
 	ErrPhoneAlreadyReg    = NewDefault(CodePhoneAlreadyReg)
 	ErrInvalidPhoneFormat = NewDefault(CodeInvalidPhoneFormat)
+	ErrCaptchaInvalid     = NewDefault(CodeCaptchaInvalid)
 )

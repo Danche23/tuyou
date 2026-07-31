@@ -11,7 +11,7 @@ import (
 	response "tuyou/internal/model/dto/response/web/auth"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository/web/auth"
-	"tuyou/internal/service/sms"
+	"tuyou/internal/service/web/auth/sms"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 )
@@ -22,7 +22,7 @@ type authService struct {
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(memberRepo auth.MemberRepository) AuthService {
+func NewAuthService(memberRepo auth.MemberRepository) WebAuthService {
 	return &authService{memberRepo: memberRepo}
 }
 
@@ -39,7 +39,7 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 	}
 
 	//校验验证码
-	err := sms.Receive(req.Phone, req.Code)
+	err := sms.Receive(req.Phone, req.Code, sms.SceneRegister)
 	if err != nil {
 		return nil, appErrors.ErrSmsCodeInvalid
 	}
@@ -90,6 +90,37 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 			Avatar:   member.Avatar,
 		},
 	}, nil
+}
+
+// SendCode 发送验证码
+func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest) (*response.MessageResponse, error) {
+	//校验手机号格式
+	if err := sms.ValidatorPhone(req.Phone); err != nil {
+		return nil, err
+	}
+
+	//按场景做发送端业务检查
+	switch sms.Scene(req.Scene) {
+	case sms.SceneRegister:
+		//注册：手机号已注册则拒发
+		exist, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+		if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
+			return nil, err
+		}
+		if exist != nil {
+			return nil, appErrors.ErrPhoneAlreadyReg
+		}
+	case sms.SceneLogin, sms.SceneResetPwd:
+		//登录/重置密码：手机号未注册则拒发
+		if _, err := s.memberRepo.FindByPhone(ctx, req.Phone); err != nil {
+			if errors.Is(err, appErrors.ErrUserNotFound) {
+				return nil, appErrors.ErrPhoneNotRegistered
+			}
+			return nil, err
+		}
+	}
+
+	return sms.Send(req.Phone, sms.Scene(req.Scene))
 }
 
 // Login 登录
@@ -158,7 +189,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 	}
 
 	//校验验证码
-	err := sms.Receive(req.Phone, req.Code)
+	err := sms.Receive(req.Phone, req.Code, sms.SceneLogin)
 	if err != nil {
 		return nil, appErrors.ErrSmsCodeInvalid
 	}
@@ -170,16 +201,19 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		}
 		return nil, err
 	}
+
 	if member.Status == 0 {
 		return nil, appErrors.ErrUserDisabled
 	}
 	go func() {
 		_ = s.memberRepo.UpdateLastLoginTime(context.Background(), member.ID)
 	}()
+
 	token, err := jwt.GenerateToken(member.ID, member.Nickname)
 	if err != nil {
 		return nil, err
 	}
+
 	return &response.LoginResponse{
 		Token: token,
 		Member: response.MemberInfo{
@@ -199,7 +233,7 @@ func (s *authService) ResetPassword(ctx context.Context, req *request.ResetPassw
 	}
 
 	//校验验证码
-	err := sms.Receive(req.Phone, req.Code)
+	err := sms.Receive(req.Phone, req.Code, sms.SceneResetPwd)
 	if err != nil {
 		return nil, appErrors.ErrSmsCodeInvalid
 	}

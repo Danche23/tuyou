@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -10,6 +9,13 @@ import (
 
 type redisRepository struct {
 	redis *redis.Client
+}
+
+// NewRedisRepository 创建 Redis 仓库
+func NewRedisRepository(redisClient *redis.Client) RedisRepository {
+	return &redisRepository{
+		redis: redisClient,
+	}
 }
 
 // XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil 以触发调用方降级
@@ -82,4 +88,3 @@ func (r *redisRepository) SIsMember(ctx context.Context, key string, member inte
 	}
 	return r.redis.SIsMember(ctx, key, member).Result()
 }
-

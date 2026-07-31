@@ -38,13 +38,15 @@ const (
 	CodeResourceAlreadyExists = 3002
 	CodeResourceLocked        = 3003
 
-	// 短信验证码错误 4xxx
+	// 验证码错误 4xxx
 	CodeSmsSendFrequently  = 4001 // 发送太频繁
 	CodeSmsDailyLimit      = 4002 // 超出每日发送上限
 	CodeSmsCodeInvalid     = 4003 // 验证码错误
 	CodeSmsCodeExpired     = 4004 // 验证码已过期
 	CodePhoneNotRegistered = 4005 // 手机号未注册
 	CodePhoneAlreadyReg    = 4006 // 手机号已注册
+	CodeCaptchaInvalid     = 4007 // 图形验证码错误
+
 )
 
 // 错误码对应的文本消息
@@ -79,6 +81,7 @@ var codeMessages = map[int]string{
 	CodeSmsCodeExpired:        "验证码已过期",
 	CodePhoneNotRegistered:    "该手机号尚未注册",
 	CodePhoneAlreadyReg:       "该手机号已注册",
+	CodeCaptchaInvalid:        "图形验证码错误",
 }
 
 // GetMessage 获取错误码对应的文本消息

@@ -58,7 +58,7 @@ func CreateClient(sms config.SMSConfig) (_result *dypnsapi20170525.Client, _err 
 }
 
 // Send 发送验证码
-func Send(phone string) (*response.MessageResponse, error) {
+func Send(phone string, scene Scene) (*response.MessageResponse, error) {
 	var sms = config.Get().SMS
 
 	// 创建SDK客户端
@@ -130,11 +130,22 @@ func Send(phone string) (*response.MessageResponse, error) {
 		return nil, tryErr
 	}
 
+	// 发送成功后写入场景锁，供校验时比对
+	if err := storeScene(phone, scene); err != nil {
+		return nil, err
+	}
+
 	return &response.MessageResponse{Message: "验证码已发送"}, nil
 }
 
 // Receive 接收验证码
-func Receive(phone string, code string) (_err error) {
+func Receive(phone string, code string, scene Scene) (_err error) {
+	// 场景锁校验：发送时未写入场景锁，或场景与本次操作不匹配，一律按验证码错误拒绝（fail closed）
+	storedScene, err := getScene(phone)
+	if err != nil || storedScene != scene {
+		return appErrors.ErrSmsCodeInvalid
+	}
+
 	var sms = config.Get().SMS
 	client, _err := CreateClient(sms)
 	if _err != nil {
