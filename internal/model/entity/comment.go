@@ -9,7 +9,7 @@ type Comment struct {
 	Content    string `gorm:"type:text;not null;comment:评论内容" json:"content"`
 	ReplyToID  *uint  `gorm:"column:reply_to_id;index;comment:回复目标评论ID，NULL=一级评论" json:"replyToId"`
 	LikeCount  int64  `gorm:"type:bigint;default:0;column:like_count;comment:点赞总数" json:"likeCount"`
-	Status     int    `gorm:"type:tinyint;default:0;index;comment:评论状态：0=正常，1=用户删除" json:"status"`
+	Status     int    `gorm:"type:tinyint;default:1;index;comment:评论状态：0=下架/删除，1=正常" json:"status"`
 }
 
 // TableName 指定表名
