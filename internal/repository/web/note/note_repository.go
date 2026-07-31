@@ -145,6 +145,25 @@ func (r *noteRepository) DecrCollectCount(tx *gorm.DB, noteID uint) error {
 		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error
 }
 
+// UpdateStatus 更新笔记上下架状态
+func (r *noteRepository) UpdateStatus(tx *gorm.DB, noteID uint, status int) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("status", status).Error
+}
+
+// DecrPublishCount 发布计数 -1
+func (r *noteRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+}
+
+// UpdateCommentStatusByTarget 批量更新评论状态
+func (r *noteRepository) UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error {
+	return tx.Model(&entity.Comment{}).
+		Where("target_type = ? AND target_id = ?", targetType, targetID).
+		UpdateColumn("status", status).Error
+}
+
 // ExistsFollow 检查当前用户是否已关注该作者
 func (r *noteRepository) ExistsFollow(followerID uint, followeeID uint) (bool, error) {
 	var count int64

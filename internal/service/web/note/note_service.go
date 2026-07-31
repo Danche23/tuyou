@@ -391,3 +391,34 @@ func (s *noteService) ToggleCollectNote(noteID uint, memberID uint) (*responseNo
 		IsFavorited: !favorite,
 	}, nil
 }
+
+// DeleteNote 删除笔记（下架，仅作者本人）
+func (s *noteService) DeleteNote(noteID uint, memberID uint) error {
+	// 1. 查笔记（FindByID 只查 status=1，已删除则 404）
+	note, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeNotFound, "笔记不存在", err)
+	}
+
+	// 2. 仅作者本人可删除
+	if note.MemberID != memberID {
+		return errors.New(errors.CodeForbidden, "无权删除他人笔记")
+	}
+
+	// 3. 事务：下架笔记 + 下架评论 + 发布数-1
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.noteRepo.UpdateStatus(tx, noteID, 0); err != nil {
+			return err
+		}
+		if err := s.noteRepo.UpdateCommentStatusByTarget(tx, 1, noteID, 0); err != nil {
+			return err
+		}
+		return s.noteRepo.DecrPublishCount(tx, memberID)
+	})
+	if err != nil {
+		logger.Errorf("删除笔记事务失败 noteID=%d memberID=%d err=%v", noteID, memberID, err)
+		return errors.NewWithErr(errors.CodeInternalError, "删除笔记失败", err)
+	}
+
+	return nil
+}

@@ -46,11 +46,21 @@ type NoteRepository interface {
 
 	// DeleteCollect 删除收藏记录（硬删除）
 	DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error
+
 	// IncrCollectCount 笔记收藏数 +1
 	IncrCollectCount(tx *gorm.DB, noteID uint) error
 
 	// DecrCollectCount 笔记收藏数 -1
 	DecrCollectCount(tx *gorm.DB, noteID uint) error
+
+	// UpdateStatus 更新笔记上下架状态
+	UpdateStatus(tx *gorm.DB, noteID uint, status int) error
+
+	// DecrPublishCount 发布计数 -1
+	DecrPublishCount(tx *gorm.DB, memberID uint) error
+
+	// UpdateCommentStatusByTarget 批量更新评论状态
+	UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error
 
 	// ExistsFollow 检查用户是否已关注该作者
 	ExistsFollow(followerID uint, followeeID uint) (bool, error)

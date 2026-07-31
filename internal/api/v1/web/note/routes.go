@@ -13,6 +13,7 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		notes.POST("", c.Create)
 		notes.GET("/:id", c.GetNoteDetail)
+		notes.DELETE("/:id", c.Delete)
 		notes.POST("/:id/like", c.ToggleLike)
 		notes.POST("/:id/favorite", c.ToggleCollect)
 	}

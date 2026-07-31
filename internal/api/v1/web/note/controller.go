@@ -95,6 +95,30 @@ func (c *Controller) ToggleLike(ctx *gin.Context) {
 	response.Success(ctx, resp)
 }
 
+// Delete 删除笔记（下架，仅作者）
+// DELETE /api/v1/notes/:id
+func (c *Controller) Delete(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	noteID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.Error(ctx, http.StatusBadRequest, "参数错误: id格式不正确")
+		return
+	}
+
+	if err := c.noteSvc.DeleteNote(uint(noteID), memberID); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, nil)
+}
+
 // ToggleCollect 收藏/取消收藏
 // POST /api/v1/notes/:id/favorite
 func (c *Controller) ToggleCollect(ctx *gin.Context) {

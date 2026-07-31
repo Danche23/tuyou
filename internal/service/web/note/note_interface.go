@@ -18,4 +18,7 @@ type NoteService interface {
 
 	// ToggleCollectNote 收藏/取消收藏
 	ToggleCollectNote(noteID uint, memberID uint) (*responseNote.CollectToggleResponse, error)
+
+	// DeleteNote 删除笔记（下架，仅作者）
+	DeleteNote(noteID uint, memberID uint) error
 }
