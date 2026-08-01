@@ -1,18 +1,57 @@
 package note
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 
 	"gorm.io/gorm"
 )
 
+const (
+	statusCacheTTL = time.Hour
+	countCacheTTL  = time.Hour
+)
+
+// Redis key 定义
+func likeStatusKey(noteID, memberID uint) string {
+	return fmt.Sprintf("note:like:status:%d:%d", noteID, memberID)
+}
+func likeCountKey(noteID uint) string { return fmt.Sprintf("note:likes:count:%d", noteID) }
+func collectStatusKey(noteID, memberID uint) string {
+	return fmt.Sprintf("note:collect:status:%d:%d", noteID, memberID)
+}
+func collectCountKey(noteID uint) string { return fmt.Sprintf("note:collects:count:%d", noteID) }
+
+func cacheStatusValue(ok bool) string {
+	if ok {
+		return "1"
+	}
+	return "0"
+}
+
+func parseCacheStatus(value string) (bool, bool) {
+	switch value {
+	case "1":
+		return true, true
+	case "0":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 type noteRepository struct {
-	db *gorm.DB
+	db        *gorm.DB
+	redisRepo repository.RedisRepository
 }
 
 // NewNoteRepository 创建笔记仓储实例
-func NewNoteRepository(db *gorm.DB) NoteRepository {
-	return &noteRepository{db: db}
+func NewNoteRepository(db *gorm.DB, redisRepo repository.RedisRepository) NoteRepository {
+	return &noteRepository{db: db, redisRepo: redisRepo}
 }
 
 // Create 创建笔记
@@ -201,4 +240,57 @@ func (r *noteRepository) DecrLikeCount(tx *gorm.DB, noteID uint) error {
 func (r *noteRepository) IncrViewCount(noteID uint) error {
 	return r.db.Model(&entity.Note{}).Where("id = ?", noteID).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+}
+
+// ────────── Redis 缓存实现 ──────────
+
+func (r *noteRepository) GetCachedLikeStatus(ctx context.Context, noteID, memberID uint) (bool, bool, error) {
+	var value string
+	if err := r.redisRepo.Get(ctx, likeStatusKey(noteID, memberID), &value); err != nil {
+		return false, false, err
+	}
+	isLiked, ok := parseCacheStatus(value)
+	return isLiked, ok, nil
+}
+
+func (r *noteRepository) SetCachedLikeStatus(ctx context.Context, noteID, memberID uint, isLiked bool) {
+	_ = r.redisRepo.Set(ctx, likeStatusKey(noteID, memberID), cacheStatusValue(isLiked), statusCacheTTL)
+}
+
+func (r *noteRepository) GetCachedCollectStatus(ctx context.Context, noteID, memberID uint) (bool, bool, error) {
+	var value string
+	if err := r.redisRepo.Get(ctx, collectStatusKey(noteID, memberID), &value); err != nil {
+		return false, false, err
+	}
+	isFavorited, ok := parseCacheStatus(value)
+	return isFavorited, ok, nil
+}
+
+func (r *noteRepository) SetCachedCollectStatus(ctx context.Context, noteID, memberID uint, isFavorited bool) {
+	_ = r.redisRepo.Set(ctx, collectStatusKey(noteID, memberID), cacheStatusValue(isFavorited), statusCacheTTL)
+}
+
+func (r *noteRepository) GetCachedLikeCount(ctx context.Context, noteID uint) (int64, error) {
+	var count int64
+	return count, r.redisRepo.Get(ctx, likeCountKey(noteID), &count)
+}
+
+func (r *noteRepository) SetCachedLikeCount(ctx context.Context, noteID uint, count int64) {
+	_ = r.redisRepo.Set(ctx, likeCountKey(noteID), count, countCacheTTL)
+}
+
+func (r *noteRepository) GetCachedCollectCount(ctx context.Context, noteID uint) (int64, error) {
+	var count int64
+	return count, r.redisRepo.Get(ctx, collectCountKey(noteID), &count)
+}
+
+func (r *noteRepository) SetCachedCollectCount(ctx context.Context, noteID uint, count int64) {
+	_ = r.redisRepo.Set(ctx, collectCountKey(noteID), count, countCacheTTL)
+}
+
+func (r *noteRepository) XAddViewCount(ctx context.Context, noteID uint) error {
+	return r.redisRepo.XAdd(ctx, "stream:content", map[string]interface{}{
+		"type": "note",
+		"id":   noteID,
+	})
 }

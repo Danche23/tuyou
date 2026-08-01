@@ -3,15 +3,16 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"tuyou/internal/api"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
@@ -169,18 +170,16 @@ func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
-	noteRepo := repoNote.NewNoteRepository(a.mysqlDB)
+	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, redisRepo)
-
-	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)
 
 	// ========== 创建 Router ==========
