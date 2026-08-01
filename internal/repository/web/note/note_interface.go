@@ -1,6 +1,8 @@
 package note
 
 import (
+	"context"
+
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
@@ -79,4 +81,31 @@ type NoteRepository interface {
 
 	// DecrLikeCount 笔记点赞数 -1
 	DecrLikeCount(tx *gorm.DB, noteID uint) error
+
+	// GetCachedLikeStatus 读取点赞状态缓存（found=false 表示缓存未命中）
+	GetCachedLikeStatus(ctx context.Context, noteID, memberID uint) (isLiked bool, found bool, err error)
+
+	// SetCachedLikeStatus 写入点赞状态缓存
+	SetCachedLikeStatus(ctx context.Context, noteID, memberID uint, isLiked bool)
+
+	// GetCachedCollectStatus 读取收藏状态缓存
+	GetCachedCollectStatus(ctx context.Context, noteID, memberID uint) (isFavorited bool, found bool, err error)
+
+	// SetCachedCollectStatus 写入收藏状态缓存
+	SetCachedCollectStatus(ctx context.Context, noteID, memberID uint, isFavorited bool)
+
+	// GetCachedLikeCount 读取点赞数缓存
+	GetCachedLikeCount(ctx context.Context, noteID uint) (int64, error)
+
+	// SetCachedLikeCount 写入点赞数缓存
+	SetCachedLikeCount(ctx context.Context, noteID uint, count int64)
+
+	// GetCachedCollectCount 读取收藏数缓存
+	GetCachedCollectCount(ctx context.Context, noteID uint) (int64, error)
+
+	// SetCachedCollectCount 写入收藏数缓存
+	SetCachedCollectCount(ctx context.Context, noteID uint, count int64)
+
+	// XAddViewCount 发送浏览量消息到 Redis Stream（异步批量写 DB）
+	XAddViewCount(ctx context.Context, noteID uint) error
 }

@@ -13,10 +13,6 @@ type RedisRepository interface {
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 	// Get 获取缓存
 	Get(ctx context.Context, key string, dest interface{}) error
-	// Del 删除缓存
-	Del(ctx context.Context, key string) error
-	// Exists 检查是否存在
-	Exists(ctx context.Context, key string) (bool, error)
 
 	// XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil
 	XAdd(ctx context.Context, stream string, values map[string]interface{}) error
@@ -28,9 +24,4 @@ type RedisRepository interface {
 	XAck(ctx context.Context, stream, group string, ids ...string) error
 	// XTrimMaxLen 截断 Stream 到指定最大长度（非精确修剪）
 	XTrimMaxLen(ctx context.Context, stream string, maxLen int64) error
-
-	// SAdd Set 操作（点赞/收藏成员集合）
-	SAdd(ctx context.Context, key string, members ...interface{}) error
-	SRem(ctx context.Context, key string, members ...interface{}) error
-	SIsMember(ctx context.Context, key string, member interface{}) (bool, error)
 }

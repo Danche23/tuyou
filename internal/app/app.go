@@ -18,8 +18,8 @@ import (
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoNote "tuyou/internal/repository/web/note"
-	"tuyou/internal/stream"
 	serviceNote "tuyou/internal/service/web/note"
+	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -27,9 +27,9 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg     *config.Config
-	mysqlDB *gorm.DB
-	redis   *redis.Client
+	cfg      *config.Config
+	mysqlDB  *gorm.DB
+	redis    *redis.Client
 	router   *api.Router
 	server   *http.Server
 	consumer *stream.Consumer
@@ -162,10 +162,10 @@ func (a *App) initDependencies() {
 	redisRepo := repository.NewRedisRepository(a.redis)
 
 	// ========== 创建 Repository ==========
-	noteRepo := repoNote.NewNoteRepository(a.mysqlDB)
+	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 
 	// ========== 创建 Service ==========
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, redisRepo)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 
 	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)

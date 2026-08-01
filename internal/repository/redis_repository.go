@@ -41,21 +41,6 @@ func (r *redisRepository) Get(ctx context.Context, key string, dest interface{})
 	return json.Unmarshal(data, dest)
 }
 
-func (r *redisRepository) Del(ctx context.Context, key string) error {
-	if r.redis == nil {
-		return nil
-	}
-	return r.redis.Del(ctx, key).Err()
-}
-
-func (r *redisRepository) Exists(ctx context.Context, key string) (bool, error) {
-	if r.redis == nil {
-		return false, nil
-	}
-	n, err := r.redis.Exists(ctx, key).Result()
-	return n > 0, err
-}
-
 // XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil 以触发调用方降级
 func (r *redisRepository) XAdd(ctx context.Context, stream string, values map[string]interface{}) error {
 	if r.redis == nil {
@@ -105,25 +90,3 @@ func (r *redisRepository) XTrimMaxLen(ctx context.Context, stream string, maxLen
 	}
 	return r.redis.XTrimMaxLen(ctx, stream, maxLen).Err()
 }
-
-func (r *redisRepository) SAdd(ctx context.Context, key string, members ...interface{}) error {
-	if r.redis == nil {
-		return redis.Nil
-	}
-	return r.redis.SAdd(ctx, key, members...).Err()
-}
-
-func (r *redisRepository) SRem(ctx context.Context, key string, members ...interface{}) error {
-	if r.redis == nil {
-		return redis.Nil
-	}
-	return r.redis.SRem(ctx, key, members...).Err()
-}
-
-func (r *redisRepository) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
-	if r.redis == nil {
-		return false, redis.Nil
-	}
-	return r.redis.SIsMember(ctx, key, member).Result()
-}
-
