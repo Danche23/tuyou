@@ -12,11 +12,14 @@ import (
 type Response struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    interface{} `json:"data"`
 }
 
 // Success 成功响应
 func Success(c *gin.Context, data interface{}) {
+	if data == nil {
+		data = struct{}{}
+	}
 	c.JSON(200, Response{
 		Code:    errors.CodeSuccess,
 		Message: errors.GetMessage(errors.CodeSuccess),

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/middleware"
 
@@ -9,13 +10,15 @@ import (
 
 // Router 路由
 type Router struct {
-	noteCtrl *note.Controller
+	noteCtrl  *note.Controller
+	guideCtrl *guide.Controller
 }
 
 // NewRouter 创建路由
-func NewRouter(noteCtrl *note.Controller) *Router {
+func NewRouter(noteCtrl *note.Controller, guideCtrl *guide.Controller) *Router {
 	return &Router{
-		noteCtrl: noteCtrl,
+		noteCtrl:  noteCtrl,
+		guideCtrl: guideCtrl,
 	}
 }
 
@@ -39,6 +42,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	apiGroup := engine.Group("/api/v1")
 	{
 		r.noteCtrl.RegisterRoutes(apiGroup)
+		r.guideCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
