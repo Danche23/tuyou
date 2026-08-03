@@ -15,14 +15,17 @@ import (
 	"gorm.io/gorm"
 	"tuyou/internal/api"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
+	memberCtrl "tuyou/internal/api/v1/admin/member"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
+	repoAdminMember "tuyou/internal/repository/admin/member"
 	"tuyou/internal/repository/web/auth"
 	repoNote "tuyou/internal/repository/web/note"
 	serviceAdmin "tuyou/internal/service/admin/auth"
+	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/internal/stream"
@@ -170,20 +173,23 @@ func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
+	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
+	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
 	noteCtrl := note.NewController(noteSvc)
+	memberC := memberCtrl.NewController(adminMemberSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

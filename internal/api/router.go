@@ -2,6 +2,7 @@ package api
 
 import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
+	"tuyou/internal/api/v1/admin/member"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/middleware"
@@ -14,6 +15,7 @@ type Router struct {
 	authHandler  *handlerAuth.AuthHandler
 	adminHandler *handlerAdmin.AdminHandler
 	noteCtrl     *note.Controller
+	memberCtrl   *member.Controller
 }
 
 // NewRouter 创建路由
@@ -21,11 +23,13 @@ func NewRouter(
 	noteCtrl *note.Controller,
 	authHandler *handlerAuth.AuthHandler,
 	adminHandle *handlerAdmin.AdminHandler,
+	memberCtrl *member.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:     noteCtrl,
 		authHandler:  authHandler,
 		adminHandler: adminHandle,
+		memberCtrl:   memberCtrl,
 	}
 }
 
@@ -52,6 +56,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.authHandler.RegisterRoutes(apiGroup)
 		r.noteCtrl.RegisterRoutes(apiGroup)
 		r.adminHandler.RegisterRoutes(apiGroup)
+		r.memberCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
