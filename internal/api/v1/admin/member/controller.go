@@ -1,0 +1,102 @@
+package member
+
+import (
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	request "tuyou/internal/model/dto/request/admin/member"
+	service "tuyou/internal/service/admin/member"
+	"tuyou/pkg/response"
+)
+
+// Controller 会员管理控制器
+type Controller struct {
+	memberSvc service.MemberService
+}
+
+// NewController 创建控制器实例
+func NewController(memberSvc service.MemberService) *Controller {
+	return &Controller{memberSvc: memberSvc}
+}
+
+// ListMembers 查询会员列表（/admin/members）
+func (c *Controller) ListMembers(ctx *gin.Context) {
+	var req request.ListMemberReq
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		return
+	}
+
+	//会员的角色用 1 表示
+	resp, err := c.memberSvc.ListMembers(ctx, 1, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// ListLeaders 查询领队列表（/admin/leaders）
+func (c *Controller) ListLeaders(ctx *gin.Context) {
+	var req request.ListMemberReq
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		return
+	}
+	//领队的角色用 0 表示
+	resp, err := c.memberSvc.ListMembers(ctx, 0, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// GetDetail 获取会员/领队详情
+func (c *Controller) GetDetail(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+	resp, err := c.memberSvc.GetMemberDetail(ctx, uint(id))
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// Update 编辑会员/领队
+func (c *Controller) Update(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+	var req request.UpdateMemberReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		return
+	}
+	if err := c.memberSvc.UpdateMember(ctx, uint(id), &req); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.SuccessWithMessage(ctx, "更新成功", nil)
+}
+
+// Delete 删除会员/领队
+func (c *Controller) Delete(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+	if err := c.memberSvc.DeleteMember(ctx, uint(id)); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.SuccessWithMessage(ctx, "删除成功", nil)
+}

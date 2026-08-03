@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	response "tuyou/internal/model/dto/response/admin/auth"
@@ -10,8 +12,6 @@ import (
 	"tuyou/internal/service/admin/auth/b64c"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type authService struct {
@@ -61,8 +61,14 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 	}
 
 	//验证密码
+
+	hashassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(string(hashassword))
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(req.Password)); err != nil {
-		return nil, appErrors.ErrInvalidCredentials
+		return nil, errors.New(err.Error() + string(hashassword))
 	}
 
 	//异步更新登录时间

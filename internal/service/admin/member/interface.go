@@ -1,0 +1,23 @@
+package member
+
+import (
+	"context"
+
+	request "tuyou/internal/model/dto/request/admin/member"
+	response "tuyou/internal/model/dto/response/admin/member"
+)
+
+// MemberService 会员管理服务接口
+type MemberService interface {
+	// ListMembers 查询会员列表（role 由路由传入）
+	ListMembers(ctx context.Context, role int, req *request.ListMemberReq) (*response.ListMemberResp, error)
+
+	// GetMemberDetail 获取会员详情
+	GetMemberDetail(ctx context.Context, id uint) (*response.MemberDetail, error)
+
+	// UpdateMember 编辑会员
+	UpdateMember(ctx context.Context, id uint, req *request.UpdateMemberReq) error
+
+	// DeleteMember 删除会员
+	DeleteMember(ctx context.Context, id uint) error
+}
