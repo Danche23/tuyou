@@ -15,5 +15,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 		guides.GET("/:id", c.GetGuideDetail)
 		guides.POST("/:id/like", c.ToggleLike)
 		guides.POST("/:id/favorite", c.ToggleCollect)
+		guides.DELETE("/:id", c.DeleteGuide)
 	}
 }

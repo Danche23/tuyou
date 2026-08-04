@@ -271,3 +271,22 @@ func (r *guideRepository) GetCachedCollectStatus(ctx context.Context, strategyID
 func (r *guideRepository) SetCachedCollectStatus(ctx context.Context, strategyID, memberID uint, isFavorited bool) {
 	_ = r.redisRepo.Set(ctx, collectStatusKey(strategyID, memberID), cacheStatusValue(isFavorited), likeCacheTTL)
 }
+
+// UpdateStatus 更新攻略上下架状态
+func (r *guideRepository) UpdateStatus(tx *gorm.DB, strategyID uint, status int) error {
+	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
+		UpdateColumn("status", status).Error
+}
+
+// UpdateCommentStatusByTarget 批量更新评论状态
+func (r *guideRepository) UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error {
+	return tx.Model(&entity.Comment{}).
+		Where("target_type = ? AND target_id = ?", targetType, targetID).
+		UpdateColumn("status", status).Error
+}
+
+// DecrPublishCount 发布计数 -1
+func (r *guideRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+}

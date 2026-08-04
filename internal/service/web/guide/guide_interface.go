@@ -18,4 +18,7 @@ type GuideService interface {
 
 	// ToggleCollectGuide 收藏/取消收藏
 	ToggleCollectGuide(strategyID uint, memberID uint) (*responseGuide.CollectToggleResponse, error)
+
+	// DeleteGuide 删除攻略（下架，仅作者）
+	DeleteGuide(strategyID uint, memberID uint) error
 }

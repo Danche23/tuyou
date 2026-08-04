@@ -93,4 +93,13 @@ type GuideRepository interface {
 
 	// SetCachedCollectStatus 写入收藏状态缓存
 	SetCachedCollectStatus(ctx context.Context, strategyID, memberID uint, isFavorited bool)
+
+	// UpdateStatus 更新攻略上下架状态
+	UpdateStatus(tx *gorm.DB, strategyID uint, status int) error
+
+	// UpdateCommentStatusByTarget 批量更新评论状态
+	UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error
+
+	// DecrPublishCount 发布计数 -1
+	DecrPublishCount(tx *gorm.DB, memberID uint) error
 }

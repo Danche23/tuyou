@@ -312,3 +312,30 @@ func (s *guideService) ToggleCollectGuide(strategyID uint, memberID uint) (*resp
 
 	return &responseGuide.CollectToggleResponse{IsFavorited: !favorited}, nil
 }
+
+// DeleteGuide 删除攻略（下架，仅作者本人）
+func (s *guideService) DeleteGuide(strategyID uint, memberID uint) error {
+	strategy, err := s.guideRepo.FindByID(strategyID)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeNotFound, "攻略不存在", err)
+	}
+	if strategy.MemberID != memberID {
+		return errors.New(errors.CodeForbidden, "无权删除他人攻略")
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.guideRepo.UpdateStatus(tx, strategyID, 0); err != nil {
+			return err
+		}
+		if err := s.guideRepo.UpdateCommentStatusByTarget(tx, 2, strategyID, 0); err != nil {
+			return err
+		}
+		return s.guideRepo.DecrPublishCount(tx, memberID)
+	})
+	if err != nil {
+		logger.Errorf("删除攻略事务失败 strategyID=%d memberID=%d err=%v", strategyID, memberID, err)
+		return errors.NewWithErr(errors.CodeInternalError, "删除攻略失败", err)
+	}
+
+	return nil
+}

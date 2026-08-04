@@ -119,3 +119,27 @@ func (c *Controller) ToggleCollect(ctx *gin.Context) {
 
 	response.Success(ctx, resp)
 }
+
+// DeleteGuide 删除攻略（下架，仅作者）
+// DELETE /api/v1/guides/:id
+func (c *Controller) DeleteGuide(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	strategyID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.Error(ctx, http.StatusBadRequest, "参数错误: id格式不正确")
+		return
+	}
+
+	if err := c.guideSvc.DeleteGuide(uint(strategyID), memberID); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, nil)
+}
