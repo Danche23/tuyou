@@ -3,6 +3,7 @@ package member
 import (
 	"context"
 	"math"
+	"strconv"
 
 	request "tuyou/internal/model/dto/request/admin/member"
 	response "tuyou/internal/model/dto/response/admin/member"
@@ -67,10 +68,21 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 	updates := make(map[string]interface{})
 
 	if req.Status != nil {
-		updates["status"] = *req.Status
+		if *req.Status {
+			updates["status"] = 1
+		} else {
+			updates["status"] = 0
+		}
 	}
 	if req.Role != nil {
-		updates["role"] = *req.Role
+		switch *req.Role {
+		case "领队":
+			updates["role"] = 0
+		case "普通会员":
+			updates["role"] = 1
+		default:
+			return appErrors.ErrInvalidParam
+		}
 	}
 
 	if len(updates) == 0 {
@@ -83,4 +95,48 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 // DeleteMember 删除会员
 func (s *memberService) DeleteMember(ctx context.Context, id uint) error {
 	return s.memberRepo.Delete(ctx, id)
+}
+
+// parseIDs 将字符串 ID 列表转换为 uint 列表
+func parseIDs(ids []string) ([]uint, error) {
+	result := make([]uint, 0, len(ids))
+	for _, s := range ids {
+		id, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return nil, appErrors.ErrInvalidParam
+		}
+		result = append(result, uint(id))
+	}
+	return result, nil
+}
+
+// BatchDeleteMembers 批量删除
+func (s *memberService) BatchDeleteMembers(ctx context.Context, req *request.BatchDeleteReq) error {
+	ids, err := parseIDs(req.IDs)
+	if err != nil {
+		return err
+	}
+	return s.memberRepo.BatchDelete(ctx, ids)
+}
+
+// BatchUpdateStatus 批量修改状态
+func (s *memberService) BatchUpdateStatus(ctx context.Context, req *request.BatchUpdateStatusReq) error {
+	ids, err := parseIDs(req.IDs)
+	if err != nil {
+		return err
+	}
+	status := 0
+	if req.Status {
+		status = 1
+	}
+	return s.memberRepo.BatchUpdateStatus(ctx, ids, status)
+}
+
+// ExportMembers 导出某角色全部记录
+func (s *memberService) ExportMembers(ctx context.Context, role int) ([]response.MemberListItem, error) {
+	list, err := s.memberRepo.ListAllByRole(ctx, role)
+	if err != nil {
+		return nil, appErrors.ErrInternalError
+	}
+	return list, nil
 }

@@ -120,3 +120,33 @@ func (r *memberRepository) Delete(ctx context.Context, id uint) error {
 	}
 	return nil
 }
+
+// BatchDelete 批量硬删除
+func (r *memberRepository) BatchDelete(ctx context.Context, ids []uint) error {
+	return r.db.WithContext(ctx).Exec("DELETE FROM member WHERE id IN ?", ids).Error
+}
+
+// BatchUpdateStatus 批量更新状态
+func (r *memberRepository) BatchUpdateStatus(ctx context.Context, ids []uint, status int) error {
+	return r.db.WithContext(ctx).Table("member").
+		Where("id IN ?", ids).
+		Updates(map[string]interface{}{"status": status}).Error
+}
+
+// ListAllByRole 查询某角色全部记录（无分页），用于导出
+func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]response.MemberListItem, error) {
+	var list []response.MemberListItem
+	query := r.db.WithContext(ctx).Table("member").
+		Select(`id, avatar, nickname,
+			CONCAT(LEFT(phone, 3), '****', RIGHT(phone, 4)) AS phone,
+			IF(status = 1, TRUE, FALSE) AS status,
+			bio, bg_img,
+			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
+			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
+			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login`).
+		Where("role = ?", role)
+	if err := query.Order("id DESC").Scan(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
