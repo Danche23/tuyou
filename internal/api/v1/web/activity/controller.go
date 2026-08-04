@@ -68,3 +68,27 @@ func (c *Controller) GetDetail(ctx *gin.Context) {
 	}
 	response.Success(ctx, resp)
 }
+
+// ToggleSignup 报名/取消报名
+// POST /api/v1/activities/:id/signup
+func (c *Controller) ToggleSignup(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	activityID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.Error(ctx, http.StatusBadRequest, "参数错误: id格式不正确")
+		return
+	}
+
+	resp, err := c.activitySvc.ToggleSignup(uint(activityID), memberID)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}

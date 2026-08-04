@@ -182,6 +182,72 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 	}, nil
 }
 
+// ToggleSignup 报名/取消报名
+func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*responseActivity.SignupToggleResponse, error) {
+	activity, err := s.activityRepo.FindByID(activityID)
+	if err != nil {
+		return nil, errors.New(errors.CodeNotFound, "活动不存在")
+	}
+
+	// 同步活动状态
+	realStatusInt, _ := computeActivityStatus(activity.SignUpEnd, activity.EndTime)
+	if activity.ActivityStatus != realStatusInt {
+		if err := s.activityRepo.UpdateActivityStatus(activityID, realStatusInt); err != nil {
+			logger.Errorf("同步活动状态失败 activityID=%d err=%v", activityID, err)
+		}
+	}
+
+	joined, err := s.activityRepo.ExistsJoin(activityID, memberID)
+	if err != nil {
+		return nil, errors.New(errors.CodeInternalError, "查询报名状态失败")
+	}
+
+	if joined {
+		// ========== 取消报名 ==========
+		err = s.db.Transaction(func(tx *gorm.DB) error {
+			if err := s.activityRepo.DeleteJoin(tx, activityID, memberID); err != nil {
+				return err
+			}
+			return s.activityRepo.DecrCurrentPeople(tx, activityID)
+		})
+		if err != nil {
+			logger.Errorf("取消报名事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
+			return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
+		}
+
+		return &responseActivity.SignupToggleResponse{
+			IsJoined:      false,
+			CurrentPeople: activity.CurrentPeople - 1,
+		}, nil
+	}
+
+	// ========== 报名 ==========
+	if realStatusInt != 1 {
+		return nil, errors.New(errors.CodeInvalidParam, "不在报名时间内")
+	}
+	var affected int64
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.activityRepo.CreateJoin(tx, activityID, memberID); err != nil {
+			return err
+		}
+		var incrErr error
+		affected, incrErr = s.activityRepo.IncrCurrentPeople(tx, activityID, activity.MaxPeople)
+		return incrErr
+	})
+	if err != nil {
+		logger.Errorf("报名事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
+		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
+	}
+	if affected == 0 {
+		return nil, errors.New(errors.CodeInvalidParam, "活动人数已满")
+	}
+
+	return &responseActivity.SignupToggleResponse{
+		IsJoined:      true,
+		CurrentPeople: activity.CurrentPeople + 1,
+	}, nil
+}
+
 // ────────── 枚举映射 ──────────
 
 var categoryStrToInt = map[string]int{

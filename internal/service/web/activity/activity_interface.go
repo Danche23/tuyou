@@ -12,4 +12,7 @@ type ActivityService interface {
 
 	// GetActivityDetail 获取活动详情
 	GetActivityDetail(activityID uint, memberID uint) (*responseActivity.ActivityDetailResponse, error)
+
+	// ToggleSignup 报名/取消报名
+	ToggleSignup(activityID uint, memberID uint) (*responseActivity.SignupToggleResponse, error)
 }

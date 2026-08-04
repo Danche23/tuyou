@@ -55,3 +55,9 @@ type ActivityDetailResponse struct {
 	Joined          bool         `json:"joined"`
 	Members         []MemberInfo `json:"members"`
 }
+
+// SignupToggleResponse 报名/取消报名响应
+type SignupToggleResponse struct {
+	IsJoined      bool `json:"isJoined"`
+	CurrentPeople int  `json:"currentPeople"`
+}

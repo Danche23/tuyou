@@ -13,5 +13,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		activities.POST("", c.Create)
 		activities.GET("/:id", c.GetDetail)
+		activities.POST("/:id/signup", c.ToggleSignup)
 	}
 }
