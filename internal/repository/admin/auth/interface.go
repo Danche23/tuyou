@@ -17,4 +17,13 @@ type AdminRepository interface {
 
 	// FindRoleNameByRoleID 通过角色ID查询角色名称
 	FindRoleNameByRoleID(ctx context.Context, roleID uint) (string, error)
+
+	// FindMenusByRoleID 查询角色拥有的全部菜单
+	FindMenusByRoleID(ctx context.Context, roleID uint) ([]entity.SysMenu, error)
+
+	// FindPermsByRoleID 查询角色拥有的全部接口权限
+	FindPermsByRoleID(ctx context.Context, roleID uint) ([]entity.SysPermission, error)
+
+	// UpdatePassword 更新密码
+	UpdatePassword(ctx context.Context, id uint, password string) error
 }

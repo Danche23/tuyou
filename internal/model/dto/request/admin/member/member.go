@@ -16,3 +16,14 @@ type UpdateMemberReq struct {
 	Status *bool   `json:"status"` // true=正常, false=禁用
 	Role   *string `json:"role"`   // "领队" 或 "普通会员"
 }
+
+// BatchDeleteReq 批量删除请求
+type BatchDeleteReq struct {
+	IDs []string `json:"ids" binding:"required,min=1"`
+}
+
+// BatchUpdateStatusReq 批量修改状态请求
+type BatchUpdateStatusReq struct {
+	IDs    []string `json:"ids" binding:"required,min=1"`
+	Status bool     `json:"status"` // true=正常, false=禁用
+}

@@ -12,4 +12,10 @@ type AdminAuthService interface {
 
 	// GetCaptcha 获取图形验证码
 	GetCaptcha(ctx context.Context) (*response.CaptchaResponse, error)
+
+	// GetProfile 获取当前登录管理员信息
+	GetProfile(ctx context.Context, adminID uint) (*response.AdminInfo, error)
+
+	// UpdatePassword 修改当前登录管理员密码
+	UpdatePassword(ctx context.Context, adminID uint, req *request.ResetPasswordRequest) error
 }

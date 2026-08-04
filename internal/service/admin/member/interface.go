@@ -20,4 +20,13 @@ type MemberService interface {
 
 	// DeleteMember 删除会员
 	DeleteMember(ctx context.Context, id uint) error
+
+	// BatchDeleteMembers 批量删除
+	BatchDeleteMembers(ctx context.Context, req *request.BatchDeleteReq) error
+
+	// BatchUpdateStatus 批量修改状态
+	BatchUpdateStatus(ctx context.Context, req *request.BatchUpdateStatusReq) error
+
+	// ExportMembers 导出某角色全部记录（role 由路由传入）
+	ExportMembers(ctx context.Context, role int) ([]response.MemberListItem, error)
 }
