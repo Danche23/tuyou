@@ -18,4 +18,7 @@ type ActivityService interface {
 
 	// DeleteActivity 删除活动（仅创建者）
 	DeleteActivity(activityID uint, memberID uint) error
+
+	// GetActivityList 获取活动列表（支持按分类筛选和分页）
+	GetActivityList(memberID uint, req *requestActivity.ListActivityRequest) ([]responseActivity.ActivityListItem, int64, error)
 }

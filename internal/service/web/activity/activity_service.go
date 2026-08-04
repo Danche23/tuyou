@@ -275,6 +275,102 @@ func (s *activityService) DeleteActivity(activityID uint, memberID uint) error {
 	return nil
 }
 
+// GetActivityList 获取活动列表
+func (s *activityService) GetActivityList(memberID uint, req *requestActivity.ListActivityRequest) ([]responseActivity.ActivityListItem, int64, error) {
+	// ========== 1. 默认分页参数 ==========
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 || req.Size > 100 {
+		req.Size = 10
+	}
+
+	// ========== 2. 分类校验与转换 ==========
+	var category int
+	if req.Category != "" {
+		var ok bool
+		category, ok = categoryStrToInt[req.Category]
+		if !ok {
+			return nil, 0, errors.New(errors.CodeInvalidParam, "活动类型不合法")
+		}
+	}
+
+	// ========== 3. 查询活动列表 ==========
+	activities, total, err := s.activityRepo.FindList(category, req.Page, req.Size)
+	if err != nil {
+		return nil, 0, errors.New(errors.CodeInternalError, "获取活动列表失败")
+	}
+
+	if len(activities) == 0 {
+		return []responseActivity.ActivityListItem{}, total, nil
+	}
+
+	// ========== 4. 批量获取领队信息 ==========
+	leaderIDSet := make(map[uint]bool)
+	uniqueLeaderIDs := make([]uint, 0)
+	for _, a := range activities {
+		if !leaderIDSet[a.LeaderMemberID] {
+			leaderIDSet[a.LeaderMemberID] = true
+			uniqueLeaderIDs = append(uniqueLeaderIDs, a.LeaderMemberID)
+		}
+	}
+	members, err := s.activityRepo.GetMembersByIDs(uniqueLeaderIDs)
+	if err != nil {
+		return nil, 0, errors.New(errors.CodeInternalError, "查询领队信息失败")
+	}
+	memberMap := make(map[uint]*entity.Member, len(members))
+	for i := range members {
+		memberMap[members[i].ID] = &members[i]
+	}
+
+	// ========== 5. 批量查询当前用户的报名状态 ==========
+	activityIDs := make([]uint, len(activities))
+	for i, a := range activities {
+		activityIDs[i] = a.ID
+	}
+	joinedMap, err := s.activityRepo.FindJoinedActivityIDs(activityIDs, memberID)
+	if err != nil {
+		return nil, 0, errors.New(errors.CodeInternalError, "查询报名状态失败")
+	}
+
+	// ========== 6. 组装响应 ==========
+	list := make([]responseActivity.ActivityListItem, 0, len(activities))
+	for _, a := range activities {
+		// 领队信息
+		var leader *responseActivity.LeaderInfo
+		if m, ok := memberMap[a.LeaderMemberID]; ok {
+			leader = &responseActivity.LeaderInfo{
+				ID:       strconv.FormatUint(uint64(m.ID), 10),
+				Nickname: m.Nickname,
+				Avatar:   m.Avatar,
+			}
+		}
+
+		// 活动状态按时间计算
+		_, statusStr := computeActivityStatus(a.SignUpEnd, a.EndTime)
+
+		list = append(list, responseActivity.ActivityListItem{
+			ID:             strconv.FormatUint(uint64(a.ID), 10),
+			Leader:         leader,
+			Title:          a.Title,
+			CoverImg:       a.CoverImg,
+			Category:       categoryIntToStr[a.ActivityType],
+			Address:        a.Address,
+			StartTime:      a.StartTime.Format("2006-01-02 15:04:05"),
+			EndTime:        a.EndTime.Format("2006-01-02 15:04:05"),
+			SignUpEnd:      a.SignUpEnd.Format("2006-01-02 15:04:05"),
+			Price:          a.Price,
+			MaxPeople:      a.MaxPeople,
+			CurrentPeople:  a.CurrentPeople,
+			Difficulty:     difficultyIntToStr[a.Difficulty],
+			ActivityStatus: statusStr,
+			Joined:         joinedMap[a.ID],
+		})
+	}
+
+	return list, total, nil
+}
+
 var categoryStrToInt = map[string]int{
 	"徒步": 1, "露营": 2, "骑行": 3, "登山": 4, "跑步": 5, "攀岩": 6, "溯溪": 7,
 }

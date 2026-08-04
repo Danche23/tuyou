@@ -93,6 +93,30 @@ func (c *Controller) ToggleSignup(ctx *gin.Context) {
 	response.Success(ctx, resp)
 }
 
+// List 获取活动列表
+// GET /api/v1/activities?category=xxx&page=1&size=10
+func (c *Controller) List(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	var req requestActivity.ListActivityRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		return
+	}
+
+	list, total, err := c.activitySvc.GetActivityList(memberID, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+
+	response.Success(ctx, response.NewPageResponse(list, total, req.Page, req.Size))
+}
+
 // Delete 删除活动
 // DELETE /api/v1/activities/:id
 func (c *Controller) Delete(ctx *gin.Context) {

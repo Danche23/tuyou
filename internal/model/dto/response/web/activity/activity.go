@@ -7,6 +7,25 @@ type LeaderInfo struct {
 	Avatar   string `json:"avatar"`
 }
 
+// ActivityListItem 活动列表项
+type ActivityListItem struct {
+	ID             string      `json:"id"`
+	Leader         *LeaderInfo `json:"leader"`
+	Title          string      `json:"title"`
+	CoverImg       string      `json:"coverImg"`
+	Category       string      `json:"category"`
+	Address        string      `json:"address"`
+	StartTime      string      `json:"startTime"`
+	EndTime        string      `json:"endTime"`
+	SignUpEnd      string      `json:"signUpEnd"`
+	Price          float64     `json:"price"`
+	MaxPeople      int         `json:"maxPeople"`
+	CurrentPeople  int         `json:"currentPeople"`
+	Difficulty     string      `json:"difficulty"`
+	ActivityStatus string      `json:"activityStatus"`
+	Joined         bool        `json:"joined"`
+}
+
 // CreateActivityResponse 创建活动响应
 type CreateActivityResponse struct {
 	ID              string      `json:"id"`

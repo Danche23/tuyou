@@ -110,3 +110,57 @@ func (r *activityRepository) SoftDelete(tx *gorm.DB, activityID uint) error {
 	return tx.Model(&entity.Activity{}).Where("id = ?", activityID).
 		UpdateColumn("is_del", 1).Error
 }
+
+// FindList 查询活动列表（分页，按分类筛选，过滤已删除，按开始时间倒序）
+func (r *activityRepository) FindList(category int, page, size int) ([]entity.Activity, int64, error) {
+	var list []entity.Activity
+	var total int64
+
+	db := r.db.Model(&entity.Activity{}).Where("is_del = ?", 0)
+	if category > 0 {
+		db = db.Where("activity_type = ?", category)
+	}
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * size
+	if err := db.Offset(offset).Limit(size).Order("start_time DESC").Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return list, total, nil
+}
+
+// GetMembersByIDs 批量获取成员信息
+func (r *activityRepository) GetMembersByIDs(ids []uint) ([]entity.Member, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var members []entity.Member
+	if err := r.db.Where("id IN ?", ids).Find(&members).Error; err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+// FindJoinedActivityIDs 查询当前用户已报名的活动ID集合
+func (r *activityRepository) FindJoinedActivityIDs(activityIDs []uint, memberID uint) (map[uint]bool, error) {
+	result := make(map[uint]bool)
+	if len(activityIDs) == 0 {
+		return result, nil
+	}
+
+	var joins []entity.ActivityJoin
+	if err := r.db.Model(&entity.ActivityJoin{}).
+		Where("activity_id IN ? AND member_id = ?", activityIDs, memberID).
+		Find(&joins).Error; err != nil {
+		return nil, err
+	}
+
+	for _, j := range joins {
+		result[j.ActivityID] = true
+	}
+	return result, nil
+}
