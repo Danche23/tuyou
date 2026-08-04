@@ -1,6 +1,7 @@
 package api
 
 import (
+	"tuyou/internal/api/v1/web/activity"
 	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/middleware"
@@ -10,15 +11,17 @@ import (
 
 // Router 路由
 type Router struct {
-	noteCtrl  *note.Controller
-	guideCtrl *guide.Controller
+	noteCtrl     *note.Controller
+	guideCtrl    *guide.Controller
+	activityCtrl *activity.Controller
 }
 
 // NewRouter 创建路由
-func NewRouter(noteCtrl *note.Controller, guideCtrl *guide.Controller) *Router {
+func NewRouter(noteCtrl *note.Controller, guideCtrl *guide.Controller, activityCtrl *activity.Controller) *Router {
 	return &Router{
-		noteCtrl:  noteCtrl,
-		guideCtrl: guideCtrl,
+		noteCtrl:     noteCtrl,
+		guideCtrl:    guideCtrl,
+		activityCtrl: activityCtrl,
 	}
 }
 
@@ -43,6 +46,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	{
 		r.noteCtrl.RegisterRoutes(apiGroup)
 		r.guideCtrl.RegisterRoutes(apiGroup)
+		r.activityCtrl.RegisterRoutes(apiGroup)
 	}
 }
 

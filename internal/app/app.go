@@ -14,12 +14,15 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"tuyou/internal/api"
+	"tuyou/internal/api/v1/web/activity"
 	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
+	repoActivity "tuyou/internal/repository/web/activity"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
+	serviceActivity "tuyou/internal/service/web/activity"
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/internal/stream"
@@ -167,17 +170,20 @@ func (a *App) initDependencies() {
 	// ========== 创建 Repository ==========
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
+	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
+	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 
 	// ========== 创建 Controller ==========
 	noteCtrl := note.NewController(noteSvc)
 	guideCtrl := guide.NewController(guideSvc)
+	activityCtrl := activity.NewController(activitySvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, guideCtrl)
+	a.router = api.NewRouter(noteCtrl, guideCtrl, activityCtrl)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
