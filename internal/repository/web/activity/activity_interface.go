@@ -17,6 +17,9 @@ type ActivityRepository interface {
 	// IncrPublishCount 发布计数 +1
 	IncrPublishCount(tx *gorm.DB, memberID uint) error
 
+	// DecrPublishCount 发布计数 -1
+	DecrPublishCount(tx *gorm.DB, memberID uint) error
+
 	// FindByID 根据活动ID查询（未删除）
 	FindByID(activityID uint) (*entity.Activity, error)
 
@@ -40,4 +43,7 @@ type ActivityRepository interface {
 
 	// DecrCurrentPeople 报名人数 -1
 	DecrCurrentPeople(tx *gorm.DB, activityID uint) error
+
+	// SoftDelete 逻辑删除活动（is_del=1）
+	SoftDelete(tx *gorm.DB, activityID uint) error
 }

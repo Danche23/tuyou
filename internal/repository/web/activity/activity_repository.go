@@ -35,6 +35,12 @@ func (r *activityRepository) IncrPublishCount(tx *gorm.DB, memberID uint) error 
 		UpdateColumn("publish_count", gorm.Expr("publish_count + 1")).Error
 }
 
+// DecrPublishCount 发布计数 -1
+func (r *activityRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+}
+
 // FindByID 根据活动ID查询（未删除）
 func (r *activityRepository) FindByID(activityID uint) (*entity.Activity, error) {
 	var activity entity.Activity
@@ -96,4 +102,10 @@ func (r *activityRepository) IncrCurrentPeople(tx *gorm.DB, activityID uint, max
 func (r *activityRepository) DecrCurrentPeople(tx *gorm.DB, activityID uint) error {
 	return tx.Model(&entity.Activity{}).Where("id = ?", activityID).
 		UpdateColumn("current_people", gorm.Expr("current_people - 1")).Error
+}
+
+// SoftDelete 逻辑删除活动（is_del=1）
+func (r *activityRepository) SoftDelete(tx *gorm.DB, activityID uint) error {
+	return tx.Model(&entity.Activity{}).Where("id = ?", activityID).
+		UpdateColumn("is_del", 1).Error
 }

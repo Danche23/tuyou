@@ -225,21 +225,24 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 	if realStatusInt != 1 {
 		return nil, errors.New(errors.CodeInvalidParam, "不在报名时间内")
 	}
-	var affected int64
+	var bizErr error
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.activityRepo.CreateJoin(tx, activityID, memberID); err != nil {
-			return err
+		affected, incrErr := s.activityRepo.IncrCurrentPeople(tx, activityID, activity.MaxPeople)
+		if incrErr != nil {
+			return incrErr
 		}
-		var incrErr error
-		affected, incrErr = s.activityRepo.IncrCurrentPeople(tx, activityID, activity.MaxPeople)
-		return incrErr
+		if affected == 0 {
+			bizErr = errors.New(errors.CodeInvalidParam, "活动人数已满")
+			return bizErr
+		}
+		return s.activityRepo.CreateJoin(tx, activityID, memberID)
 	})
+	if bizErr != nil {
+		return nil, bizErr
+	}
 	if err != nil {
 		logger.Errorf("报名事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
-	}
-	if affected == 0 {
-		return nil, errors.New(errors.CodeInvalidParam, "活动人数已满")
 	}
 
 	return &responseActivity.SignupToggleResponse{
@@ -248,7 +251,29 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 	}, nil
 }
 
-// ────────── 枚举映射 ──────────
+// DeleteActivity 删除活动（逻辑删除，仅创建者）
+func (s *activityService) DeleteActivity(activityID uint, memberID uint) error {
+	activity, err := s.activityRepo.FindByID(activityID)
+	if err != nil {
+		return errors.New(errors.CodeNotFound, "活动不存在")
+	}
+	if activity.LeaderMemberID != memberID {
+		return errors.New(errors.CodeForbidden, "无权删除他人活动")
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.activityRepo.SoftDelete(tx, activityID); err != nil {
+			return err
+		}
+		return s.activityRepo.DecrPublishCount(tx, memberID)
+	})
+	if err != nil {
+		logger.Errorf("删除活动事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
+		return errors.NewWithErr(errors.CodeInternalError, "删除活动失败", err)
+	}
+
+	return nil
+}
 
 var categoryStrToInt = map[string]int{
 	"徒步": 1, "露营": 2, "骑行": 3, "登山": 4, "跑步": 5, "攀岩": 6, "溯溪": 7,

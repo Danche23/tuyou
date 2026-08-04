@@ -15,4 +15,7 @@ type ActivityService interface {
 
 	// ToggleSignup 报名/取消报名
 	ToggleSignup(activityID uint, memberID uint) (*responseActivity.SignupToggleResponse, error)
+
+	// DeleteActivity 删除活动（仅创建者）
+	DeleteActivity(activityID uint, memberID uint) error
 }
