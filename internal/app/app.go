@@ -17,16 +17,19 @@ import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
+	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminMember "tuyou/internal/repository/admin/member"
 	"tuyou/internal/repository/web/auth"
+	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAuth "tuyou/internal/service/web/auth"
+	serviceGuide "tuyou/internal/service/web/guide"
 	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
@@ -175,21 +178,24 @@ func (a *App) initDependencies() {
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
+	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
+	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
 	noteCtrl := note.NewController(noteSvc)
 	memberC := memberCtrl.NewController(adminMemberSvc)
+	guideCtrl := guide.NewController(guideSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
