@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"tuyou/internal/api"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
+	centerCtrl "tuyou/internal/api/v1/admin/center"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -22,11 +23,13 @@ import (
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
+	repoAdminCenter "tuyou/internal/repository/admin/center"
 	repoAdminMember "tuyou/internal/repository/admin/member"
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
 	serviceAdmin "tuyou/internal/service/admin/auth"
+	serviceAdminCenter "tuyou/internal/service/admin/center"
 	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
@@ -177,6 +180,7 @@ func (a *App) initDependencies() {
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
+	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 
@@ -185,6 +189,7 @@ func (a *App) initDependencies() {
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
+	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 
 	// ========== 创建 Handler ==========
@@ -192,10 +197,11 @@ func (a *App) initDependencies() {
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
 	noteCtrl := note.NewController(noteSvc)
 	memberC := memberCtrl.NewController(adminMemberSvc)
+	centerC := centerCtrl.NewController(adminCenterSvc)
 	guideCtrl := guide.NewController(guideSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl, centerC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
