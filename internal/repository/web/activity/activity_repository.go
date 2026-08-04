@@ -34,3 +34,41 @@ func (r *activityRepository) IncrPublishCount(tx *gorm.DB, memberID uint) error 
 	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
 		UpdateColumn("publish_count", gorm.Expr("publish_count + 1")).Error
 }
+
+// FindByID 根据活动ID查询（未删除）
+func (r *activityRepository) FindByID(activityID uint) (*entity.Activity, error) {
+	var activity entity.Activity
+	if err := r.db.Where("id = ? AND is_del = ?", activityID, 0).First(&activity).Error; err != nil {
+		return nil, err
+	}
+	return &activity, nil
+}
+
+// FindJoinedMembers 查询已报名成员列表（activity_join JOIN member，排除取消报名）
+func (r *activityRepository) FindJoinedMembers(activityID uint) ([]entity.Member, error) {
+	var members []entity.Member
+	if err := r.db.Table("activity_join").
+		Joins("JOIN member ON member.id = activity_join.member_id").
+		Where("activity_join.activity_id = ? AND activity_join.is_cancel = ?", activityID, 0).
+		Find(&members).Error; err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+// ExistsJoin 检查用户是否已报名该活动（未取消）
+func (r *activityRepository) ExistsJoin(activityID uint, memberID uint) (bool, error) {
+	var count int64
+	if err := r.db.Model(&entity.ActivityJoin{}).
+		Where("activity_id = ? AND member_id = ? AND is_cancel = ?", activityID, memberID, 0).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// UpdateActivityStatus 更新活动状态
+func (r *activityRepository) UpdateActivityStatus(activityID uint, status int) error {
+	return r.db.Model(&entity.Activity{}).Where("id = ?", activityID).
+		UpdateColumn("activity_status", status).Error
+}

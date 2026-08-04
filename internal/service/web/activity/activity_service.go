@@ -14,16 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// 分类中文 → 数据库 int 映射（写死枚举，无独立分类接口）
-var categoryStrToInt = map[string]int{
-	"徒步": 1, "露营": 2, "骑行": 3, "登山": 4, "跑步": 5, "攀岩": 6, "溯溪": 7,
-}
-
-// 难度中文 → 数据库 int 映射
-var difficultyStrToInt = map[string]int{
-	"入门": 1, "中等": 2, "中高等": 3, "高等": 4,
-}
-
 type activityService struct {
 	activityRepo repoActivity.ActivityRepository
 	db           *gorm.DB
@@ -127,4 +117,96 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		Difficulty:      req.Difficulty,
 		Joined:          false,
 	}, nil
+}
+
+// GetActivityDetail 获取活动详情
+func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*responseActivity.ActivityDetailResponse, error) {
+	activity, err := s.activityRepo.FindByID(activityID)
+	if err != nil {
+		return nil, errors.New(errors.CodeNotFound, "活动不存在")
+	}
+
+	// 领队信息
+	leader, err := s.activityRepo.GetAuthor(activity.LeaderMemberID)
+	if err != nil {
+		return nil, errors.New(errors.CodeInternalError, "获取领队信息失败")
+	}
+
+	// 已报名成员
+	members, err := s.activityRepo.FindJoinedMembers(activityID)
+	if err != nil {
+		return nil, errors.New(errors.CodeInternalError, "查询报名成员失败")
+	}
+	memberInfos := make([]responseActivity.MemberInfo, 0, len(members))
+	for _, m := range members {
+		memberInfos = append(memberInfos, responseActivity.MemberInfo{
+			ID:       strconv.FormatUint(uint64(m.ID), 10),
+			Nickname: m.Nickname,
+			Avatar:   m.Avatar,
+		})
+	}
+
+	// 当前用户是否已报名
+	joined, err := s.activityRepo.ExistsJoin(activityID, memberID)
+	if err != nil {
+		return nil, errors.New(errors.CodeInternalError, "查询报名状态失败")
+	}
+
+	// 活动状态按时间自动计算，和 DB 不一致时同步更新
+	realStatusInt, activityStatus := computeActivityStatus(activity.SignUpEnd, activity.EndTime)
+	if activity.ActivityStatus != realStatusInt {
+		if err := s.activityRepo.UpdateActivityStatus(activityID, realStatusInt); err != nil {
+			logger.Errorf("同步活动状态失败 activityID=%d old=%d new=%d err=%v", activityID, activity.ActivityStatus, realStatusInt, err)
+		}
+	}
+
+	return &responseActivity.ActivityDetailResponse{
+		ID:              strconv.FormatUint(uint64(activity.ID), 10),
+		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar},
+		Title:           activity.Title,
+		CoverImg:        activity.CoverImg,
+		Category:        categoryIntToStr[activity.ActivityType],
+		Address:         activity.Address,
+		ActivityContent: activity.ActivityContent,
+		StartTime:       activity.StartTime.Format("2006-01-02 15:04:05"),
+		EndTime:         activity.EndTime.Format("2006-01-02 15:04:05"),
+		SignUpStart:     activity.SignUpStart.Format("2006-01-02 15:04:05"),
+		SignUpEnd:       activity.SignUpEnd.Format("2006-01-02 15:04:05"),
+		MaxPeople:       activity.MaxPeople,
+		CurrentPeople:   activity.CurrentPeople,
+		Price:           activity.Price,
+		Difficulty:      difficultyIntToStr[activity.Difficulty],
+		ActivityStatus:  activityStatus,
+		Joined:          joined,
+		Members:         memberInfos,
+	}, nil
+}
+
+// ────────── 枚举映射 ──────────
+
+var categoryStrToInt = map[string]int{
+	"徒步": 1, "露营": 2, "骑行": 3, "登山": 4, "跑步": 5, "攀岩": 6, "溯溪": 7,
+}
+
+var categoryIntToStr = map[int]string{
+	1: "徒步", 2: "露营", 3: "骑行", 4: "登山", 5: "跑步", 6: "攀岩", 7: "溯溪",
+}
+
+var difficultyStrToInt = map[string]int{
+	"入门": 1, "中等": 2, "中高等": 3, "高等": 4,
+}
+
+var difficultyIntToStr = map[int]string{
+	1: "入门", 2: "中等", 3: "中高等", 4: "高等",
+}
+
+func computeActivityStatus(signUpEnd, endTime time.Time) (int, string) {
+	now := time.Now()
+	if now.After(endTime) {
+		return 3, "已结束"
+	}
+	if !now.Before(signUpEnd) {
+		return 2, "进行中"
+	}
+	return 1, "报名中"
 }

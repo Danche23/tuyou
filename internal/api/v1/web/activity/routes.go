@@ -12,5 +12,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	activities.Use(middleware.Auth())
 	{
 		activities.POST("", c.Create)
+		activities.GET("/:id", c.GetDetail)
 	}
 }
