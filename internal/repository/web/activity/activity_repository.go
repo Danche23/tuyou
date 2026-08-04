@@ -50,10 +50,11 @@ func (r *activityRepository) FindByID(activityID uint) (*entity.Activity, error)
 	return &activity, nil
 }
 
-// FindJoinedMembers 查询已报名成员列表（activity_join JOIN member，排除取消报名）
+// FindJoinedMembers 查询已报名成员列表（activity_join JOIN member）
 func (r *activityRepository) FindJoinedMembers(activityID uint) ([]entity.Member, error) {
 	var members []entity.Member
 	if err := r.db.Table("activity_join").
+		Select("member.id, member.nickname, member.avatar").
 		Joins("JOIN member ON member.id = activity_join.member_id").
 		Where("activity_join.activity_id = ?", activityID).
 		Find(&members).Error; err != nil {
