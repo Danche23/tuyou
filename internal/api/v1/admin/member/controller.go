@@ -24,7 +24,7 @@ func NewController(memberSvc service.MemberService) *Controller {
 func (c *Controller) ListMembers(ctx *gin.Context) {
 	var req request.ListMemberReq
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
@@ -41,7 +41,7 @@ func (c *Controller) ListMembers(ctx *gin.Context) {
 func (c *Controller) ListLeaders(ctx *gin.Context) {
 	var req request.ListMemberReq
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	//领队的角色用 0 表示
@@ -77,7 +77,7 @@ func (c *Controller) Update(ctx *gin.Context) {
 	}
 	var req request.UpdateMemberReq
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败: "+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	if err := c.memberSvc.UpdateMember(ctx, uint(id), &req); err != nil {

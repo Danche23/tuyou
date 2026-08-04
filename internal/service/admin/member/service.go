@@ -67,10 +67,21 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 	updates := make(map[string]interface{})
 
 	if req.Status != nil {
-		updates["status"] = *req.Status
+		if *req.Status {
+			updates["status"] = 1
+		} else {
+			updates["status"] = 0
+		}
 	}
 	if req.Role != nil {
-		updates["role"] = *req.Role
+		switch *req.Role {
+		case "领队":
+			updates["role"] = 0
+		case "普通会员":
+			updates["role"] = 1
+		default:
+			return appErrors.ErrInvalidParam
+		}
 	}
 
 	if len(updates) == 0 {
