@@ -21,7 +21,7 @@ type Strategy struct {
 	Distance     string    `gorm:"type:varchar(20);comment:距离（单位：公里）" json:"distance"`
 	Duration     string    `gorm:"type:varchar(20);comment:总时长" json:"duration"`
 	Difficulty   int       `gorm:"type:tinyint;comment:难度（下拉选择 入门、中等、中高等、高等）" json:"difficulty"`
-	Transport    int       `gorm:"type:tinyint;comment:交通" json:"transport"`
+	Transport    string    `gorm:"type:varchar(20);comment:交通方式（用户自由填写）" json:"transport"`
 }
 
 // TableName 指定表名
