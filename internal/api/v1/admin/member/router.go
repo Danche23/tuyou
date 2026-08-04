@@ -1,0 +1,26 @@
+package member
+
+import (
+	"tuyou/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+// RegisterRoutes 注册会员/领队管理路由
+func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
+	admin := r.Group("/admin")
+	admin.Use(middleware.Auth())
+	{
+		// 会员
+		admin.GET("/members", c.ListMembers)
+		admin.GET("/members/:id", c.GetDetail)
+		admin.PUT("/members/:id", c.Update)
+		admin.DELETE("/members/:id", c.Delete)
+
+		// 领队（同一套 handler，role 由 ListLeaders 固定传 0）
+		admin.GET("/leaders", c.ListLeaders)
+		admin.GET("/leaders/:id", c.GetDetail)
+		admin.PUT("/leaders/:id", c.Update)
+		admin.DELETE("/leaders/:id", c.Delete)
+	}
+}
