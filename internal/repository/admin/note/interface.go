@@ -25,4 +25,7 @@ type NoteRepository interface {
 
 	// FindByID 根据 ID 查询单篇笔记，不存在时返回 nil, nil
 	FindByID(ctx context.Context, id uint) (*entity.Note, error)
+
+	// Update 更新笔记字段（updates map 中的 key 都会被更新）
+	Update(ctx context.Context, id uint, updates map[string]interface{}) error
 }

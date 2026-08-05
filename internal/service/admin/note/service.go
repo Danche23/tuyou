@@ -231,6 +231,57 @@ func (s *noteService) GetNoteDetail(ctx context.Context, id uint) (*response.Not
 	}, nil
 }
 
+// UpdateNote 编辑笔记（分类/轮播/状态三字段必传，整体覆盖），返回更新后的详情
+func (s *noteService) UpdateNote(ctx context.Context, id uint, req *request.UpdateNoteReq) (*response.NoteDetailResp, error) {
+	// 1. 校验笔记存在
+	note, err := s.noteRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取笔记失败", err)
+	}
+	if note == nil {
+		return nil, errors.New(errors.CodeNotFound, "笔记不存在")
+	}
+
+	// 2. 解析三个必传字段
+	c, ok := categoryStrToInt[req.Category]
+	if !ok {
+		return nil, errors.New(errors.CodeInvalidParam, "分类不合法")
+	}
+
+	var isSlide int
+	switch req.IsSlide {
+	case "是":
+		isSlide = 1
+	case "否":
+		isSlide = 0
+	default:
+		return nil, errors.New(errors.CodeInvalidParam, "是否轮播参数不合法")
+	}
+
+	var status int
+	switch req.Status {
+	case "正常":
+		status = 1
+	case "下架":
+		status = 0
+	default:
+		return nil, errors.New(errors.CodeInvalidParam, "状态参数不合法")
+	}
+
+	// 3. 整体覆盖更新
+	updates := map[string]interface{}{
+		"category": c,
+		"is_slide": isSlide,
+		"status":   status,
+	}
+	if err := s.noteRepo.Update(ctx, id, updates); err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑笔记失败", err)
+	}
+
+	// 4. 返回更新后的详情
+	return s.GetNoteDetail(ctx, id)
+}
+
 // buildResp 组装分页响应
 func (s *noteService) buildResp(list []response.NoteListItem, total int64, req *request.ListNoteReq) *response.ListNoteResp {
 	return &response.ListNoteResp{

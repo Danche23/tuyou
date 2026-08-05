@@ -14,4 +14,7 @@ type NoteService interface {
 
 	// GetNoteDetail 获取笔记详情
 	GetNoteDetail(ctx context.Context, id uint) (*response.NoteDetailResp, error)
+
+	// UpdateNote 编辑笔记（分类/轮播/状态三字段必传，整体覆盖），返回更新后的详情
+	UpdateNote(ctx context.Context, id uint, req *request.UpdateNoteReq) (*response.NoteDetailResp, error)
 }

@@ -152,3 +152,10 @@ func (r *noteRepository) FindByID(ctx context.Context, id uint) (*entity.Note, e
 	}
 	return &note, nil
 }
+
+// Update 更新笔记字段（updates map 中的 key 都会被更新）
+func (r *noteRepository) Update(ctx context.Context, id uint, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(&entity.Note{}).
+		Where("id = ?", id).
+		Updates(updates).Error
+}
