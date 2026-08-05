@@ -153,7 +153,11 @@ func (c *Controller) export(ctx *gin.Context, role int) {
 		response.InternalError(ctx, "导出失败")
 		return
 	}
-	filename := "member_export_" + time.Now().Format("20060102") + ".xlsx"
+	prefix := "member_export_"
+	if role == 0 {
+		prefix = "leader_export_"
+	}
+	filename := prefix + time.Now().Format("20060102") + ".xlsx"
 	ctx.Header("Content-Disposition", "attachment; filename="+filename)
 	ctx.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
 }
