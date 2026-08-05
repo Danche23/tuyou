@@ -4,6 +4,7 @@ import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	"tuyou/internal/api/v1/admin/center"
 	"tuyou/internal/api/v1/admin/member"
+	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -20,6 +21,7 @@ type Router struct {
 	centerCtrl   *center.Controller
 	noteCtrl     *note.Controller
 	memberCtrl   *member.Controller
+	adminPerCtrl *adminPermCtrl.Controller
 	guideCtrl    *guide.Controller
 	activityCtrl *activity.Controller
 }
@@ -30,6 +32,7 @@ func NewRouter(
 	authHandler *handlerAuth.AuthHandler,
 	adminHandler *handlerAdmin.AdminHandler,
 	memberCtrl *member.Controller,
+	adminPerCtrl *adminPermCtrl.Controller,
 	guideCtrl *guide.Controller,
 	centerCtrl *center.Controller,
 	activityCtrl *activity.Controller,
@@ -39,6 +42,7 @@ func NewRouter(
 		authHandler:  authHandler,
 		adminHandler: adminHandler,
 		memberCtrl:   memberCtrl,
+		adminPerCtrl: adminPerCtrl,
 		guideCtrl:    guideCtrl,
 		activityCtrl: activityCtrl,
 		centerCtrl:   centerCtrl,
@@ -68,6 +72,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.noteCtrl.RegisterRoutes(apiGroup)
 		r.adminHandler.RegisterRoutes(apiGroup)
 		r.memberCtrl.RegisterRoutes(apiGroup)
+		r.adminPerCtrl.RegisterRoutes(apiGroup)
 		r.guideCtrl.RegisterRoutes(apiGroup)
 		r.activityCtrl.RegisterRoutes(apiGroup)
 		r.centerCtrl.RegisterRoutes(apiGroup)
