@@ -50,10 +50,10 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	// ========== 时间解析 ==========
 	startTime, err := time.ParseInLocation("2006-01-02 15:04", req.StartTime, time.Local)
 	if err != nil {
-		return nil, errors.New(errors.CodeInvalidParam, "开始时间格式不正确")
+		return nil, errors.New(errors.CodeInvalidParam, "活动开始时间格式不正确")
 	}
-	if !startTime.After(time.Now()) {
-		return nil, errors.New(errors.CodeInvalidParam, "开始时间必须晚于当前时间")
+	if !startTime.After(time.Now().Add(48 * time.Hour)) {
+		return nil, errors.New(errors.CodeInvalidParam, "活动开始时间必须晚于当前时间48小时")
 	}
 
 	endTime, err := time.ParseInLocation("2006-01-02 15:04", req.EndTime, time.Local)

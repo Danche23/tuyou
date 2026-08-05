@@ -26,8 +26,8 @@ import (
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminCenter "tuyou/internal/repository/admin/center"
 	repoAdminMember "tuyou/internal/repository/admin/member"
-	"tuyou/internal/repository/web/auth"
 	repoActivity "tuyou/internal/repository/web/activity"
+	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
 	serviceAdmin "tuyou/internal/service/admin/auth"
@@ -207,8 +207,7 @@ func (a *App) initDependencies() {
 	activityCtrl := activity.NewController(activitySvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl, centerC)
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl, activityCtrl)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl, centerC, activityCtrl)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
