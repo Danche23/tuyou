@@ -23,19 +23,19 @@ func NewAdminAuthService(adminRepo auth.AdminRepository) AdminAuthService {
 }
 
 // GetCaptcha 获取图形验证码
-func (s *authService) GetCaptcha(ctx context.Context) (*response.CaptchaResponse, error) {
+func (s *authService) GetCaptcha(ctx context.Context) (*response.CaptchaResp, error) {
 	captchaID, b64s, err := b64c.Generate()
 	if err != nil {
 		return nil, err
 	}
-	return &response.CaptchaResponse{
+	return &response.CaptchaResp{
 		CaptchaID:    captchaID,
 		CaptchaImage: b64s,
 	}, nil
 }
 
 // Login 登录，只返回 token，管理员信息通过 GetProfile 获取
-func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResponse, error) {
+func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResp, error) {
 
 	if req.Password == "" {
 		return nil, appErrors.ErrMissingParam
@@ -92,7 +92,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 		return nil, err
 	}
 
-	return &response.LoginResponse{
+	return &response.LoginResp{
 		Token:    token,
 		ID:       strconv.Itoa(int(admin.ID)),
 		Username: admin.Username,
@@ -110,7 +110,7 @@ func buildMenuTree(menus []entity.SysMenu) []*response.MenuTree {
 	for i := range menus {
 		m := &menus[i]
 		nodes[m.ID] = &response.MenuTree{
-			ID:        m.ID,
+			ID:        strconv.Itoa(int(m.ID)),
 			MenuName:  m.MenuName,
 			ParentID:  m.ParentID,
 			MenuType:  m.MenuType,
@@ -138,7 +138,7 @@ func buildPermTree(perms []entity.SysPermission) []response.PermTree {
 	idx := make(map[string]int, len(perms))
 	for _, p := range perms {
 		item := response.PermItem{
-			ID:            p.ID,
+			ID:            strconv.Itoa(int(p.ID)),
 			PermName:      p.PermName,
 			PermKey:       p.PermKey,
 			RequestMethod: p.RequestMethod,

@@ -91,7 +91,7 @@ func (r *memberRepository) GetDetailByID(ctx context.Context, id uint) (*respons
 	if err != nil {
 		return nil, err
 	}
-	if detail.ID == 0 {
+	if detail.ID == "0" {
 		return nil, appErrors.ErrUserNotFound
 	}
 	return &detail, nil
