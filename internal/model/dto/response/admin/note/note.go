@@ -26,3 +26,10 @@ type ListNoteResp struct {
 	Size      int            `json:"size"`
 	TotalPage int            `json:"total_page"`
 }
+
+// NoteDetailResp 后台笔记详情响应（= 列表项 + content + delete_time）
+type NoteDetailResp struct {
+	NoteListItem
+	Content    string `json:"content"`     // 笔记正文
+	DeleteTime string `json:"delete_time"` // 删除时间，未删除时为空字符串
+}

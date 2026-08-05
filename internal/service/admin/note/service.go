@@ -157,6 +157,80 @@ func (s *noteService) ListNotes(ctx context.Context, req *request.ListNoteReq) (
 	return s.buildResp(list, total, req), nil
 }
 
+// GetNoteDetail 获取笔记详情
+func (s *noteService) GetNoteDetail(ctx context.Context, id uint) (*response.NoteDetailResp, error) {
+	note, err := s.noteRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取笔记详情失败", err)
+	}
+	if note == nil {
+		return nil, errors.New(errors.CodeNotFound, "笔记不存在")
+	}
+
+	// 作者昵称
+	members, err := s.noteRepo.FindMembersByIDs(ctx, []uint{note.MemberID})
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询作者信息失败", err)
+	}
+	nickname := ""
+	if len(members) > 0 {
+		nickname = members[0].Nickname
+	}
+
+	// 标签
+	tagsMap, err := s.noteRepo.FindTagsByNoteIDs(ctx, []uint{note.ID})
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询标签失败", err)
+	}
+
+	// 封面
+	covers, err := s.noteRepo.FindCoverImagesByNoteIDs(ctx, []uint{note.ID})
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询封面失败", err)
+	}
+
+	category := categoryIntToStr[note.Category]
+	if category == "" {
+		category = "未知"
+	}
+
+	isSlide := "否"
+	if note.IsSlide == 1 {
+		isSlide = "是"
+	}
+
+	status := "下架"
+	if note.Status == 1 {
+		status = "正常"
+	}
+
+	deleteTime := ""
+	if note.DeletedAt.Valid {
+		deleteTime = note.DeletedAt.Time.Format("2006-01-02 15:04:05")
+	}
+
+	return &response.NoteDetailResp{
+		NoteListItem: response.NoteListItem{
+			ID:           fmt.Sprintf("N%04d", note.ID),
+			CoverImg:     covers[note.ID],
+			Title:        note.Title,
+			Nickname:     nickname,
+			Category:     category,
+			Tags:         tagsMap[note.ID],
+			PublishTime:  note.PublishTime.Format("2006-01-02 15:04:05"),
+			ViewCount:    note.ViewCount,
+			LikeCount:    note.LikeCount,
+			CollectCount: note.CollectCount,
+			CommentCount: note.CommentCount,
+			Heat:         int64(note.Heat),
+			IsSlide:      isSlide,
+			Status:       status,
+		},
+		Content:    note.Content,
+		DeleteTime: deleteTime,
+	}, nil
+}
+
 // buildResp 组装分页响应
 func (s *noteService) buildResp(list []response.NoteListItem, total int64, req *request.ListNoteReq) *response.ListNoteResp {
 	return &response.ListNoteResp{
@@ -180,7 +254,7 @@ var categoryStrToInt = map[string]int{
 
 // 排序字段中文 → 数据库列名（白名单，防注入）
 var noteSortFieldMap = map[string]string{
-	"热度":   "heat",
+	"热度":  "heat",
 	"浏览量": "view_count",
 	"点赞量": "like_count",
 	"收藏量": "collect_count",

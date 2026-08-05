@@ -2,6 +2,7 @@ package note
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
@@ -40,7 +41,7 @@ func applyFilters(query *gorm.DB, filters map[string]interface{}) *gorm.DB {
 // Count 统计笔记数量
 func (r *noteRepository) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
 	var total int64
-	query := r.db.WithContext(ctx).Model(&entity.Note{})
+	query := r.db.WithContext(ctx).Unscoped().Model(&entity.Note{})
 	query = applyFilters(query, filters)
 	if err := query.Count(&total).Error; err != nil {
 		return 0, err
@@ -52,7 +53,7 @@ func (r *noteRepository) Count(ctx context.Context, filters map[string]interface
 func (r *noteRepository) FindList(ctx context.Context, filters map[string]interface{}, sortField, sortOrder string, page, size int) ([]entity.Note, error) {
 	notes := make([]entity.Note, 0)
 
-	query := r.db.WithContext(ctx).Model(&entity.Note{})
+	query := r.db.WithContext(ctx).Unscoped().Model(&entity.Note{})
 	query = applyFilters(query, filters)
 
 	// 排序（sortField 来自 Service 白名单，安全）
@@ -137,4 +138,17 @@ func (r *noteRepository) FindCoverImagesByNoteIDs(ctx context.Context, noteIDs [
 		covers[row.NoteID] = row.URL
 	}
 	return covers, nil
+}
+
+// FindByID 根据 ID 查询单篇笔记（Unscoped 含软删除记录，不存在返回 nil, nil）
+func (r *noteRepository) FindByID(ctx context.Context, id uint) (*entity.Note, error) {
+	var note entity.Note
+	err := r.db.WithContext(ctx).Unscoped().First(&note, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &note, nil
 }

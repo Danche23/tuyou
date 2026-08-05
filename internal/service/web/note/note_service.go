@@ -299,6 +299,9 @@ func (s *noteService) DeleteNote(noteID uint, memberID uint) error {
 		if err := s.noteRepo.UpdateStatus(tx, noteID, 0); err != nil {
 			return err
 		}
+		if err := s.noteRepo.SoftDelete(tx, noteID); err != nil {
+			return err
+		}
 		if err := s.noteRepo.UpdateCommentStatusByTarget(tx, 1, noteID, 0); err != nil {
 			return err
 		}

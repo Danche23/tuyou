@@ -11,4 +11,7 @@ import (
 type NoteService interface {
 	// ListNotes 分页查询笔记列表
 	ListNotes(ctx context.Context, req *request.ListNoteReq) (*response.ListNoteResp, error)
+
+	// GetNoteDetail 获取笔记详情
+	GetNoteDetail(ctx context.Context, id uint) (*response.NoteDetailResp, error)
 }

@@ -12,5 +12,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin.Use(middleware.Auth())
 	{
 		admin.GET("/notes", c.ListNotes)
+		admin.GET("/notes/:id", c.GetNoteDetail)
 	}
 }

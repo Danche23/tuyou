@@ -58,6 +58,9 @@ type NoteRepository interface {
 	// UpdateStatus 更新笔记上下架状态
 	UpdateStatus(tx *gorm.DB, noteID uint, status int) error
 
+	// SoftDelete 软删除笔记：设置 delete_time 为当前时间
+	SoftDelete(tx *gorm.DB, noteID uint) error
+
 	// DecrPublishCount 发布计数 -1
 	DecrPublishCount(tx *gorm.DB, memberID uint) error
 

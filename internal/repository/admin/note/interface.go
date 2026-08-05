@@ -22,4 +22,7 @@ type NoteRepository interface {
 
 	// FindCoverImagesByNoteIDs 批量查询笔记封面图（每篇第一张）map[noteID]url
 	FindCoverImagesByNoteIDs(ctx context.Context, noteIDs []uint) (map[uint]string, error)
+
+	// FindByID 根据 ID 查询单篇笔记，不存在时返回 nil, nil
+	FindByID(ctx context.Context, id uint) (*entity.Note, error)
 }

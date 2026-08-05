@@ -1,6 +1,8 @@
 package note
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 
 	request "tuyou/internal/model/dto/request/admin/note"
@@ -28,6 +30,23 @@ func (c *Controller) ListNotes(ctx *gin.Context) {
 	}
 
 	resp, err := c.noteSvc.ListNotes(ctx, &req)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// GetNoteDetail 获取笔记详情
+// GET /api/v1/admin/notes/:id
+func (c *Controller) GetNoteDetail(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+
+	resp, err := c.noteSvc.GetNoteDetail(ctx, uint(id))
 	if err != nil {
 		response.BizError(ctx, err)
 		return
