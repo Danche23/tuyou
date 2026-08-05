@@ -12,7 +12,7 @@ type AdminInfo struct {
 
 // MenuTree 菜单树节点
 type MenuTree struct {
-	ID        uint        `json:"id"`
+	ID        string      `json:"id"`
 	MenuName  string      `json:"menuName"`
 	ParentID  uint        `json:"parentId"`
 	MenuType  int         `json:"menuType"`
@@ -23,7 +23,7 @@ type MenuTree struct {
 
 // PermItem 权限树叶子节点（单个接口权限）
 type PermItem struct {
-	ID            uint   `json:"id"`
+	ID            string `json:"id"`
 	PermName      string `json:"permName"`
 	PermKey       string `json:"permKey"`
 	RequestMethod string `json:"requestMethod"`
@@ -36,8 +36,8 @@ type PermTree struct {
 	Children []PermItem `json:"children"`
 }
 
-// LoginResponse 登录响应
-type LoginResponse struct {
+// LoginResp 登录响应
+type LoginResp struct {
 	Token    string      `json:"token"`
 	ID       string      `json:"id"`
 	Username string      `json:"username"`
@@ -47,8 +47,8 @@ type LoginResponse struct {
 	PermTree []PermTree  `json:"permTree"`
 }
 
-// CaptchaResponse 图形验证码响应
-type CaptchaResponse struct {
+// CaptchaResp 图形验证码响应
+type CaptchaResp struct {
 	CaptchaID    string `json:"captcha_id"`
 	CaptchaImage string `json:"captcha_image"`
 }
