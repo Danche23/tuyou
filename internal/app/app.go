@@ -18,6 +18,7 @@ import (
 	centerCtrl "tuyou/internal/api/v1/admin/center"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
+	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -28,6 +29,7 @@ import (
 	repoAdminCenter "tuyou/internal/repository/admin/center"
 	repoAdminMember "tuyou/internal/repository/admin/member"
 	repoAdminNote "tuyou/internal/repository/admin/note"
+	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
@@ -36,6 +38,7 @@ import (
 	serviceAdminCenter "tuyou/internal/service/admin/center"
 	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAdminNote "tuyou/internal/service/admin/note"
+	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
@@ -187,6 +190,7 @@ func (a *App) initDependencies() {
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
+	adminPermRepo := repoAdminPerm.NewAdminsRepository(a.mysqlDB)
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
@@ -198,6 +202,7 @@ func (a *App) initDependencies() {
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
+	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
@@ -208,12 +213,13 @@ func (a *App) initDependencies() {
 	noteCtrl := note.NewController(noteSvc)
 	memberC := memberCtrl.NewController(adminMemberSvc)
 	centerC := centerCtrl.NewController(adminCenterSvc)
+	adminPermC := adminPermCtrl.NewController(adminPermSvc)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideCtrl := guide.NewController(guideSvc)
 	activityCtrl := activity.NewController(activitySvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, guideCtrl, centerC, activityCtrl, noteAdminC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

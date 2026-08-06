@@ -11,7 +11,7 @@ type ListMemberResp struct {
 
 // MemberListItem 会员列表项
 type MemberListItem struct {
-	ID           uint   `json:"id"`
+	ID           string `json:"id"`
 	Avatar       string `json:"avatar"`
 	Nickname     string `json:"nickname"`
 	Phone        string `json:"phone"`
@@ -25,7 +25,7 @@ type MemberListItem struct {
 
 // MemberDetail 会员详情
 type MemberDetail struct {
-	ID            uint   `json:"id"`
+	ID            string `json:"id"`
 	Avatar        string `json:"avatar"`
 	BgImg         string `json:"bg_img"`
 	Nickname      string `json:"nickname"`
