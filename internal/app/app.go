@@ -17,14 +17,17 @@ import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/note"
+	"tuyou/internal/api/v1/web/personal"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	"tuyou/internal/repository/web/auth"
 	repoNote "tuyou/internal/repository/web/note"
+	repoPersonal "tuyou/internal/repository/web/personal"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceNote "tuyou/internal/service/web/note"
+	servicePersonal "tuyou/internal/service/web/personal"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
@@ -171,19 +174,22 @@ func (a *App) initDependencies() {
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
+	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
+	personalSvc := servicePersonal.NewPersonalService(personalRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
 	noteCtrl := note.NewController(noteSvc)
+	personalCtrl := personal.NewController(personalSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

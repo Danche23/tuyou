@@ -4,6 +4,7 @@ import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/note"
+	"tuyou/internal/api/v1/web/personal"
 	"tuyou/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -14,16 +15,19 @@ type Router struct {
 	authHandler  *handlerAuth.AuthHandler
 	adminHandler *handlerAdmin.AdminHandler
 	noteCtrl     *note.Controller
+	personalCtrl *personal.Controller
 }
 
 // NewRouter 创建路由
 func NewRouter(
 	noteCtrl *note.Controller,
+	personalCtrl *personal.Controller,
 	authHandler *handlerAuth.AuthHandler,
 	adminHandle *handlerAdmin.AdminHandler,
 ) *Router {
 	return &Router{
 		noteCtrl:     noteCtrl,
+		personalCtrl: personalCtrl,
 		authHandler:  authHandler,
 		adminHandler: adminHandle,
 	}
@@ -51,6 +55,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		_ = apiGroup
 		r.authHandler.RegisterRoutes(apiGroup)
 		r.noteCtrl.RegisterRoutes(apiGroup)
+		r.personalCtrl.RegisterRoutes(apiGroup)
 		r.adminHandler.RegisterRoutes(apiGroup)
 	}
 }
