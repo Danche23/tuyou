@@ -11,11 +11,12 @@ func (h *AdminHandler) RegisterRoutes(group *gin.RouterGroup) {
 	{
 		adminGroup.GET("/captcha", h.GetCaptcha)
 		adminGroup.POST("/login", h.Login)
+		adminGroup.POST("/logout", h.Logout)
 	}
 
-	// 需要登录的接口
+	// 需要登录的接口（启用登录态白名单校验）
 	authGroup := adminGroup.Group("/auth")
-	authGroup.Use(middleware.Auth())
+	authGroup.Use(middleware.Auth(h.redisRepo))
 	{
 		authGroup.GET("/me", h.Me)
 		authGroup.PUT("/password", h.UpdatePassword)

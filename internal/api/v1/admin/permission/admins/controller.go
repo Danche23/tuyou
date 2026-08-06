@@ -4,17 +4,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/permission/admins"
+	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/permission/admins"
 	"tuyou/pkg/response"
 )
 
 // Controller 实现控制器
 type Controller struct {
-	adminSvc service.AdminService
+	adminSvc  service.AdminService
+	redisRepo repository.RedisRepository
 }
 
-func NewController(adminSvc service.AdminService) *Controller {
-	return &Controller{adminSvc: adminSvc}
+func NewController(adminSvc service.AdminService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{adminSvc: adminSvc, redisRepo: redisRepo}
 }
 
 // List 查询管理员列表

@@ -5,21 +5,26 @@ import (
 	"errors"
 	"golang.org/x/crypto/bcrypt"
 	"strconv"
+	"time"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	response "tuyou/internal/model/dto/response/admin/auth"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/auth"
-	"tuyou/internal/service/admin/auth/b64c"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+
+	"tuyou/internal/service/admin/auth/b64c"
+	"tuyou/pkg/config"
 )
 
 type authService struct {
 	adminRepo auth.AdminRepository
+	redisRepo repository.RedisRepository
 }
 
-func NewAdminAuthService(adminRepo auth.AdminRepository) AdminAuthService {
-	return &authService{adminRepo: adminRepo}
+func NewAdminAuthService(adminRepo auth.AdminRepository, redisRepo repository.RedisRepository) AdminAuthService {
+	return &authService{adminRepo: adminRepo, redisRepo: redisRepo}
 }
 
 // GetCaptcha 获取图形验证码
@@ -76,6 +81,9 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 		return nil, err
 	}
 
+	//写入登录态白名单（多端登录：每个 token 独立 key；Redis 不可用时忽略，不影响登录）
+	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), 1, time.Duration(config.Get().JWT.ExpireHours)*time.Hour)
+
 	//查询角色名称
 	role, err := s.adminRepo.FindRoleNameByRoleID(ctx, admin.RoleID)
 	if err != nil {
@@ -112,7 +120,7 @@ func buildMenuTree(menus []entity.SysMenu) []*response.MenuTree {
 		nodes[m.ID] = &response.MenuTree{
 			ID:        strconv.Itoa(int(m.ID)),
 			MenuName:  m.MenuName,
-			ParentID:  m.ParentID,
+			ParentID:  strconv.Itoa(int(m.ParentID)),
 			MenuType:  m.MenuType,
 			RoutePath: m.RoutePath,
 			Sort:      m.Sort,

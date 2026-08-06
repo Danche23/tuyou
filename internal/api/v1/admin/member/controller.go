@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	request "tuyou/internal/model/dto/request/admin/member"
+	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/member"
 	"tuyou/pkg/response"
 )
@@ -15,11 +16,12 @@ import (
 // Controller 会员管理控制器
 type Controller struct {
 	memberSvc service.MemberService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(memberSvc service.MemberService) *Controller {
-	return &Controller{memberSvc: memberSvc}
+func NewController(memberSvc service.MemberService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{memberSvc: memberSvc, redisRepo: redisRepo}
 }
 
 // ListMembers 查询会员列表（/admin/members）
