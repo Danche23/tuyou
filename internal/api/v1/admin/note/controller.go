@@ -3,6 +3,7 @@ package note
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -43,13 +44,13 @@ func (c *Controller) ListNotes(ctx *gin.Context) {
 // GetNoteDetail 获取笔记详情
 // GET /api/v1/admin/notes/:id
 func (c *Controller) GetNoteDetail(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	id, err := parseNoteID(ctx.Param("id"))
 	if err != nil {
 		response.BadRequest(ctx, "参数错误: id格式不正确")
 		return
 	}
 
-	resp, err := c.noteSvc.GetNoteDetail(ctx, uint(id))
+	resp, err := c.noteSvc.GetNoteDetail(ctx, id)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
@@ -60,7 +61,7 @@ func (c *Controller) GetNoteDetail(ctx *gin.Context) {
 // UpdateNote 编辑笔记
 // PUT /api/v1/admin/notes/:id
 func (c *Controller) UpdateNote(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	id, err := parseNoteID(ctx.Param("id"))
 	if err != nil {
 		response.BadRequest(ctx, "参数错误: id格式不正确")
 		return
@@ -72,7 +73,7 @@ func (c *Controller) UpdateNote(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := c.noteSvc.UpdateNote(ctx, uint(id), &req)
+	resp, err := c.noteSvc.UpdateNote(ctx, id, &req)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
@@ -83,13 +84,13 @@ func (c *Controller) UpdateNote(ctx *gin.Context) {
 // DeleteNote 删除笔记
 // DELETE /api/v1/admin/notes/:id
 func (c *Controller) DeleteNote(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	id, err := parseNoteID(ctx.Param("id"))
 	if err != nil {
 		response.BadRequest(ctx, "参数错误: id格式不正确")
 		return
 	}
 
-	if err := c.noteSvc.DeleteNote(ctx, uint(id)); err != nil {
+	if err := c.noteSvc.DeleteNote(ctx, id); err != nil {
 		response.BizError(ctx, err)
 		return
 	}
@@ -135,4 +136,13 @@ func (c *Controller) ExportNotes(ctx *gin.Context) {
 	filename := "note_export_" + time.Now().Format("20060102") + ".xlsx"
 	ctx.Header("Content-Disposition", "attachment; filename="+filename)
 	ctx.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
+}
+
+// parseNoteID 解析路径参数 id（兼容 "N0001" 展示格式与纯数字，与批量接口 parseNoteIDs 对齐）
+func parseNoteID(s string) (uint, error) {
+	id, err := strconv.ParseUint(strings.TrimPrefix(s, "N"), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(id), nil
 }
