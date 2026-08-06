@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -82,12 +84,22 @@ func (s *noteService) ListNotes(ctx context.Context, req *request.ListNoteReq) (
 		return nil, errors.NewWithErr(errors.CodeInternalError, "获取笔记列表失败", err)
 	}
 
-	list := make([]response.NoteListItem, 0, len(notes))
-	if len(notes) == 0 {
-		return s.buildResp(list, total, req), nil
+	list, err := s.buildListItems(ctx, notes)
+	if err != nil {
+		return nil, err
 	}
 
-	// ========== 4. 批量查询作者 / 标签 / 封面 ==========
+	return s.buildResp(list, total, req), nil
+}
+
+// buildListItems 批量查询作者/标签/封面并组装列表项（列表与导出共用）
+func (s *noteService) buildListItems(ctx context.Context, notes []entity.Note) ([]response.NoteListItem, error) {
+	list := make([]response.NoteListItem, 0, len(notes))
+	if len(notes) == 0 {
+		return list, nil
+	}
+
+	// 批量查询作者 / 标签 / 封面
 	noteIDs := make([]uint, len(notes))
 	uniqueMemberIDs := make([]uint, 0)
 	memberIDSet := make(map[uint]bool)
@@ -118,7 +130,7 @@ func (s *noteService) ListNotes(ctx context.Context, req *request.ListNoteReq) (
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询封面失败", err)
 	}
 
-	// ========== 5. 组装响应 ==========
+	// 组装列表项
 	for _, n := range notes {
 		var nickname string
 		if m, ok := memberMap[n.MemberID]; ok {
@@ -158,7 +170,7 @@ func (s *noteService) ListNotes(ctx context.Context, req *request.ListNoteReq) (
 		})
 	}
 
-	return s.buildResp(list, total, req), nil
+	return list, nil
 }
 
 // GetNoteDetail 获取笔记详情
@@ -328,6 +340,56 @@ func (s *noteService) DeleteNote(ctx context.Context, id uint) error {
 	return nil
 }
 
+// BatchDeleteNotes 批量硬删除笔记（连带关联数据；不存在的 ID 自动跳过）
+func (s *noteService) BatchDeleteNotes(ctx context.Context, req *request.BatchDeleteReq) error {
+	ids, err := parseNoteIDs(req.IDs)
+	if err != nil {
+		return errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	// 一次查出存在的笔记（IN 子句自动去重，重复/不存在的 ID 自动跳过）
+	notes, err := s.noteRepo.FindNotesByIDs(ctx, ids)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取笔记失败", err)
+	}
+	if len(notes) == 0 {
+		return nil
+	}
+
+	if err := s.noteRepo.BatchDelete(ctx, notes); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "批量删除笔记失败", err)
+	}
+	return nil
+}
+
+// ExportNotes 按 ID 批量导出笔记（不含软删的过滤，已下架也导出）
+func (s *noteService) ExportNotes(ctx context.Context, req *request.ExportNoteReq) ([]response.NoteListItem, error) {
+	ids, err := parseNoteIDs(req.IDs)
+	if err != nil {
+		return nil, errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	notes, err := s.noteRepo.FindNotesByIDs(ctx, ids)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取笔记失败", err)
+	}
+
+	return s.buildListItems(ctx, notes)
+}
+
+// parseNoteIDs 解析笔记 ID 列表（支持 "N0001" 展示格式与纯数字）
+func parseNoteIDs(ids []string) ([]uint, error) {
+	result := make([]uint, 0, len(ids))
+	for _, s := range ids {
+		id, err := strconv.ParseUint(strings.TrimPrefix(s, "N"), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, uint(id))
+	}
+	return result, nil
+}
+
 // buildResp 组装分页响应
 func (s *noteService) buildResp(list []response.NoteListItem, total int64, req *request.ListNoteReq) *response.ListNoteResp {
 	return &response.ListNoteResp{
@@ -351,9 +413,10 @@ var categoryStrToInt = map[string]int{
 
 // 排序字段中文 → 数据库列名（白名单，防注入）
 var noteSortFieldMap = map[string]string{
-	"热度":  "heat",
-	"浏览量": "view_count",
-	"点赞量": "like_count",
-	"收藏量": "collect_count",
-	"评论量": "comment_count",
+	"热度":   "heat",
+	"浏览量":  "view_count",
+	"点赞量":  "like_count",
+	"收藏量":  "collect_count",
+	"评论量":  "comment_count",
+	"发布时间": "publish_time",
 }

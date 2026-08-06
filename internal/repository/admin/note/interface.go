@@ -42,4 +42,10 @@ type NoteRepository interface {
 
 	// Delete 硬删除笔记及其关联数据（事务）；decrPublish=true 时作者发布数 -1
 	Delete(ctx context.Context, noteID uint, memberID uint, decrPublish bool) error
+
+	// BatchDelete 批量硬删除笔记及其关联数据（单事务）；仍上架的笔记作者发布数 -1
+	BatchDelete(ctx context.Context, notes []entity.Note) error
+
+	// FindNotesByIDs 根据 ID 列表批量查询笔记（Unscoped 含软删记录）
+	FindNotesByIDs(ctx context.Context, ids []uint) ([]entity.Note, error)
 }

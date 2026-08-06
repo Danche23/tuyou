@@ -153,6 +153,18 @@ func (r *noteRepository) FindByID(ctx context.Context, id uint) (*entity.Note, e
 	return &note, nil
 }
 
+// FindNotesByIDs 根据 ID 列表批量查询笔记（Unscoped 含软删记录）
+func (r *noteRepository) FindNotesByIDs(ctx context.Context, ids []uint) ([]entity.Note, error) {
+	if len(ids) == 0 {
+		return []entity.Note{}, nil
+	}
+	notes := make([]entity.Note, 0)
+	if err := r.db.WithContext(ctx).Unscoped().Where("id IN ?", ids).Order("id DESC").Find(&notes).Error; err != nil {
+		return nil, err
+	}
+	return notes, nil
+}
+
 // Update 更新笔记字段（updates map 中的 key 都会被更新；Unscoped 以支持恢复已软删笔记）
 func (r *noteRepository) Update(tx *gorm.DB, id uint, updates map[string]interface{}) error {
 	return tx.Unscoped().Model(&entity.Note{}).Where("id = ?", id).Updates(updates).Error
@@ -177,40 +189,58 @@ func (r *noteRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
 		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
 }
 
+// deleteNoteInTx 事务内删除单篇笔记及其关联数据；decrPublish=true 时作者发布数 -1
+func deleteNoteInTx(tx *gorm.DB, noteID uint, memberID uint, decrPublish bool) error {
+	// 关联数据：图片 / 标签 / 点赞 / 收藏
+	if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteImage{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteTag{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteLike{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteCollect{}).Error; err != nil {
+		return err
+	}
+	// 评论点赞（先删，子查询引用 comment 表）
+	if err := tx.Unscoped().
+		Where("comment_id IN (SELECT id FROM comment WHERE target_type = ? AND target_id = ?)", 1, noteID).
+		Delete(&entity.CommentLike{}).Error; err != nil {
+		return err
+	}
+	// 评论（笔记 target_type=1）
+	if err := tx.Unscoped().Where("target_type = ? AND target_id = ?", 1, noteID).Delete(&entity.Comment{}).Error; err != nil {
+		return err
+	}
+	// 主行
+	if err := tx.Unscoped().Delete(&entity.Note{}, noteID).Error; err != nil {
+		return err
+	}
+	// 仍上架的笔记：作者发布数 -1
+	if decrPublish {
+		return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+			UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+	}
+	return nil
+}
+
 // Delete 硬删除笔记及其关联数据（事务）；decrPublish=true 时作者发布数 -1
 func (r *noteRepository) Delete(ctx context.Context, noteID uint, memberID uint, decrPublish bool) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 关联数据：图片 / 标签 / 点赞 / 收藏
-		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteImage{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteTag{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteLike{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteCollect{}).Error; err != nil {
-			return err
-		}
-		// 评论点赞（先删，子查询引用 comment 表）
-		if err := tx.Unscoped().
-			Where("comment_id IN (SELECT id FROM comment WHERE target_type = ? AND target_id = ?)", 1, noteID).
-			Delete(&entity.CommentLike{}).Error; err != nil {
-			return err
-		}
-		// 评论（笔记 target_type=1）
-		if err := tx.Unscoped().Where("target_type = ? AND target_id = ?", 1, noteID).Delete(&entity.Comment{}).Error; err != nil {
-			return err
-		}
-		// 主行
-		if err := tx.Unscoped().Delete(&entity.Note{}, noteID).Error; err != nil {
-			return err
-		}
-		// 仍上架的笔记：作者发布数 -1
-		if decrPublish {
-			return tx.Model(&entity.Member{}).Where("id = ?", memberID).
-				UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+		return deleteNoteInTx(tx, noteID, memberID, decrPublish)
+	})
+}
+
+// BatchDelete 批量硬删除笔记及其关联数据（单事务）；仍上架的笔记作者发布数 -1
+func (r *noteRepository) BatchDelete(ctx context.Context, notes []entity.Note) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range notes {
+			n := &notes[i]
+			if err := deleteNoteInTx(tx, n.ID, n.MemberID, n.Status == 1); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

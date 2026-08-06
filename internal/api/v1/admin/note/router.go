@@ -15,5 +15,7 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 		admin.GET("/notes/:id", c.GetNoteDetail)
 		admin.PUT("/notes/:id", c.UpdateNote)
 		admin.DELETE("/notes/:id", c.DeleteNote)
+		admin.POST("/notes/batch-delete", c.BatchDeleteNotes)
+		admin.POST("/notes/export", c.ExportNotes)
 	}
 }

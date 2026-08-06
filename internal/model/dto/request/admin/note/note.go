@@ -19,3 +19,13 @@ type UpdateNoteReq struct {
 	IsSlide  string `json:"is_slide" binding:"required"` // 是否轮播：是/否
 	Status   string `json:"status" binding:"required"`   // 上下架：正常/下架
 }
+
+// BatchDeleteReq 批量删除笔记请求
+type BatchDeleteReq struct {
+	IDs []string `json:"ids" binding:"required,min=1"` // 笔记 ID 列表（"N0001" 展示格式或纯数字）
+}
+
+// ExportNoteReq 批量导出笔记请求
+type ExportNoteReq struct {
+	IDs []string `json:"ids" binding:"required,min=1"` // 笔记 ID 列表（"N0001" 展示格式或纯数字）
+}

@@ -20,4 +20,10 @@ type NoteService interface {
 
 	// DeleteNote 硬删除笔记（连带关联数据；仍上架的笔记作者发布数 -1）
 	DeleteNote(ctx context.Context, id uint) error
+
+	// BatchDeleteNotes 批量硬删除笔记（连带关联数据；不存在的 ID 自动跳过）
+	BatchDeleteNotes(ctx context.Context, req *request.BatchDeleteReq) error
+
+	// ExportNotes 按 ID 批量导出笔记
+	ExportNotes(ctx context.Context, req *request.ExportNoteReq) ([]response.NoteListItem, error)
 }
