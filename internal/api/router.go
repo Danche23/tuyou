@@ -10,6 +10,7 @@ import (
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
+	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,7 @@ type Router struct {
 	guideCtrl     *guide.Controller
 	activityCtrl  *activity.Controller
 	noteAdminCtrl *noteAdmin.Controller
+	tagCtrl       *tagCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -39,6 +41,7 @@ func NewRouter(
 	centerCtrl *center.Controller,
 	activityCtrl *activity.Controller,
 	noteAdminCtrl *noteAdmin.Controller,
+	tagCtrl *tagCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:      noteCtrl,
@@ -50,6 +53,7 @@ func NewRouter(
 		activityCtrl:  activityCtrl,
 		centerCtrl:    centerCtrl,
 		noteAdminCtrl: noteAdminCtrl,
+		tagCtrl:       tagCtrl,
 	}
 }
 
@@ -81,6 +85,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.activityCtrl.RegisterRoutes(apiGroup)
 		r.centerCtrl.RegisterRoutes(apiGroup)
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
+		r.tagCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
