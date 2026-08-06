@@ -2,6 +2,7 @@ package tag
 
 import (
 	"context"
+	"strconv"
 
 	response "tuyou/internal/model/dto/response/web/tag"
 	repo "tuyou/internal/repository/web/tag"
@@ -25,7 +26,7 @@ func (s *tagService) ListTags(ctx context.Context) ([]response.TagItem, error) {
 	}
 	list := make([]response.TagItem, 0, len(tags))
 	for _, t := range tags {
-		list = append(list, response.TagItem{ID: t.ID, TagName: t.TagName})
+		list = append(list, response.TagItem{ID: strconv.FormatUint(uint64(t.ID), 10), TagName: t.TagName})
 	}
 	return list, nil
 }
