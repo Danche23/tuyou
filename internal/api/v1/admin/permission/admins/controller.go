@@ -19,6 +19,16 @@ func NewController(adminSvc service.AdminService, redisRepo repository.RedisRepo
 	return &Controller{adminSvc: adminSvc, redisRepo: redisRepo}
 }
 
+// ListRoles 查询角色列表
+func (c *Controller) ListRoles(ctx *gin.Context) {
+	resp, err := c.adminSvc.ListRoles(ctx)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
 // List 查询管理员列表
 func (c *Controller) List(ctx *gin.Context) {
 	var req request.ListAdminsReq

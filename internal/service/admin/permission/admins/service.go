@@ -125,6 +125,15 @@ func (s *adminService) DeleteAdmin(ctx context.Context, id uint) error {
 	return s.adminRepo.Delete(ctx, id)
 }
 
+// ListRoles 查询角色列表
+func (s *adminService) ListRoles(ctx context.Context) ([]response.RoleItem, error) {
+	list, err := s.adminRepo.ListRoles(ctx)
+	if err != nil {
+		return nil, appErrors.ErrInternalError
+	}
+	return list, nil
+}
+
 // ResetAdminPassword 重置管理员密码
 func (s *adminService) ResetAdminPassword(ctx context.Context, id uint, req *request.ResetAdminPasswordReq) error {
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
