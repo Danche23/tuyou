@@ -3,6 +3,8 @@ package note
 import (
 	"context"
 
+	"gorm.io/gorm"
+
 	"tuyou/internal/model/entity"
 )
 
@@ -26,6 +28,18 @@ type NoteRepository interface {
 	// FindByID 根据 ID 查询单篇笔记，不存在时返回 nil, nil
 	FindByID(ctx context.Context, id uint) (*entity.Note, error)
 
-	// Update 更新笔记字段（updates map 中的 key 都会被更新）
-	Update(ctx context.Context, id uint, updates map[string]interface{}) error
+	// Update 更新笔记字段（updates map 中的 key 都会被更新；Unscoped，可更新软删行以支持恢复）
+	Update(tx *gorm.DB, id uint, updates map[string]interface{}) error
+
+	// UpdateCommentStatusByTarget 更新目标笔记/攻略下的评论状态
+	UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error
+
+	// IncrPublishCount 作者发布数 +1
+	IncrPublishCount(tx *gorm.DB, memberID uint) error
+
+	// DecrPublishCount 作者发布数 -1
+	DecrPublishCount(tx *gorm.DB, memberID uint) error
+
+	// Delete 硬删除笔记及其关联数据（事务）；decrPublish=true 时作者发布数 -1
+	Delete(ctx context.Context, noteID uint, memberID uint, decrPublish bool) error
 }

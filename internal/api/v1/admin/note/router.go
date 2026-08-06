@@ -14,5 +14,6 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 		admin.GET("/notes", c.ListNotes)
 		admin.GET("/notes/:id", c.GetNoteDetail)
 		admin.PUT("/notes/:id", c.UpdateNote)
+		admin.DELETE("/notes/:id", c.DeleteNote)
 	}
 }

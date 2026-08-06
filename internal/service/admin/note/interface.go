@@ -17,4 +17,7 @@ type NoteService interface {
 
 	// UpdateNote 编辑笔记（分类/轮播/状态三字段必传，整体覆盖），返回更新后的详情
 	UpdateNote(ctx context.Context, id uint, req *request.UpdateNoteReq) (*response.NoteDetailResp, error)
+
+	// DeleteNote 硬删除笔记（连带关联数据；仍上架的笔记作者发布数 -1）
+	DeleteNote(ctx context.Context, id uint) error
 }

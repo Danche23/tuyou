@@ -153,9 +153,65 @@ func (r *noteRepository) FindByID(ctx context.Context, id uint) (*entity.Note, e
 	return &note, nil
 }
 
-// Update 更新笔记字段（updates map 中的 key 都会被更新）
-func (r *noteRepository) Update(ctx context.Context, id uint, updates map[string]interface{}) error {
-	return r.db.WithContext(ctx).Model(&entity.Note{}).
-		Where("id = ?", id).
-		Updates(updates).Error
+// Update 更新笔记字段（updates map 中的 key 都会被更新；Unscoped 以支持恢复已软删笔记）
+func (r *noteRepository) Update(tx *gorm.DB, id uint, updates map[string]interface{}) error {
+	return tx.Unscoped().Model(&entity.Note{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// UpdateCommentStatusByTarget 更新目标笔记/攻略下的评论状态
+func (r *noteRepository) UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error {
+	return tx.Model(&entity.Comment{}).
+		Where("target_type = ? AND target_id = ?", targetType, targetID).
+		UpdateColumn("status", status).Error
+}
+
+// IncrPublishCount 作者发布数 +1
+func (r *noteRepository) IncrPublishCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+		UpdateColumn("publish_count", gorm.Expr("publish_count + 1")).Error
+}
+
+// DecrPublishCount 作者发布数 -1
+func (r *noteRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+}
+
+// Delete 硬删除笔记及其关联数据（事务）；decrPublish=true 时作者发布数 -1
+func (r *noteRepository) Delete(ctx context.Context, noteID uint, memberID uint, decrPublish bool) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 关联数据：图片 / 标签 / 点赞 / 收藏
+		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteImage{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteTag{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteLike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().Where("note_id = ?", noteID).Delete(&entity.NoteCollect{}).Error; err != nil {
+			return err
+		}
+		// 评论点赞（先删，子查询引用 comment 表）
+		if err := tx.Unscoped().
+			Where("comment_id IN (SELECT id FROM comment WHERE target_type = ? AND target_id = ?)", 1, noteID).
+			Delete(&entity.CommentLike{}).Error; err != nil {
+			return err
+		}
+		// 评论（笔记 target_type=1）
+		if err := tx.Unscoped().Where("target_type = ? AND target_id = ?", 1, noteID).Delete(&entity.Comment{}).Error; err != nil {
+			return err
+		}
+		// 主行
+		if err := tx.Unscoped().Delete(&entity.Note{}, noteID).Error; err != nil {
+			return err
+		}
+		// 仍上架的笔记：作者发布数 -1
+		if decrPublish {
+			return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+				UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+		}
+		return nil
+	})
 }

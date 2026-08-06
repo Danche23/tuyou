@@ -76,3 +76,19 @@ func (c *Controller) UpdateNote(ctx *gin.Context) {
 	}
 	response.Success(ctx, resp)
 }
+
+// DeleteNote 删除笔记
+// DELETE /api/v1/admin/notes/:id
+func (c *Controller) DeleteNote(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+
+	if err := c.noteSvc.DeleteNote(ctx, uint(id)); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}

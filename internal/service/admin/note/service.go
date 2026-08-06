@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
+
+	"gorm.io/gorm"
 
 	request "tuyou/internal/model/dto/request/admin/note"
 	response "tuyou/internal/model/dto/response/admin/note"
@@ -14,11 +17,12 @@ import (
 
 type noteService struct {
 	noteRepo repo.NoteRepository
+	db       *gorm.DB
 }
 
 // NewNoteService 创建后台笔记服务实例
-func NewNoteService(noteRepo repo.NoteRepository) NoteService {
-	return &noteService{noteRepo: noteRepo}
+func NewNoteService(noteRepo repo.NoteRepository, db *gorm.DB) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db}
 }
 
 // ListNotes 分页查询笔记列表
@@ -268,18 +272,60 @@ func (s *noteService) UpdateNote(ctx context.Context, id uint, req *request.Upda
 		return nil, errors.New(errors.CodeInvalidParam, "状态参数不合法")
 	}
 
-	// 3. 整体覆盖更新
-	updates := map[string]interface{}{
-		"category": c,
-		"is_slide": isSlide,
-		"status":   status,
-	}
-	if err := s.noteRepo.Update(ctx, id, updates); err != nil {
+	// 3. 事务内：更新笔记 + 状态变化时同步评论状态与发布数
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{
+			"category": c,
+			"is_slide": isSlide,
+			"status":   status,
+		}
+		// 下架统一关联 delete_time（前后台一致）：下架写删除时间，恢复正常清除
+		if note.Status != status {
+			if status == 0 {
+				updates["delete_time"] = time.Now()
+			} else {
+				updates["delete_time"] = nil
+			}
+		}
+		if err := s.noteRepo.Update(tx, id, updates); err != nil {
+			return err
+		}
+
+		// 状态变化才同步评论状态与发布数
+		if note.Status != status {
+			if err := s.noteRepo.UpdateCommentStatusByTarget(tx, 1, id, status); err != nil {
+				return err
+			}
+			if status == 0 { // 正常→下架：发布数 -1
+				return s.noteRepo.DecrPublishCount(tx, note.MemberID)
+			}
+			return s.noteRepo.IncrPublishCount(tx, note.MemberID) // 下架→正常：发布数 +1
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑笔记失败", err)
 	}
 
 	// 4. 返回更新后的详情
 	return s.GetNoteDetail(ctx, id)
+}
+
+// DeleteNote 硬删除笔记（连带关联数据；仍上架的笔记作者发布数 -1）
+func (s *noteService) DeleteNote(ctx context.Context, id uint) error {
+	note, err := s.noteRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取笔记失败", err)
+	}
+	if note == nil {
+		return errors.New(errors.CodeNotFound, "笔记不存在")
+	}
+
+	decrPublish := note.Status == 1 // 仍上架的笔记才减发布数
+	if err := s.noteRepo.Delete(ctx, id, note.MemberID, decrPublish); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "删除笔记失败", err)
+	}
+	return nil
 }
 
 // buildResp 组装分页响应

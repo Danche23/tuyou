@@ -5,7 +5,7 @@ import "time"
 // Activity 活动主表（仅领队可发布）
 type Activity struct {
 	BaseEntity
-	LeaderMemberID  uint      `gorm:"column:leader_member_id;not null;index;comment:发布人member表id，代码校验member_type=1" json:"leaderMemberId"`
+	LeaderMemberID  uint      `gorm:"column:leader_member_id;not null;index;comment:发布人member表id，代码校验role=0（领队）" json:"leaderMemberId"`
 	Title           string    `gorm:"type:varchar(50);not null;comment:活动标题" json:"title"`
 	CoverImg        string    `gorm:"type:varchar(255);column:cover_img;comment:活动封面图片地址" json:"coverImg"`
 	ActivityContent string    `gorm:"type:text;column:activity_content;comment:活动详情正文" json:"activityContent"`
