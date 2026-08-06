@@ -23,6 +23,7 @@ import (
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
 	"tuyou/internal/api/v1/web/note"
+	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
@@ -34,6 +35,7 @@ import (
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
+	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminCenter "tuyou/internal/service/admin/center"
 	serviceAdminMember "tuyou/internal/service/admin/member"
@@ -43,6 +45,7 @@ import (
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceNote "tuyou/internal/service/web/note"
+	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
@@ -195,6 +198,7 @@ func (a *App) initDependencies() {
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
+	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
@@ -206,6 +210,7 @@ func (a *App) initDependencies() {
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
+	tagSvc := serviceTag.NewTagService(tagRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
@@ -217,9 +222,10 @@ func (a *App) initDependencies() {
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideCtrl := guide.NewController(guideSvc)
 	activityCtrl := activity.NewController(activitySvc)
+	tagC := tagCtrl.NewController(tagSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, tagC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
