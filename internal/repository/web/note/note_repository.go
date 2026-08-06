@@ -190,6 +190,12 @@ func (r *noteRepository) UpdateStatus(tx *gorm.DB, noteID uint, status int) erro
 		UpdateColumn("status", status).Error
 }
 
+// SoftDelete 软删除笔记：设置 delete_time 为当前时间
+func (r *noteRepository) SoftDelete(tx *gorm.DB, noteID uint) error {
+	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
+		UpdateColumn("delete_time", time.Now()).Error
+}
+
 // DecrPublishCount 发布计数 -1
 func (r *noteRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
 	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
