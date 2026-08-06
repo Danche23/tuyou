@@ -22,4 +22,7 @@ type AdminService interface {
 
 	// ResetAdminPassword 重置管理员密码
 	ResetAdminPassword(ctx context.Context, id uint, req *request.ResetAdminPasswordReq) error
+
+	// ListRoles 查询角色列表
+	ListRoles(ctx context.Context) ([]response.RoleItem, error)
 }

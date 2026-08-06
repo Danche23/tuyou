@@ -25,3 +25,9 @@ type InsertAdminResp struct {
 	Id       string `json:"id"`
 	Username string `json:"username"`
 }
+
+// RoleItem 角色列表项
+type RoleItem struct {
+	ID       uint   `json:"id"`
+	RoleName string `json:"role_name"`
+}
