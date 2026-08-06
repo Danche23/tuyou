@@ -7,7 +7,7 @@ import (
 
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin := r.Group("/admin")
-	admin.Use(middleware.Auth())
+	admin.Use(middleware.Auth(c.redisRepo))
 	{
 		admin.GET("/admins", c.List)
 		admin.POST("/admins", c.Insert)

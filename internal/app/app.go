@@ -198,7 +198,7 @@ func (a *App) initDependencies() {
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo)
-	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
+	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
@@ -209,11 +209,11 @@ func (a *App) initDependencies() {
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc)
-	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
+	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc)
-	memberC := memberCtrl.NewController(adminMemberSvc)
-	centerC := centerCtrl.NewController(adminCenterSvc)
-	adminPermC := adminPermCtrl.NewController(adminPermSvc)
+	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
+	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
+	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideCtrl := guide.NewController(guideSvc)
 	activityCtrl := activity.NewController(activitySvc)

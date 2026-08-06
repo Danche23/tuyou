@@ -13,6 +13,10 @@ type RedisRepository interface {
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 	// Get 获取缓存
 	Get(ctx context.Context, key string, dest interface{}) error
+	// Available 判断 Redis 是否可用（nil 客户端或 ping 失败返回 false，用于登录态白名单的 fail-open 降级）
+	Available(ctx context.Context) bool
+	// Del 删除 key（nil 客户端时返回 nil，不影响调用方降级）
+	Del(ctx context.Context, key string) error
 
 	// XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil
 	XAdd(ctx context.Context, stream string, values map[string]interface{}) error
