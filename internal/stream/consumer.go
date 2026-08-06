@@ -77,8 +77,6 @@ func (c *Consumer) Stop() {
 	logger.Info("Consumer 已停止")
 }
 
-// ────────────────────────────── 消费主循环 ──────────────────────────────
-
 // consume 是消费者的主循环：拉取消息 → 聚合 → 条件触发批量写 DB。
 // panic 时自动重启，保证消费者始终运行。
 func (c *Consumer) consume() {
@@ -113,8 +111,6 @@ func (c *Consumer) consume() {
 		}
 	}
 }
-
-// ────────────────────────────── 消息处理 ──────────────────────────────
 
 // pullAndMerge 从 Stream 拉取一批消息，解析后合并到聚合计数器中。
 // BLOCK 模式下超时返回 redis.Nil，此时直接返回等待下次循环。
@@ -180,8 +176,6 @@ func (c *Consumer) flush(counts map[string]map[uint]int64, msgIDs []string) {
 	_ = c.redisRepo.XTrimMaxLen(c.ctx, StreamKey, StreamMaxLen)
 }
 
-// ────────────────────────────── 容灾 ──────────────────────────────
-
 // restartOnPanic 捕获 panic 并重启消费循环。
 func (c *Consumer) restartOnPanic() {
 	if r := recover(); r != nil {
@@ -191,8 +185,6 @@ func (c *Consumer) restartOnPanic() {
 		go c.consume()
 	}
 }
-
-// ────────────────────────────── 工具 ──────────────────────────────
 
 // parseMsg 解析 Redis Stream 消息，校验 type 和 id 字段合法性。
 // 返回表名、记录 ID 和是否解析成功。

@@ -7,3 +7,9 @@ type LoginRequest struct {
 	CaptchaId string `json:"captcha_id" binding:"required"`
 	Captcha   string `json:"captcha" binding:"required"`
 }
+
+// ResetPasswordRequest 重置密码请求
+type ResetPasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}

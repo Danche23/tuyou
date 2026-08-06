@@ -66,3 +66,33 @@ func (r *adminRepository) FindRoleNameByRoleID(ctx context.Context, roleID uint)
 	}
 	return roleName, nil
 }
+
+// FindMenusByRoleID 查询角色拥有的全部菜单
+func (r *adminRepository) FindMenusByRoleID(ctx context.Context, roleID uint) ([]entity.SysMenu, error) {
+	var menus []entity.SysMenu
+	err := r.db.WithContext(ctx).
+		Joins("JOIN sys_role_menu rm ON rm.menu_id = sys_menu.id").
+		Where("rm.role_id = ? AND sys_menu.status = 1", roleID).
+		Order("sys_menu.sort ASC").
+		Find(&menus).Error
+	return menus, err
+}
+
+// FindPermsByRoleID 查询角色拥有的全部接口权限
+func (r *adminRepository) FindPermsByRoleID(ctx context.Context, roleID uint) ([]entity.SysPermission, error) {
+	var perms []entity.SysPermission
+	err := r.db.WithContext(ctx).
+		Joins("JOIN sys_role_perm rp ON rp.perm_id = sys_permission.id").
+		Where("rp.role_id = ? AND sys_permission.status = 1", roleID).
+		Order("sys_permission.module ASC, sys_permission.id ASC").
+		Find(&perms).Error
+	return perms, err
+}
+
+// UpdatePassword 更新密码
+func (r *adminRepository) UpdatePassword(ctx context.Context, id uint, password string) error {
+	return r.db.WithContext(ctx).
+		Model(&entity.SysAdmin{}).
+		Where("id = ?", id).
+		Update("password", password).Error
+}
