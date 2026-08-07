@@ -6,6 +6,7 @@ import (
 
 	"tuyou/internal/middleware"
 	requestGuide "tuyou/internal/model/dto/request/web/guide"
+	"tuyou/internal/repository"
 	serviceGuide "tuyou/internal/service/web/guide"
 	"tuyou/pkg/response"
 
@@ -14,12 +15,13 @@ import (
 
 // Controller 攻略控制器
 type Controller struct {
-	guideSvc serviceGuide.GuideService
+	guideSvc  serviceGuide.GuideService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(guideSvc serviceGuide.GuideService) *Controller {
-	return &Controller{guideSvc: guideSvc}
+func NewController(guideSvc serviceGuide.GuideService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{guideSvc: guideSvc, redisRepo: redisRepo}
 }
 
 // Create 发布攻略

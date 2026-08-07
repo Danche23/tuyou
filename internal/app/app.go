@@ -202,7 +202,7 @@ func (a *App) initDependencies() {
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	authSvc := serviceAuth.NewAuthService(memberRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
@@ -214,17 +214,17 @@ func (a *App) initDependencies() {
 	tagSvc := serviceTag.NewTagService(tagRepo)
 
 	// ========== 创建 Handler ==========
-	authHandler := handlerAuth.NewAuthHandler(authSvc)
+	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
-	noteCtrl := note.NewController(noteSvc)
+	noteCtrl := note.NewController(noteSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
 	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
-	guideCtrl := guide.NewController(guideSvc)
-	activityCtrl := activity.NewController(activitySvc)
-	tagC := tagCtrl.NewController(tagSvc)
-	webMemberC := webMemberCtrl.NewController(authSvc)
+	guideCtrl := guide.NewController(guideSvc, redisRepo)
+	activityCtrl := activity.NewController(activitySvc, redisRepo)
+	tagC := tagCtrl.NewController(tagSvc, redisRepo)
+	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 
 	// ========== 创建 Router ==========
 	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, tagC, webMemberC)

@@ -1,20 +1,25 @@
 package auth
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	request "tuyou/internal/model/dto/request/web/auth"
+	"tuyou/internal/repository"
 	"tuyou/internal/service/web/auth"
+	"tuyou/pkg/jwt"
 	"tuyou/pkg/response"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authSvc auth.WebAuthService
+	authSvc   auth.WebAuthService
+	redisRepo repository.RedisRepository
 }
 
 // NewAuthHandler 创建认证处理器
-func NewAuthHandler(authSvc auth.WebAuthService) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc}
+func NewAuthHandler(authSvc auth.WebAuthService, redisRepo repository.RedisRepository) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc, redisRepo: redisRepo}
 }
 
 // Register 注册
@@ -88,4 +93,15 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+// Logout 退出登录
+// POST /api/v1/auth/logout
+// 删除该用户白名单登录态使其立即失效；幂等，token 已失效时也返回成功
+func (h *AuthHandler) Logout(c *gin.Context) {
+	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if claims, err := jwt.ParseToken(token); err == nil {
+		_ = h.authSvc.Logout(c.Request.Context(), claims.GetUserID())
+	}
+	response.SuccessWithMessage(c, "退出登录成功", struct{}{})
 }

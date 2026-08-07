@@ -114,3 +114,60 @@ func OptionalAuth() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// MemberAuth 前台单端登录认证中间件
+// 校验规则：
+//   - 校验 JWT 签名；
+//   - Redis 可用时，校验当前 token 是否等于该用户白名单中最新 token（`member:token:{userID}`）；
+//     白名单中没有 / 不匹配（已登出或被顶号）→ 401；
+//   - Redis 不可用时 fail-open，退化为纯 JWT 校验。
+func MemberAuth(redisRepo repository.RedisRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 从 Header 获取 Authorization
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			response.Unauthorized(c, "请提供认证令牌")
+			c.Abort()
+			return
+		}
+
+		// 解析 Bearer Token
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			response.Unauthorized(c, "令牌格式错误")
+			c.Abort()
+			return
+		}
+
+		// 解析 Token
+		claims, err := jwt.ParseToken(parts[1])
+		if err != nil {
+			response.Unauthorized(c, err.Error())
+			c.Abort()
+			return
+		}
+
+		// 单端白名单校验（fail-open：Redis 不可用时跳过，退化为纯 JWT 校验）
+		if redisRepo != nil && redisRepo.Available(c.Request.Context()) {
+			var stored string
+			if err := redisRepo.Get(c.Request.Context(), jwt.MemberTokenKey(claims.GetUserID()), &stored); err != nil {
+				// 白名单中不存在 → 已退出登录或未登录
+				response.Unauthorized(c, "登录已失效，请重新登录")
+				c.Abort()
+				return
+			}
+			if stored != parts[1] {
+				// 不是最新 token → 已在其他设备登录
+				response.Unauthorized(c, "账号已在其他设备登录")
+				c.Abort()
+				return
+			}
+		}
+
+		// 将用户信息存入上下文
+		c.Set(ContextUserID, claims.GetUserID())
+		c.Set(ContextUsername, claims.GetUsername())
+
+		c.Next()
+	}
+}

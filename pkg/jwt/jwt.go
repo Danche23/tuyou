@@ -73,3 +73,9 @@ func AdminTokenKey(adminID uint, token string) string {
 	hash := md5.Sum([]byte(token))
 	return fmt.Sprintf("admin:token:%d:%x", adminID, hash)
 }
+
+// MemberTokenKey 前台登录态白名单 Key（按用户维度存储，支持单端登录）
+// 存的是最新 token，新登录覆盖旧值实现顶号
+func MemberTokenKey(userID uint) string {
+	return fmt.Sprintf("member:token:%d", userID)
+}

@@ -14,13 +14,7 @@ type LoginResponse struct {
 	Member MemberInfo `json:"member"`
 }
 
-// RegisterResponse 注册响应
-type RegisterResponse struct {
-	Token  string     `json:"token"`
-	Member MemberInfo `json:"member"`
-}
-
-// MessageResponse 验证码发送和密码重置格式
+// MessageResponse 验证码发送、注册和密码重置格式
 type MessageResponse struct {
 	Message string `json:"message"`
 }
