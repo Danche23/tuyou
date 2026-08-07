@@ -16,6 +16,7 @@ import (
 	"tuyou/internal/api"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	centerCtrl "tuyou/internal/api/v1/admin/center"
+	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
@@ -28,6 +29,7 @@ import (
 	"tuyou/internal/repository"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminCenter "tuyou/internal/repository/admin/center"
+	repoAdminGuide "tuyou/internal/repository/admin/guide"
 	repoAdminMember "tuyou/internal/repository/admin/member"
 	repoAdminNote "tuyou/internal/repository/admin/note"
 	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
@@ -38,6 +40,7 @@ import (
 	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminCenter "tuyou/internal/service/admin/center"
+	serviceAdminGuide "tuyou/internal/service/admin/guide"
 	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAdminNote "tuyou/internal/service/admin/note"
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
@@ -47,6 +50,7 @@ import (
 	serviceNote "tuyou/internal/service/web/note"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/stream"
+	"tuyou/internal/task"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -54,12 +58,13 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg      *config.Config
-	mysqlDB  *gorm.DB
-	redis    *redis.Client
-	router   *api.Router
-	server   *http.Server
-	consumer *stream.Consumer
+	cfg        *config.Config
+	mysqlDB    *gorm.DB
+	redis      *redis.Client
+	router     *api.Router
+	server     *http.Server
+	consumer   *stream.Consumer
+	heatTicker *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -195,6 +200,7 @@ func (a *App) initDependencies() {
 	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
 	adminPermRepo := repoAdminPerm.NewAdminsRepository(a.mysqlDB)
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
+	adminGuideRepo := repoAdminGuide.NewGuideRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
@@ -208,6 +214,7 @@ func (a *App) initDependencies() {
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
+	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
@@ -220,16 +227,19 @@ func (a *App) initDependencies() {
 	centerC := centerCtrl.NewController(adminCenterSvc)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
+	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
 	guideCtrl := guide.NewController(guideSvc)
 	activityCtrl := activity.NewController(activitySvc)
 	tagC := tagCtrl.NewController(tagSvc)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, tagC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
 	a.consumer.Start()
+	// ========== 启动热度重算定时任务 ==========
+	a.heatTicker = task.StartHeatJob(a.mysqlDB)
 }
 
 // initRouter 初始化路由
@@ -291,6 +301,11 @@ func (a *App) gracefulShutdown() {
 	// 停止后台消费者（在关闭 DB/Redis 之前）
 	if a.consumer != nil {
 		a.consumer.Stop()
+	}
+
+	// 停止热度重算定时任务
+	if a.heatTicker != nil {
+		a.heatTicker.Stop()
 	}
 
 	// 关闭路由连接
