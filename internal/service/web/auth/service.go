@@ -9,6 +9,7 @@ import (
 	"time"
 	request "tuyou/internal/model/dto/request/web/auth"
 	response "tuyou/internal/model/dto/response/web/auth"
+	memberResp "tuyou/internal/model/dto/response/web/member"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository/web/auth"
 	"tuyou/internal/service/web/auth/sms"
@@ -255,4 +256,30 @@ func (s *authService) ResetPassword(ctx context.Context, req *request.ResetPassw
 	return &response.MessageResponse{
 		Message: "密码重置成功",
 	}, nil
+}
+
+// GetBaseInfo 获取会员基础信息（id/昵称/头像/角色）
+func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error) {
+	member, err := s.memberRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &memberResp.MemberBaseInfo{
+		ID:       strconv.Itoa(int(member.ID)),
+		Nickname: member.Nickname,
+		Avatar:   member.Avatar,
+		Role:     roleName(member.Role),
+	}, nil
+}
+
+// roleName 角色数字转名称：0=领队，1=会员
+func roleName(role int) string {
+	switch role {
+	case 0:
+		return "领队"
+	case 1:
+		return "会员"
+	default:
+		return "未知"
+	}
 }

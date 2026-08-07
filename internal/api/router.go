@@ -9,6 +9,7 @@ import (
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
+	memberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/middleware"
@@ -28,6 +29,7 @@ type Router struct {
 	activityCtrl  *activity.Controller
 	noteAdminCtrl *noteAdmin.Controller
 	tagCtrl       *tagCtrl.Controller
+	webMemberCtrl *memberCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -42,6 +44,7 @@ func NewRouter(
 	activityCtrl *activity.Controller,
 	noteAdminCtrl *noteAdmin.Controller,
 	tagCtrl *tagCtrl.Controller,
+	webMemberCtrl *memberCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:      noteCtrl,
@@ -54,6 +57,7 @@ func NewRouter(
 		centerCtrl:    centerCtrl,
 		noteAdminCtrl: noteAdminCtrl,
 		tagCtrl:       tagCtrl,
+		webMemberCtrl: webMemberCtrl,
 	}
 }
 
@@ -86,6 +90,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.centerCtrl.RegisterRoutes(apiGroup)
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
 		r.tagCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端会员路由
+		r.webMemberCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
