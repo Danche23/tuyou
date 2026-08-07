@@ -2,6 +2,7 @@ package member
 
 import (
 	"tuyou/internal/middleware"
+	"tuyou/internal/repository"
 	serviceAuth "tuyou/internal/service/web/auth"
 	"tuyou/pkg/response"
 
@@ -10,12 +11,13 @@ import (
 
 // Controller 会员控制器
 type Controller struct {
-	authSvc serviceAuth.WebAuthService
+	authSvc   serviceAuth.WebAuthService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建会员控制器
-func NewController(authSvc serviceAuth.WebAuthService) *Controller {
-	return &Controller{authSvc: authSvc}
+func NewController(authSvc serviceAuth.WebAuthService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{authSvc: authSvc, redisRepo: redisRepo}
 }
 
 // GetBaseInfo 获取当前登录会员基础信息

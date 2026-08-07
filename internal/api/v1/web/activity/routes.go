@@ -9,7 +9,7 @@ import (
 // RegisterRoutes 注册活动路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	activities := r.Group("/activities")
-	activities.Use(middleware.Auth())
+	activities.Use(middleware.MemberAuth(c.redisRepo))
 	{
 		activities.POST("", c.Create)
 		activities.GET("", c.List)

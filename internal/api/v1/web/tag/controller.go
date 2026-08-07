@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"tuyou/internal/middleware"
+	"tuyou/internal/repository"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/pkg/response"
 
@@ -12,12 +13,13 @@ import (
 
 // Controller 标签控制器
 type Controller struct {
-	tagSvc serviceTag.TagService
+	tagSvc    serviceTag.TagService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(tagSvc serviceTag.TagService) *Controller {
-	return &Controller{tagSvc: tagSvc}
+func NewController(tagSvc serviceTag.TagService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{tagSvc: tagSvc, redisRepo: redisRepo}
 }
 
 // ListTags 获取启用标签列表

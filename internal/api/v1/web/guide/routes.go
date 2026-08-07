@@ -9,7 +9,7 @@ import (
 // RegisterRoutes 注册攻略路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	guides := r.Group("/guides")
-	guides.Use(middleware.Auth())
+	guides.Use(middleware.MemberAuth(c.redisRepo))
 	{
 		guides.POST("", c.Create)
 		guides.GET("/:id", c.GetGuideDetail)
