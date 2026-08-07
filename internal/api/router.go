@@ -31,17 +31,7 @@ type Router struct {
 	noteAdminCtrl  *noteAdmin.Controller
 	guideAdminCtrl *guideAdmin.Controller
 	tagCtrl        *tagCtrl.Controller
-	authHandler   *handlerAuth.AuthHandler
-	adminHandler  *handlerAdmin.AdminHandler
-	centerCtrl    *center.Controller
-	noteCtrl      *note.Controller
-	memberCtrl    *member.Controller
-	adminPerCtrl  *adminPermCtrl.Controller
-	guideCtrl     *guide.Controller
-	activityCtrl  *activity.Controller
-	noteAdminCtrl *noteAdmin.Controller
-	tagCtrl       *tagCtrl.Controller
-	webMemberCtrl *memberCtrl.Controller
+	webMemberCtrl  *memberCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -71,17 +61,7 @@ func NewRouter(
 		noteAdminCtrl:  noteAdminCtrl,
 		guideAdminCtrl: guideAdminCtrl,
 		tagCtrl:        tagCtrl,
-		noteCtrl:      noteCtrl,
-		authHandler:   authHandler,
-		adminHandler:  adminHandler,
-		memberCtrl:    memberCtrl,
-		adminPerCtrl:  adminPerCtrl,
-		guideCtrl:     guideCtrl,
-		activityCtrl:  activityCtrl,
-		centerCtrl:    centerCtrl,
-		noteAdminCtrl: noteAdminCtrl,
-		tagCtrl:       tagCtrl,
-		webMemberCtrl: webMemberCtrl,
+		webMemberCtrl:  webMemberCtrl,
 	}
 }
 

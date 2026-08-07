@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"tuyou/internal/task"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -228,18 +229,13 @@ func (a *App) initDependencies() {
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
-	guideCtrl := guide.NewController(guideSvc)
-	activityCtrl := activity.NewController(activitySvc)
-	tagC := tagCtrl.NewController(tagSvc)
-
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC)
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, tagC, webMemberC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
