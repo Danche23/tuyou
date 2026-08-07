@@ -179,3 +179,73 @@ func (r *guideRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
 	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
 		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
 }
+
+// deleteStrategyInTx 事务内删除单篇攻略及其关联数据；decrPublish=true 时作者发布数 -1
+func deleteStrategyInTx(tx *gorm.DB, strategyID uint, memberID uint, decrPublish bool) error {
+	// 关联数据：图片 / 标签 / 点赞 / 收藏
+	if err := tx.Unscoped().Where("strategy_id = ?", strategyID).Delete(&entity.StrategyImage{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("strategy_id = ?", strategyID).Delete(&entity.StrategyTag{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("strategy_id = ?", strategyID).Delete(&entity.StrategyLike{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Unscoped().Where("strategy_id = ?", strategyID).Delete(&entity.StrategyCollect{}).Error; err != nil {
+		return err
+	}
+	// 评论点赞（先删，子查询引用 comment 表）
+	if err := tx.Unscoped().
+		Where("comment_id IN (SELECT id FROM comment WHERE target_type = ? AND target_id = ?)", 2, strategyID).
+		Delete(&entity.CommentLike{}).Error; err != nil {
+		return err
+	}
+	// 评论（攻略 target_type=2）
+	if err := tx.Unscoped().Where("target_type = ? AND target_id = ?", 2, strategyID).Delete(&entity.Comment{}).Error; err != nil {
+		return err
+	}
+	// 主行
+	if err := tx.Unscoped().Delete(&entity.Strategy{}, strategyID).Error; err != nil {
+		return err
+	}
+	// 仍上架的攻略：作者发布数 -1
+	if decrPublish {
+		return tx.Model(&entity.Member{}).Where("id = ?", memberID).
+			UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
+	}
+	return nil
+}
+
+// Delete 硬删除攻略及其关联数据（事务）；decrPublish=true 时作者发布数 -1
+func (r *guideRepository) Delete(ctx context.Context, strategyID uint, memberID uint, decrPublish bool) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return deleteStrategyInTx(tx, strategyID, memberID, decrPublish)
+	})
+}
+
+// FindStrategiesByIDs 根据 ID 列表批量查询攻略（Unscoped 含软删，不存在的 ID 自动跳过）
+func (r *guideRepository) FindStrategiesByIDs(ctx context.Context, ids []uint) ([]entity.Strategy, error) {
+	if len(ids) == 0 {
+		return []entity.Strategy{}, nil
+	}
+
+	strategies := make([]entity.Strategy, 0)
+	if err := r.db.WithContext(ctx).Unscoped().Where("id IN ?", ids).Order("id DESC").Find(&strategies).Error; err != nil {
+		return nil, err
+	}
+	return strategies, nil
+}
+
+// BatchDelete 批量硬删除攻略及其关联数据（单事务）；仍上架的攻略作者发布数 -1
+func (r *guideRepository) BatchDelete(ctx context.Context, strategies []entity.Strategy) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := range strategies {
+			g := &strategies[i]
+			if err := deleteStrategyInTx(tx, g.ID, g.MemberID, g.Status == 1); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

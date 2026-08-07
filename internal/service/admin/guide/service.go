@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -255,6 +257,73 @@ func (s *guideService) UpdateGuide(ctx context.Context, id uint, req *request.Up
 
 	// 4. 返回更新后的详情
 	return s.GetGuideDetail(ctx, id)
+}
+
+// DeleteGuide 硬删除攻略（连带关联数据；仍上架的攻略作者发布数 -1）
+func (s *guideService) DeleteGuide(ctx context.Context, id uint) error {
+	g, err := s.guideRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取攻略失败", err)
+	}
+	if g == nil {
+		return errors.New(errors.CodeNotFound, "攻略不存在")
+	}
+
+	decrPublish := g.Status == 1 // 仍上架的攻略才减发布数
+	if err := s.guideRepo.Delete(ctx, id, g.MemberID, decrPublish); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "删除攻略失败", err)
+	}
+	return nil
+}
+
+// BatchDeleteGuides 批量硬删除攻略（连带关联数据；不存在的 ID 自动跳过）
+func (s *guideService) BatchDeleteGuides(ctx context.Context, req *request.BatchDeleteReq) error {
+	ids, err := parseGuideIDs(req.IDs)
+	if err != nil {
+		return errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	// 一次查出存在的攻略（IN 子句自动去重，重复/不存在的 ID 自动跳过）
+	strategies, err := s.guideRepo.FindStrategiesByIDs(ctx, ids)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取攻略失败", err)
+	}
+	if len(strategies) == 0 {
+		return nil
+	}
+
+	if err := s.guideRepo.BatchDelete(ctx, strategies); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "批量删除攻略失败", err)
+	}
+	return nil
+}
+
+// ExportGuides 按 ID 批量导出攻略列表项（不含软删过滤，已下架也导出）
+func (s *guideService) ExportGuides(ctx context.Context, req *request.ExportGuideReq) ([]response.GuideListItem, error) {
+	ids, err := parseGuideIDs(req.IDs)
+	if err != nil {
+		return nil, errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	strategies, err := s.guideRepo.FindStrategiesByIDs(ctx, ids)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取攻略失败", err)
+	}
+
+	return s.buildListItems(ctx, strategies)
+}
+
+// parseGuideIDs 解析攻略 ID 列表（兼容 "G0001" 展示格式与纯数字）
+func parseGuideIDs(ids []string) ([]uint, error) {
+	result := make([]uint, 0, len(ids))
+	for _, s := range ids {
+		id, err := strconv.ParseUint(strings.TrimPrefix(s, "G"), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, uint(id))
+	}
+	return result, nil
 }
 
 // buildListItems 批量查询作者/标签/封面并组装列表项

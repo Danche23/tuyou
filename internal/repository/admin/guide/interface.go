@@ -39,4 +39,13 @@ type GuideRepository interface {
 
 	// DecrPublishCount 作者发布数 -1
 	DecrPublishCount(tx *gorm.DB, memberID uint) error
+
+	// Delete 硬删除攻略及其关联数据（事务）；decrPublish=true 时作者发布数 -1
+	Delete(ctx context.Context, strategyID uint, memberID uint, decrPublish bool) error
+
+	// FindStrategiesByIDs 根据 ID 列表批量查询攻略（Unscoped 含软删，不存在的 ID 自动跳过）
+	FindStrategiesByIDs(ctx context.Context, ids []uint) ([]entity.Strategy, error)
+
+	// BatchDelete 批量硬删除攻略及其关联数据（单事务）；仍上架的攻略作者发布数 -1
+	BatchDelete(ctx context.Context, strategies []entity.Strategy) error
 }

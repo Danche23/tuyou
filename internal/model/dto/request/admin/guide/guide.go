@@ -20,3 +20,13 @@ type UpdateGuideReq struct {
 	IsSlide  string `json:"is_slide" binding:"required"` // 是否轮播：是/否
 	Status   string `json:"status" binding:"required"`   // 上下架：正常/下架
 }
+
+// BatchDeleteReq 批量删除攻略请求
+type BatchDeleteReq struct {
+	IDs []string `json:"ids" binding:"required,min=1"` // 攻略 ID 列表（"G0001" 展示格式或纯数字）
+}
+
+// ExportGuideReq 批量导出攻略请求
+type ExportGuideReq struct {
+	IDs []string `json:"ids" binding:"required,min=1"` // 攻略 ID 列表（"G0001" 展示格式或纯数字）
+}
