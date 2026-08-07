@@ -6,6 +6,7 @@ import (
 
 	"tuyou/internal/middleware"
 	requestNote "tuyou/internal/model/dto/request/web/note"
+	"tuyou/internal/repository"
 	serviceNote "tuyou/internal/service/web/note"
 	"tuyou/pkg/response"
 
@@ -14,12 +15,13 @@ import (
 
 // Controller 笔记控制器
 type Controller struct {
-	noteSvc serviceNote.NoteService
+	noteSvc   serviceNote.NoteService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(noteSvc serviceNote.NoteService) *Controller {
-	return &Controller{noteSvc: noteSvc}
+func NewController(noteSvc serviceNote.NoteService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{noteSvc: noteSvc, redisRepo: redisRepo}
 }
 
 // Create 发布笔记

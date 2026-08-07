@@ -9,9 +9,12 @@ import (
 	"time"
 	request "tuyou/internal/model/dto/request/web/auth"
 	response "tuyou/internal/model/dto/response/web/auth"
+	memberResp "tuyou/internal/model/dto/response/web/member"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	"tuyou/internal/repository/web/auth"
 	"tuyou/internal/service/web/auth/sms"
+	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 )
@@ -19,15 +22,16 @@ import (
 // authService 认证服务实现
 type authService struct {
 	memberRepo auth.MemberRepository
+	redisRepo  repository.RedisRepository
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(memberRepo auth.MemberRepository) WebAuthService {
-	return &authService{memberRepo: memberRepo}
+func NewAuthService(memberRepo auth.MemberRepository, redisRepo repository.RedisRepository) WebAuthService {
+	return &authService{memberRepo: memberRepo, redisRepo: redisRepo}
 }
 
 // Register 注册
-func (s *authService) Register(ctx context.Context, req *request.RegisterRequest) (*response.RegisterResponse, error) {
+func (s *authService) Register(ctx context.Context, req *request.RegisterRequest) (*response.MessageResponse, error) {
 	//检验手机号格式
 	if err := sms.ValidatorPhone(req.Phone); err != nil {
 		return nil, err
@@ -74,21 +78,9 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 		return nil, err
 	}
 
-	// 生成 JWT token
-	token, err := jwt.GenerateToken(member.ID, member.Nickname)
-	if err != nil {
-		return nil, err
-	}
-
-	//返回用户信息
-	return &response.RegisterResponse{
-		Token: token,
-		Member: response.MemberInfo{
-			ID:       strconv.Itoa(int(member.ID)),
-			Nickname: member.Nickname,
-			Phone:    member.Phone,
-			Avatar:   member.Avatar,
-		},
+	//注册成功不自动登录，前端引导用户去登录
+	return &response.MessageResponse{
+		Message: "注册成功",
 	}, nil
 }
 
@@ -171,6 +163,9 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 		return nil, err
 	}
 
+	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, time.Duration(config.Get().JWT.ExpireHours)*time.Hour)
+
 	return &response.LoginResponse{
 		Token: token,
 		Member: response.MemberInfo{
@@ -214,6 +209,9 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		return nil, err
 	}
 
+	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, time.Duration(config.Get().JWT.ExpireHours)*time.Hour)
+
 	return &response.LoginResponse{
 		Token: token,
 		Member: response.MemberInfo{
@@ -255,4 +253,35 @@ func (s *authService) ResetPassword(ctx context.Context, req *request.ResetPassw
 	return &response.MessageResponse{
 		Message: "密码重置成功",
 	}, nil
+}
+
+// Logout 退出登录：删除该用户白名单登录态，使其立即失效（幂等，Redis 不可用时忽略）
+func (s *authService) Logout(ctx context.Context, userID uint) error {
+	return s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))
+}
+
+// GetBaseInfo 获取会员基础信息（id/昵称/头像/角色）
+func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error) {
+	member, err := s.memberRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &memberResp.MemberBaseInfo{
+		ID:       strconv.Itoa(int(member.ID)),
+		Nickname: member.Nickname,
+		Avatar:   member.Avatar,
+		Role:     roleName(member.Role),
+	}, nil
+}
+
+// roleName 角色数字转名称：0=领队，1=会员
+func roleName(role int) string {
+	switch role {
+	case 0:
+		return "领队"
+	case 1:
+		return "会员"
+	default:
+		return "未知"
+	}
 }

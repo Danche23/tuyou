@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"tuyou/internal/middleware"
 	request "tuyou/internal/model/dto/request/admin/center"
+	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/center"
 	"tuyou/pkg/response"
 )
@@ -11,11 +12,12 @@ import (
 // Controller 个人中心控制器
 type Controller struct {
 	centerSvc service.CenterService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(centerSvc service.CenterService) *Controller {
-	return &Controller{centerSvc: centerSvc}
+func NewController(centerSvc service.CenterService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{centerSvc: centerSvc, redisRepo: redisRepo}
 }
 
 // UpdateAvatar 更新头像

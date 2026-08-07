@@ -10,6 +10,7 @@ import (
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
+	memberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/middleware"
@@ -30,6 +31,17 @@ type Router struct {
 	noteAdminCtrl  *noteAdmin.Controller
 	guideAdminCtrl *guideAdmin.Controller
 	tagCtrl        *tagCtrl.Controller
+	authHandler   *handlerAuth.AuthHandler
+	adminHandler  *handlerAdmin.AdminHandler
+	centerCtrl    *center.Controller
+	noteCtrl      *note.Controller
+	memberCtrl    *member.Controller
+	adminPerCtrl  *adminPermCtrl.Controller
+	guideCtrl     *guide.Controller
+	activityCtrl  *activity.Controller
+	noteAdminCtrl *noteAdmin.Controller
+	tagCtrl       *tagCtrl.Controller
+	webMemberCtrl *memberCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -45,6 +57,7 @@ func NewRouter(
 	noteAdminCtrl *noteAdmin.Controller,
 	guideAdminCtrl *guideAdmin.Controller,
 	tagCtrl *tagCtrl.Controller,
+	webMemberCtrl *memberCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:       noteCtrl,
@@ -58,6 +71,17 @@ func NewRouter(
 		noteAdminCtrl:  noteAdminCtrl,
 		guideAdminCtrl: guideAdminCtrl,
 		tagCtrl:        tagCtrl,
+		noteCtrl:      noteCtrl,
+		authHandler:   authHandler,
+		adminHandler:  adminHandler,
+		memberCtrl:    memberCtrl,
+		adminPerCtrl:  adminPerCtrl,
+		guideCtrl:     guideCtrl,
+		activityCtrl:  activityCtrl,
+		centerCtrl:    centerCtrl,
+		noteAdminCtrl: noteAdminCtrl,
+		tagCtrl:       tagCtrl,
+		webMemberCtrl: webMemberCtrl,
 	}
 }
 
@@ -91,6 +115,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
 		r.guideAdminCtrl.RegisterRoutes(apiGroup)
 		r.tagCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端会员路由
+		r.webMemberCtrl.RegisterRoutes(apiGroup)
 	}
 }
 

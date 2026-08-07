@@ -41,6 +41,22 @@ func (r *redisRepository) Get(ctx context.Context, key string, dest interface{})
 	return json.Unmarshal(data, dest)
 }
 
+// Available 判断 Redis 是否可用
+func (r *redisRepository) Available(ctx context.Context) bool {
+	if r.redis == nil {
+		return false
+	}
+	return r.redis.Ping(ctx).Err() == nil
+}
+
+// Del 删除 key
+func (r *redisRepository) Del(ctx context.Context, key string) error {
+	if r.redis == nil {
+		return nil
+	}
+	return r.redis.Del(ctx, key).Err()
+}
+
 // XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil 以触发调用方降级
 func (r *redisRepository) XAdd(ctx context.Context, stream string, values map[string]interface{}) error {
 	if r.redis == nil {

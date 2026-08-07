@@ -1,7 +1,9 @@
 package jwt
 
 import (
+	"crypto/md5"
 	"errors"
+	"fmt"
 	"time"
 
 	"tuyou/pkg/config"
@@ -63,4 +65,17 @@ func RefreshToken(tokenString string) (string, error) {
 	}
 
 	return GenerateToken(claims.UserID, claims.Username)
+}
+
+// AdminTokenKey 后台登录态白名单 Key（按 token 维度存储，支持多端登录）
+// 使用 md5 压缩 token，避免把完整 token 拼进 Redis key
+func AdminTokenKey(adminID uint, token string) string {
+	hash := md5.Sum([]byte(token))
+	return fmt.Sprintf("admin:token:%d:%x", adminID, hash)
+}
+
+// MemberTokenKey 前台登录态白名单 Key（按用户维度存储，支持单端登录）
+// 存的是最新 token，新登录覆盖旧值实现顶号
+func MemberTokenKey(userID uint) string {
+	return fmt.Sprintf("member:token:%d", userID)
 }

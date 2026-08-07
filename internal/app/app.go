@@ -23,6 +23,7 @@ import (
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
+	webMemberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
@@ -50,7 +51,6 @@ import (
 	serviceNote "tuyou/internal/service/web/note"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/stream"
-	"tuyou/internal/task"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
@@ -207,8 +207,8 @@ func (a *App) initDependencies() {
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	authSvc := serviceAuth.NewAuthService(memberRepo)
-	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
+	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
@@ -220,20 +220,26 @@ func (a *App) initDependencies() {
 	tagSvc := serviceTag.NewTagService(tagRepo)
 
 	// ========== 创建 Handler ==========
-	authHandler := handlerAuth.NewAuthHandler(authSvc)
-	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc)
-	noteCtrl := note.NewController(noteSvc)
-	memberC := memberCtrl.NewController(adminMemberSvc)
-	centerC := centerCtrl.NewController(adminCenterSvc)
-	adminPermC := adminPermCtrl.NewController(adminPermSvc)
+	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
+	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
+	noteCtrl := note.NewController(noteSvc, redisRepo)
+	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
+	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
+	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
 	guideCtrl := guide.NewController(guideSvc)
 	activityCtrl := activity.NewController(activitySvc)
 	tagC := tagCtrl.NewController(tagSvc)
 
+	guideCtrl := guide.NewController(guideSvc, redisRepo)
+	activityCtrl := activity.NewController(activitySvc, redisRepo)
+	tagC := tagCtrl.NewController(tagSvc, redisRepo)
+	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
+
 	// ========== 创建 Router ==========
 	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC, tagC, webMemberC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

@@ -89,6 +89,18 @@ func (r *adminsRepository) FindRoleIDByRoleName(ctx context.Context, roleName st
 	return role.ID, nil
 }
 
+// ListRoles 查询所有启用角色
+func (r *adminsRepository) ListRoles(ctx context.Context) ([]admins.RoleItem, error) {
+	var list []admins.RoleItem
+	err := r.db.WithContext(ctx).
+		Table("sys_role").
+		Select("id, role_name").
+		Where("status = 1").
+		Order("id ASC").
+		Scan(&list).Error
+	return list, err
+}
+
 // Insert 新增管理员
 func (r *adminsRepository) Insert(ctx context.Context, admin *entity.SysAdmin) error {
 	return r.db.WithContext(ctx).Create(admin).Error

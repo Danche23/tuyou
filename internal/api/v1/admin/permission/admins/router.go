@@ -7,9 +7,10 @@ import (
 
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin := r.Group("/admin")
-	admin.Use(middleware.Auth())
+	admin.Use(middleware.Auth(c.redisRepo))
 	{
 		admin.GET("/admins", c.List)
+		admin.GET("/admins/role", c.ListRoles)
 		admin.POST("/admins", c.Insert)
 		admin.PUT("/admins/:id", c.Update)
 		admin.DELETE("/admins/:id", c.Delete)
