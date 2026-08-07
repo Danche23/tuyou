@@ -3,6 +3,7 @@ package api
 import (
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	"tuyou/internal/api/v1/admin/center"
+	guideAdmin "tuyou/internal/api/v1/admin/guide"
 	"tuyou/internal/api/v1/admin/member"
 	noteAdmin "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
@@ -19,17 +20,18 @@ import (
 
 // Router 路由
 type Router struct {
-	authHandler   *handlerAuth.AuthHandler
-	adminHandler  *handlerAdmin.AdminHandler
-	centerCtrl    *center.Controller
-	noteCtrl      *note.Controller
-	memberCtrl    *member.Controller
-	adminPerCtrl  *adminPermCtrl.Controller
-	guideCtrl     *guide.Controller
-	activityCtrl  *activity.Controller
-	noteAdminCtrl *noteAdmin.Controller
-	tagCtrl       *tagCtrl.Controller
-	webMemberCtrl *memberCtrl.Controller
+	authHandler    *handlerAuth.AuthHandler
+	adminHandler   *handlerAdmin.AdminHandler
+	centerCtrl     *center.Controller
+	noteCtrl       *note.Controller
+	memberCtrl     *member.Controller
+	adminPerCtrl   *adminPermCtrl.Controller
+	guideCtrl      *guide.Controller
+	activityCtrl   *activity.Controller
+	noteAdminCtrl  *noteAdmin.Controller
+	guideAdminCtrl *guideAdmin.Controller
+	tagCtrl        *tagCtrl.Controller
+	webMemberCtrl  *memberCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -43,21 +45,23 @@ func NewRouter(
 	centerCtrl *center.Controller,
 	activityCtrl *activity.Controller,
 	noteAdminCtrl *noteAdmin.Controller,
+	guideAdminCtrl *guideAdmin.Controller,
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 ) *Router {
 	return &Router{
-		noteCtrl:      noteCtrl,
-		authHandler:   authHandler,
-		adminHandler:  adminHandler,
-		memberCtrl:    memberCtrl,
-		adminPerCtrl:  adminPerCtrl,
-		guideCtrl:     guideCtrl,
-		activityCtrl:  activityCtrl,
-		centerCtrl:    centerCtrl,
-		noteAdminCtrl: noteAdminCtrl,
-		tagCtrl:       tagCtrl,
-		webMemberCtrl: webMemberCtrl,
+		noteCtrl:       noteCtrl,
+		authHandler:    authHandler,
+		adminHandler:   adminHandler,
+		memberCtrl:     memberCtrl,
+		adminPerCtrl:   adminPerCtrl,
+		guideCtrl:      guideCtrl,
+		activityCtrl:   activityCtrl,
+		centerCtrl:     centerCtrl,
+		noteAdminCtrl:  noteAdminCtrl,
+		guideAdminCtrl: guideAdminCtrl,
+		tagCtrl:        tagCtrl,
+		webMemberCtrl:  webMemberCtrl,
 	}
 }
 
@@ -89,6 +93,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.activityCtrl.RegisterRoutes(apiGroup)
 		r.centerCtrl.RegisterRoutes(apiGroup)
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
+		r.guideAdminCtrl.RegisterRoutes(apiGroup)
 		r.tagCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端会员路由
