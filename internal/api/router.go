@@ -9,6 +9,7 @@ import (
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
+	uploadCtrl "tuyou/internal/api/v1/upload"
 	adminRoleCtrl "tuyou/internal/api/v1/admin/permission/roles"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
@@ -40,6 +41,7 @@ type Router struct {
 	tagCtrl          *tagCtrl.Controller
 	webMemberCtrl    *memberCtrl.Controller
 	homeCtrl         *homeCtrl.Controller
+	uploadCtrl       *uploadCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -60,6 +62,7 @@ func NewRouter(
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
+	uploadCtrl *uploadCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:         noteCtrl,
@@ -78,6 +81,7 @@ func NewRouter(
 		tagCtrl:          tagCtrl,
 		webMemberCtrl:    webMemberCtrl,
 		homeCtrl:         homeCtrl,
+		uploadCtrl:       uploadCtrl,
 	}
 }
 
@@ -120,6 +124,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// Web 端社区首页路由
 		r.homeCtrl.RegisterRoutes(apiGroup)
+
+		// 文件上传路由
+		r.uploadCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
