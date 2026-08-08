@@ -10,6 +10,7 @@ import (
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	uploadCtrl "tuyou/internal/api/v1/upload"
+	adminRoleCtrl "tuyou/internal/api/v1/admin/permission/roles"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -32,6 +33,7 @@ type Router struct {
 	adminPerCtrl     *adminPermCtrl.Controller
 	adminMenuCtrl    *adminMenuCtrl.Controller
 	adminApiPermCtrl *adminApiPermCtrl.Controller
+	adminRoleCtrl    *adminRoleCtrl.Controller
 	guideCtrl        *guide.Controller
 	activityCtrl     *activity.Controller
 	noteAdminCtrl    *noteAdmin.Controller
@@ -51,6 +53,7 @@ func NewRouter(
 	adminPerCtrl *adminPermCtrl.Controller,
 	adminMenuCtrl *adminMenuCtrl.Controller,
 	adminApiPermCtrl *adminApiPermCtrl.Controller,
+	adminRoleCtrl *adminRoleCtrl.Controller,
 	guideCtrl *guide.Controller,
 	centerCtrl *center.Controller,
 	activityCtrl *activity.Controller,
@@ -69,6 +72,7 @@ func NewRouter(
 		adminPerCtrl:     adminPerCtrl,
 		adminMenuCtrl:    adminMenuCtrl,
 		adminApiPermCtrl: adminApiPermCtrl,
+		adminRoleCtrl:    adminRoleCtrl,
 		guideCtrl:        guideCtrl,
 		activityCtrl:     activityCtrl,
 		centerCtrl:       centerCtrl,
@@ -107,6 +111,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.adminPerCtrl.RegisterRoutes(apiGroup)
 		r.adminMenuCtrl.RegisterRoutes(apiGroup)
 		r.adminApiPermCtrl.RegisterRoutes(apiGroup)
+		r.adminRoleCtrl.RegisterRoutes(apiGroup)
 		r.guideCtrl.RegisterRoutes(apiGroup)
 		r.activityCtrl.RegisterRoutes(apiGroup)
 		r.centerCtrl.RegisterRoutes(apiGroup)
