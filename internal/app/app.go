@@ -26,6 +26,7 @@ import (
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
+	homeCtrl "tuyou/internal/api/v1/web/home"
 	webMemberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
@@ -42,6 +43,7 @@ import (
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
+	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
 	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdmin "tuyou/internal/service/admin/auth"
@@ -55,6 +57,7 @@ import (
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
+	serviceHome "tuyou/internal/service/web/home"
 	serviceNote "tuyou/internal/service/web/note"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/stream"
@@ -214,6 +217,7 @@ func (a *App) initDependencies() {
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
+	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
@@ -229,6 +233,7 @@ func (a *App) initDependencies() {
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
+	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
@@ -245,9 +250,10 @@ func (a *App) initDependencies() {
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
+	homeC := homeCtrl.NewController(homeSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

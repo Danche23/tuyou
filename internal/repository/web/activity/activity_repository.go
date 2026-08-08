@@ -56,7 +56,7 @@ func (r *activityRepository) FindJoinedMembers(activityID uint) ([]entity.Member
 	if err := r.db.Table("activity_join").
 		Select("member.id, member.nickname, member.avatar").
 		Joins("JOIN member ON member.id = activity_join.member_id").
-		Where("activity_join.activity_id = ?", activityID).
+		Where("activity_join.activity_id = ? AND member.delete_time IS NULL", activityID).
 		Find(&members).Error; err != nil {
 		return nil, err
 	}
