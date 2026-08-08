@@ -5,7 +5,6 @@ import (
 	"errors"
 	"golang.org/x/crypto/bcrypt"
 	"strconv"
-	"time"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	response "tuyou/internal/model/dto/response/admin/auth"
 	"tuyou/internal/model/entity"
@@ -82,7 +81,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 	}
 
 	//写入登录态白名单（多端登录：每个 token 独立 key；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), 1, time.Duration(config.Get().JWT.ExpireHours)*time.Hour)
+	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), 1, config.Get().JWT.ExpireHours)
 
 	//查询角色名称
 	role, err := s.adminRepo.FindRoleNameByRoleID(ctx, admin.RoleID)
