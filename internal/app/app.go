@@ -23,6 +23,7 @@ import (
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
+	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -54,12 +55,14 @@ import (
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
+	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceHome "tuyou/internal/service/web/home"
 	serviceNote "tuyou/internal/service/web/note"
 	serviceTag "tuyou/internal/service/web/tag"
+	"tuyou/internal/storage"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
@@ -203,6 +206,12 @@ func (a *App) initDependencies() {
 	// ========== 创建 Redis 仓储 ==========
 	redisRepo := repository.NewRedisRepository(a.redis)
 
+	// ========== 创建存储（OSS）==========
+	store, err := storage.New(a.cfg.Storage)
+	if err != nil {
+		logger.Fatal("存储初始化失败", zap.Error(err))
+	}
+
 	// ========== 创建 Repository ==========
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
@@ -234,6 +243,7 @@ func (a *App) initDependencies() {
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	uploadSvc := serviceUpload.NewUploadService(store)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
@@ -251,9 +261,10 @@ func (a *App) initDependencies() {
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 	homeC := homeCtrl.NewController(homeSvc, redisRepo)
+	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC, uploadC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
@@ -279,8 +290,8 @@ func (a *App) initServer() {
 	a.server = &http.Server{
 		Addr:           fmt.Sprintf(":%d", a.cfg.App.Port),
 		Handler:        engine,
-		ReadTimeout:    60 * time.Second,
-		WriteTimeout:   60 * time.Second,
+		ReadTimeout:    5 * time.Minute,
+		WriteTimeout:   5 * time.Minute,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 }
