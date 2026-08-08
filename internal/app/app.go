@@ -223,7 +223,7 @@ func (a *App) initDependencies() {
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
-	homeSvc := serviceHome.NewHomeService(homeRepo)
+	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)

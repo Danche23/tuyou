@@ -14,4 +14,11 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		slides.GET("", c.GetSlides)
 	}
+
+	// Feed 流（需要登录，瀑布流分页）
+	feed := r.Group("/feed")
+	feed.Use(middleware.MemberAuth(c.redisRepo))
+	{
+		feed.GET("", c.GetFeed)
+	}
 }

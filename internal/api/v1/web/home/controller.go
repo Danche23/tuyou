@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"tuyou/internal/middleware"
+	requestHome "tuyou/internal/model/dto/request/web/home"
 	"tuyou/internal/repository"
 	serviceHome "tuyou/internal/service/web/home"
 	"tuyou/pkg/response"
@@ -32,6 +33,29 @@ func (c *Controller) GetSlides(ctx *gin.Context) {
 	}
 
 	resp, err := c.homeSvc.GetSlides()
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
+// GetFeed 获取Feed流
+// GET /api/v1/feed?page=1&size=10&category=0&sort=推荐
+func (c *Controller) GetFeed(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	var req requestHome.FeedRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(ctx, "参数错误")
+		return
+	}
+
+	resp, err := c.homeSvc.GetFeed(memberID, &req)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
