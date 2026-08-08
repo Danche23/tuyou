@@ -7,6 +7,8 @@ import (
 	"tuyou/internal/api/v1/admin/member"
 	noteAdmin "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
+	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
+	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -21,19 +23,21 @@ import (
 
 // Router 路由
 type Router struct {
-	authHandler    *handlerAuth.AuthHandler
-	adminHandler   *handlerAdmin.AdminHandler
-	centerCtrl     *center.Controller
-	noteCtrl       *note.Controller
-	memberCtrl     *member.Controller
-	adminPerCtrl   *adminPermCtrl.Controller
-	guideCtrl      *guide.Controller
-	activityCtrl   *activity.Controller
-	noteAdminCtrl  *noteAdmin.Controller
-	guideAdminCtrl *guideAdmin.Controller
-	tagCtrl        *tagCtrl.Controller
-	webMemberCtrl  *memberCtrl.Controller
-	homeCtrl       *homeCtrl.Controller
+	authHandler      *handlerAuth.AuthHandler
+	adminHandler     *handlerAdmin.AdminHandler
+	centerCtrl       *center.Controller
+	noteCtrl         *note.Controller
+	memberCtrl       *member.Controller
+	adminPerCtrl     *adminPermCtrl.Controller
+	adminMenuCtrl    *adminMenuCtrl.Controller
+	adminApiPermCtrl *adminApiPermCtrl.Controller
+	guideCtrl        *guide.Controller
+	activityCtrl     *activity.Controller
+	noteAdminCtrl    *noteAdmin.Controller
+	guideAdminCtrl   *guideAdmin.Controller
+	tagCtrl          *tagCtrl.Controller
+	webMemberCtrl    *memberCtrl.Controller
+	homeCtrl         *homeCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -43,6 +47,8 @@ func NewRouter(
 	adminHandler *handlerAdmin.AdminHandler,
 	memberCtrl *member.Controller,
 	adminPerCtrl *adminPermCtrl.Controller,
+	adminMenuCtrl *adminMenuCtrl.Controller,
+	adminApiPermCtrl *adminApiPermCtrl.Controller,
 	guideCtrl *guide.Controller,
 	centerCtrl *center.Controller,
 	activityCtrl *activity.Controller,
@@ -53,19 +59,21 @@ func NewRouter(
 	homeCtrl *homeCtrl.Controller,
 ) *Router {
 	return &Router{
-		noteCtrl:       noteCtrl,
-		authHandler:    authHandler,
-		adminHandler:   adminHandler,
-		memberCtrl:     memberCtrl,
-		adminPerCtrl:   adminPerCtrl,
-		guideCtrl:      guideCtrl,
-		activityCtrl:   activityCtrl,
-		centerCtrl:     centerCtrl,
-		noteAdminCtrl:  noteAdminCtrl,
-		guideAdminCtrl: guideAdminCtrl,
-		tagCtrl:        tagCtrl,
-		webMemberCtrl:  webMemberCtrl,
-		homeCtrl:       homeCtrl,
+		noteCtrl:         noteCtrl,
+		authHandler:      authHandler,
+		adminHandler:     adminHandler,
+		memberCtrl:       memberCtrl,
+		adminPerCtrl:     adminPerCtrl,
+		adminMenuCtrl:    adminMenuCtrl,
+		adminApiPermCtrl: adminApiPermCtrl,
+		guideCtrl:        guideCtrl,
+		activityCtrl:     activityCtrl,
+		centerCtrl:       centerCtrl,
+		noteAdminCtrl:    noteAdminCtrl,
+		guideAdminCtrl:   guideAdminCtrl,
+		tagCtrl:          tagCtrl,
+		webMemberCtrl:    webMemberCtrl,
+		homeCtrl:         homeCtrl,
 	}
 }
 
@@ -93,6 +101,8 @@ func (r *Router) Setup(engine *gin.Engine) {
 		r.adminHandler.RegisterRoutes(apiGroup)
 		r.memberCtrl.RegisterRoutes(apiGroup)
 		r.adminPerCtrl.RegisterRoutes(apiGroup)
+		r.adminMenuCtrl.RegisterRoutes(apiGroup)
+		r.adminApiPermCtrl.RegisterRoutes(apiGroup)
 		r.guideCtrl.RegisterRoutes(apiGroup)
 		r.activityCtrl.RegisterRoutes(apiGroup)
 		r.centerCtrl.RegisterRoutes(apiGroup)
