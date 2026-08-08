@@ -17,6 +17,8 @@ type RedisRepository interface {
 	Available(ctx context.Context) bool
 	// Del 删除 key（nil 客户端时返回 nil，不影响调用方降级）
 	Del(ctx context.Context, key string) error
+	// ScanKeys 按 pattern 增量遍历返回所有匹配的 key（nil 客户端时返回 nil, nil）
+	ScanKeys(ctx context.Context, pattern string) ([]string, error)
 
 	// XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil
 	XAdd(ctx context.Context, stream string, values map[string]interface{}) error

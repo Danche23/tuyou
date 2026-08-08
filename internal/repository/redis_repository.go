@@ -57,6 +57,22 @@ func (r *redisRepository) Del(ctx context.Context, key string) error {
 	return r.redis.Del(ctx, key).Err()
 }
 
+// ScanKeys 按 pattern 增量遍历返回所有匹配的 key（用 SCAN 迭代器，避免 KEYS 阻塞 Redis）
+func (r *redisRepository) ScanKeys(ctx context.Context, pattern string) ([]string, error) {
+	if r.redis == nil {
+		return nil, nil
+	}
+	iter := r.redis.Scan(ctx, 0, pattern, 0).Iterator()
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 // XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil 以触发调用方降级
 func (r *redisRepository) XAdd(ctx context.Context, stream string, values map[string]interface{}) error {
 	if r.redis == nil {
