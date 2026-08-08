@@ -13,7 +13,7 @@ type adminsRepository struct {
 	db *gorm.DB
 }
 
-func NewAdminsRepository(db *gorm.DB) *adminsRepository {
+func NewAdminsRepository(db *gorm.DB) AdminRepository {
 	return &adminsRepository{db: db}
 }
 

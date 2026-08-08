@@ -14,7 +14,7 @@ type apiPermRepository struct {
 	db *gorm.DB
 }
 
-func NewApiPermRepository(db *gorm.DB) *apiPermRepository {
+func NewApiPermRepository(db *gorm.DB) ApiPermRepository {
 	return &apiPermRepository{db: db}
 }
 
