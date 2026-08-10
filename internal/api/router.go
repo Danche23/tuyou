@@ -1,6 +1,7 @@
 package api
 
 import (
+	activityAdmin "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	"tuyou/internal/api/v1/admin/center"
 	guideAdmin "tuyou/internal/api/v1/admin/guide"
@@ -26,24 +27,25 @@ import (
 
 // Router 路由
 type Router struct {
-	authHandler      *handlerAuth.AuthHandler
-	adminHandler     *handlerAdmin.AdminHandler
-	centerCtrl       *center.Controller
-	noteCtrl         *note.Controller
-	memberCtrl       *member.Controller
-	adminPerCtrl     *adminPermCtrl.Controller
-	adminMenuCtrl    *adminMenuCtrl.Controller
-	adminApiPermCtrl *adminApiPermCtrl.Controller
-	adminRoleCtrl    *adminRoleCtrl.Controller
-	guideCtrl        *guide.Controller
-	activityCtrl     *activity.Controller
-	noteAdminCtrl    *noteAdmin.Controller
-	guideAdminCtrl   *guideAdmin.Controller
-	tagCtrl          *tagCtrl.Controller
-	webMemberCtrl    *memberCtrl.Controller
-	homeCtrl         *homeCtrl.Controller
-	uploadCtrl       *uploadCtrl.Controller
-	workbenchCtrl    *workbenchCtrl.Controller
+	authHandler       *handlerAuth.AuthHandler
+	adminHandler      *handlerAdmin.AdminHandler
+	centerCtrl        *center.Controller
+	noteCtrl          *note.Controller
+	memberCtrl        *member.Controller
+	adminPerCtrl      *adminPermCtrl.Controller
+	adminMenuCtrl     *adminMenuCtrl.Controller
+	adminApiPermCtrl  *adminApiPermCtrl.Controller
+	adminRoleCtrl     *adminRoleCtrl.Controller
+	guideCtrl         *guide.Controller
+	activityCtrl      *activity.Controller
+	noteAdminCtrl     *noteAdmin.Controller
+	guideAdminCtrl    *guideAdmin.Controller
+	activityAdminCtrl *activityAdmin.Controller
+	tagCtrl           *tagCtrl.Controller
+	webMemberCtrl     *memberCtrl.Controller
+	homeCtrl          *homeCtrl.Controller
+	uploadCtrl        *uploadCtrl.Controller
+	workbenchCtrl     *workbenchCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -61,6 +63,7 @@ func NewRouter(
 	activityCtrl *activity.Controller,
 	noteAdminCtrl *noteAdmin.Controller,
 	guideAdminCtrl *guideAdmin.Controller,
+	activityAdminCtrl *activityAdmin.Controller,
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
@@ -68,24 +71,25 @@ func NewRouter(
 	workbenchCtrl *workbenchCtrl.Controller,
 ) *Router {
 	return &Router{
-		noteCtrl:         noteCtrl,
-		authHandler:      authHandler,
-		adminHandler:     adminHandler,
-		memberCtrl:       memberCtrl,
-		adminPerCtrl:     adminPerCtrl,
-		adminMenuCtrl:    adminMenuCtrl,
-		adminApiPermCtrl: adminApiPermCtrl,
-		adminRoleCtrl:    adminRoleCtrl,
-		guideCtrl:        guideCtrl,
-		activityCtrl:     activityCtrl,
-		centerCtrl:       centerCtrl,
-		noteAdminCtrl:    noteAdminCtrl,
-		guideAdminCtrl:   guideAdminCtrl,
-		tagCtrl:          tagCtrl,
-		webMemberCtrl:    webMemberCtrl,
-		homeCtrl:         homeCtrl,
-		uploadCtrl:       uploadCtrl,
-		workbenchCtrl:    workbenchCtrl,
+		noteCtrl:          noteCtrl,
+		authHandler:       authHandler,
+		adminHandler:      adminHandler,
+		memberCtrl:        memberCtrl,
+		adminPerCtrl:      adminPerCtrl,
+		adminMenuCtrl:     adminMenuCtrl,
+		adminApiPermCtrl:  adminApiPermCtrl,
+		adminRoleCtrl:     adminRoleCtrl,
+		guideCtrl:         guideCtrl,
+		activityCtrl:      activityCtrl,
+		centerCtrl:        centerCtrl,
+		noteAdminCtrl:     noteAdminCtrl,
+		guideAdminCtrl:    guideAdminCtrl,
+		activityAdminCtrl: activityAdminCtrl,
+		tagCtrl:           tagCtrl,
+		webMemberCtrl:     webMemberCtrl,
+		homeCtrl:          homeCtrl,
+		uploadCtrl:        uploadCtrl,
+		workbenchCtrl:     workbenchCtrl,
 	}
 }
 
@@ -147,6 +151,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台攻略管理路由
 		r.guideAdminCtrl.RegisterRoutes(apiGroup)
+
+		// 后台活动管理路由
+		r.activityAdminCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端标签路由
 		r.tagCtrl.RegisterRoutes(apiGroup)

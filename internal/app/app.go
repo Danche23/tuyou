@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"tuyou/internal/api"
+	activityAdminCtrl "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	centerCtrl "tuyou/internal/api/v1/admin/center"
 	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
@@ -35,6 +36,7 @@ import (
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
+	repoAdminActivity "tuyou/internal/repository/admin/activity"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminCenter "tuyou/internal/repository/admin/center"
 	repoAdminGuide "tuyou/internal/repository/admin/guide"
@@ -51,6 +53,7 @@ import (
 	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
 	repoTag "tuyou/internal/repository/web/tag"
+	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminCenter "tuyou/internal/service/admin/center"
 	serviceAdminGuide "tuyou/internal/service/admin/guide"
@@ -229,6 +232,7 @@ func (a *App) initDependencies() {
 	roleRepo := repoAdminRole.NewRoleRepository(a.mysqlDB)
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
 	adminGuideRepo := repoAdminGuide.NewGuideRepository(a.mysqlDB)
+	adminActivityRepo := repoAdminActivity.NewActivityRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
@@ -248,6 +252,7 @@ func (a *App) initDependencies() {
 	roleSvc := serviceAdminRole.NewRoleService(roleRepo)
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
+	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
@@ -267,6 +272,7 @@ func (a *App) initDependencies() {
 	roleC := roleCtrl.NewController(roleSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
+	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
@@ -276,7 +282,7 @@ func (a *App) initDependencies() {
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
