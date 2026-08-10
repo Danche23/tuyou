@@ -290,3 +290,69 @@ func (r *guideRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
 	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
 		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
 }
+
+// FindLikedStrategys 分页查询当前用户点赞过的攻略，按点赞时间倒序（仅上架）
+func (r *guideRepository) FindLikedStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_like ON strategy_like.strategy_id = strategy.id").
+		Where("strategy_like.member_id = ? AND strategy.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_like ON strategy_like.strategy_id = strategy.id").
+		Where("strategy_like.member_id = ? AND strategy.status = 1", memberID).
+		Order("strategy_like.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}
+
+// FindCollectStrategys 分页查询当前用户收藏过的攻略，按收藏时间倒序（仅上架）
+func (r *guideRepository) FindCollectStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_collect ON strategy_collect.strategy_id = strategy.id").
+		Where("strategy_collect.member_id = ? AND strategy.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_collect ON strategy_collect.strategy_id = strategy.id").
+		Where("strategy_collect.member_id = ? AND strategy.status = 1", memberID).
+		Order("strategy_collect.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}
+
+// FindPublishStrategys 分页查询当前用户发布的攻略，按发布时间倒序（仅上架）
+func (r *guideRepository) FindPublishStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Where("member_id = ? AND status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Where("member_id = ? AND status = 1", memberID).
+		Order("publish_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}

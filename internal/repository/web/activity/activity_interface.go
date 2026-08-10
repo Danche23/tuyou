@@ -55,4 +55,10 @@ type ActivityRepository interface {
 
 	// FindJoinedActivityIDs 查询当前用户已报名的活动ID集合
 	FindJoinedActivityIDs(activityIDs []uint, memberID uint) (map[uint]bool, error)
+
+	// FindPublishActivities 分页查询当前用户发布的活动（未删除，按开始时间倒序）
+	FindPublishActivities(memberID uint, page, size int) ([]entity.Activity, int64, error)
+
+	// FindJoinActivities 分页查询当前用户报名参加的活动（未取消、活动未删除，按报名时间倒序）
+	FindJoinActivities(memberID uint, page, size int) ([]entity.Activity, int64, error)
 }

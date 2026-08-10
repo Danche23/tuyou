@@ -62,3 +62,14 @@ type LikeToggleResponse struct {
 type CollectToggleResponse struct {
 	IsFavorited bool `json:"isFavorited"`
 }
+
+type NoteCard struct {
+	ID        string      `json:"id"`
+	Type      string      `json:"type"`
+	Author    *AuthorInfo `json:"author"`
+	CoverImg  string      `json:"coverImg"`
+	Title     string      `json:"title"`
+	Tag       string      `json:"tag"`
+	LikeCount int64       `json:"likeCount"`
+	IsLiked   bool        `json:"isLiked"`
+}

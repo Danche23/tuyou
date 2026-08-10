@@ -3,6 +3,7 @@ package note
 import (
 	requestNote "tuyou/internal/model/dto/request/web/note"
 	responseNote "tuyou/internal/model/dto/response/web/note"
+	"tuyou/internal/model/entity"
 )
 
 // NoteService 笔记服务接口
@@ -21,4 +22,12 @@ type NoteService interface {
 
 	// DeleteNote 删除笔记（下架，仅作者）
 	DeleteNote(noteID uint, memberID uint) error
+
+	BuildNoteCards(notes []entity.Note, memberID uint) ([]responseNote.NoteCard, error)
+
+	// GetCollectNotes 当前用户收藏的笔记列表（分页）
+	GetCollectNotes(memberID uint, page, size int) ([]responseNote.NoteCard, int64, error)
+
+	// GetLikedNotes 当前用户点赞的笔记列表（分页）
+	GetLikedNotes(memberID uint, page, size int) ([]responseNote.NoteCard, int64, error)
 }

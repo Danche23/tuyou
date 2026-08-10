@@ -21,4 +21,10 @@ type ActivityService interface {
 
 	// GetActivityList 获取活动列表（支持按分类筛选和分页）
 	GetActivityList(memberID uint, req *requestActivity.ListActivityRequest) ([]responseActivity.ActivityListItem, int64, error)
+
+	// GetPublishActivities 当前用户发布的活动列表（分页）
+	GetPublishActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error)
+
+	// GetJoinActivities 当前用户报名参加的活动列表（分页）
+	GetJoinActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error)
 }

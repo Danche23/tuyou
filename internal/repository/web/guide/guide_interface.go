@@ -28,7 +28,9 @@ type GuideRepository interface {
 	// FindByID 根据攻略ID查攻略主表（仅上架）
 	FindByID(strategyID uint) (*entity.Strategy, error)
 
-	// FindImagesByStrategyID 查攻略图片列表
+	// FindLikedStrategys 分页查询当前用户点赞过的攻略（按点赞时间倒序，仅上架）
+	FindLikedStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error)
+
 	FindImagesByStrategyID(strategyID uint) ([]entity.StrategyImage, error)
 
 	// FindTagsByStrategyID 查攻略标签列表
@@ -102,4 +104,10 @@ type GuideRepository interface {
 
 	// DecrPublishCount 发布计数 -1
 	DecrPublishCount(tx *gorm.DB, memberID uint) error
+
+	// FindCollectStrategys 分页查询当前用户收藏过的攻略，按收藏时间倒序（仅上架）
+	FindCollectStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error)
+
+	// FindPublishStrategys 分页查询当前用户发布的攻略，按发布时间倒序（仅上架）
+	FindPublishStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error)
 }

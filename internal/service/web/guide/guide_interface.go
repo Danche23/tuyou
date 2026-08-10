@@ -3,6 +3,7 @@ package guide
 import (
 	requestGuide "tuyou/internal/model/dto/request/web/guide"
 	responseGuide "tuyou/internal/model/dto/response/web/guide"
+	"tuyou/internal/model/entity"
 )
 
 // GuideService 攻略服务接口（当前仅覆盖发布流程，后续接口按需扩展）
@@ -21,4 +22,16 @@ type GuideService interface {
 
 	// DeleteGuide 删除攻略（下架，仅作者）
 	DeleteGuide(strategyID uint, memberID uint) error
+
+	// 个人主页点赞攻略
+	BuildStrategyCards(strategies []entity.Strategy, memberID uint) ([]responseGuide.StrategyCard, error)
+
+	// 查询点赞攻略
+	FindLikedStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error)
+
+	// GetCollectStrategys 当前用户收藏的攻略列表（分页）
+	GetCollectStrategys(memberID uint, page, size int) ([]responseGuide.StrategyCard, int64, error)
+
+	// GetPublishStrategys 当前用户发布的攻略列表（分页）
+	GetPublishStrategys(memberID uint, page, size int) ([]responseGuide.StrategyCard, int64, error)
 }

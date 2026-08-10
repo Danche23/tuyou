@@ -15,52 +15,112 @@ func NewPersonalRepository(db *gorm.DB) PersonalRepository {
 	return &personalRepository{db: db}
 }
 
-// FindFollowedMembers 查询当前用户关注的所有用户信息
-//
-// 通过 follow 表关联 member 表一次查出，等价于两步：
-//  1. 从 follow 表按 follower_id 查到所有被关注者 ID（followee_id）
-//  2. 用这些 ID 去 member 表取 nickname / avatar / bio / member_type 四列（Scan 进 entity.Member）
-//
-// 关联条件：
-//   - follow.follower_id = 当前登录用户 ID（关注者）
-//   - follow.followee_id = member.id（被关注者）
-//   - follow.delete_time IS NULL 过滤已取消的关注（软删除）
-//
-// member 表主模型的软删除（delete_time）由 gorm 自动加上。
-func (r *personalRepository) FindFollowedMembers(followerID uint) ([]entity.Member, error) {
+// FindFollowedMembers 分页查询当前用户关注的所有用户信息
+func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int) ([]entity.Member, int64, error) {
+	var total int64
+	if err := r.db.Table("member").
+		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
+		Where("follow.follower_id = ?", followerID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
 	var rows []entity.Member
 	if err := r.db.Table("member").
-		Select("member.id, member.nickname, member.avatar, member.bio, member.member_type").
+		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
 		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
 		Where("follow.follower_id = ?", followerID).
 		Order("follow.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
 		Scan(&rows).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
-// FindFansMembers 查询当前用户的粉丝列表
-//
-// 粉丝 = 关注了我的人。此时当前用户是被关注者（followee）：
-//   - follow.followee_id = 当前登录用户 ID（被关注者）
-//   - follow.follower_id = member.id（关注我的人，即粉丝）
-//
-// 和 FindFollowedMembers 的区别：Join/Where 里 follower_id 和 followee_id 互换了。
-func (r *personalRepository) FindFansMembers(memberID uint) ([]entity.Member, error) {
+// FindFansMembers 分页查询当前用户的粉丝列表
+func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]entity.Member, int64, error) {
+	var total int64
+	if err := r.db.Table("member").
+		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
+		Where("follow.followee_id = ?", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
 	var rows []entity.Member
 	if err := r.db.Table("member").
-		Select("member.id, member.nickname, member.avatar, member.bio, member.member_type").
+		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
 		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
 		Where("follow.followee_id = ?", memberID).
 		Order("follow.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
 		Scan(&rows).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
-func (r *personalRepository) FindNoteLists(memberID uint) ([]entity.Note, error) {
-	var rows []entity.Note
+// FindFollowedIDs 查询当前用户关注的所有用户 ID 集合
+func (r *personalRepository) FindFollowedIDs(followerID uint) (map[uint]bool, error) {
+	var ids []uint
+	if err := r.db.Table("follow").
+		Select("followee_id").
+		Where("follower_id = ? AND delete_time IS NULL", followerID).
+		Pluck("followee_id", &ids).Error; err != nil {
+		return nil, err
+	}
 
+	followed := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		followed[id] = true
+	}
+	return followed, nil
+}
+
+func (r *personalRepository) CreateFollow(followerID, followeeID uint) error {
+	var count int64
+	if err := r.db.Model(&entity.Follow{}).
+		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return r.db.Create(&entity.Follow{
+		FollowerID: followerID,
+		FolloweeID: followeeID,
+	}).Error
+}
+
+// DeleteFollow 取关：硬删除，返回是否真的删掉了（true=之前处于已关注状态）
+func (r *personalRepository) DeleteFollow(followerID, followeeID uint) (bool, error) {
+	res := r.db.Unscoped().
+		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		Delete(&entity.Follow{})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+func (r *personalRepository) FindNoteLists(memberID uint, page, size int) ([]entity.Note, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Note{}).
+		Where("member_id = ? AND status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var notes []entity.Note
+	if err := r.db.Where("member_id = ? AND status = 1", memberID).
+		Order("publish_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&notes).Error; err != nil {
+		return nil, total, err
+	}
+	return notes, total, nil
 }

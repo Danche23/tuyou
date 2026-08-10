@@ -362,3 +362,80 @@ func (s *noteService) readCollectCount(ctx context.Context, noteID uint, fallbac
 	s.noteRepo.SetCachedCollectCount(ctx, noteID, fallback)
 	return fallback
 }
+
+func (s *noteService) BuildNoteCards(notes []entity.Note, memberID uint) ([]responseNote.NoteCard, error) {
+	cards := make([]responseNote.NoteCard, 0, len(notes))
+	for _, n := range notes {
+
+		images, err := s.noteRepo.FindImagesByNoteID(n.ID)
+		if err != nil {
+			return nil, err
+		}
+		cover := ""
+		if len(images) > 0 {
+			cover = images[0].URL
+		}
+
+		tags, err := s.noteRepo.FindTagsByNoteID(n.ID)
+		if err != nil {
+			return nil, err
+		}
+		tag := ""
+		if len(tags) > 0 {
+			tag = tags[0].TagName
+		}
+
+		author, err := s.noteRepo.GetAuthor(n.MemberID)
+		if err != nil {
+			return nil, err
+		}
+
+		cards = append(cards, responseNote.NoteCard{
+			ID:   strconv.FormatUint(uint64(n.ID), 10),
+			Type: "note",
+			Author: &responseNote.AuthorInfo{
+				ID:       strconv.FormatUint(uint64(author.ID), 10),
+				Nickname: author.Nickname,
+				Avatar:   author.Avatar,
+			},
+			CoverImg:  cover,
+			Title:     n.Title,
+			Tag:       tag,
+			LikeCount: n.LikeCount,
+			IsLiked:   s.readLikeStatus(context.Background(), n.ID, memberID),
+		})
+	}
+	return cards, nil
+}
+
+// GetCollectNotes 当前用户收藏的笔记列表（分页）
+func (s *noteService) GetCollectNotes(memberID uint, page, size int) ([]responseNote.NoteCard, int64, error) {
+	notes, total, err := s.noteRepo.FindCollectNotes(memberID, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(notes) == 0 {
+		return []responseNote.NoteCard{}, total, nil
+	}
+	cards, err := s.BuildNoteCards(notes, memberID)
+	if err != nil {
+		return nil, total, err
+	}
+	return cards, total, nil
+}
+
+// GetLikedNotes 当前用户点赞的笔记列表（分页）
+func (s *noteService) GetLikedNotes(memberID uint, page, size int) ([]responseNote.NoteCard, int64, error) {
+	notes, total, err := s.noteRepo.FindLikedNotes(memberID, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(notes) == 0 {
+		return []responseNote.NoteCard{}, total, nil
+	}
+	cards, err := s.BuildNoteCards(notes, memberID)
+	if err != nil {
+		return nil, total, err
+	}
+	return cards, total, nil
+}

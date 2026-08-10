@@ -339,3 +339,89 @@ func (s *guideService) DeleteGuide(strategyID uint, memberID uint) error {
 
 	return nil
 }
+
+func (s *guideService) BuildStrategyCards(strategies []entity.Strategy, memberID uint) ([]responseGuide.StrategyCard, error) {
+	cards := make([]responseGuide.StrategyCard, 0, len(strategies))
+	for _, st := range strategies {
+
+		//  查这篇攻略的图片
+		images, err := s.guideRepo.FindImagesByStrategyID(st.ID)
+		if err != nil {
+			return nil, err
+		}
+		cover := ""
+		if len(images) > 0 {
+			cover = images[0].URL
+		}
+
+		// 查这篇攻略的标签
+		tags, err := s.guideRepo.FindTagsByStrategyID(st.ID)
+		if err != nil {
+			return nil, err
+		}
+		tag := ""
+		if len(tags) > 0 {
+			tag = tags[0].TagName
+		}
+
+		// 查作者
+		author, err := s.guideRepo.GetAuthor(st.MemberID)
+		if err != nil {
+			return nil, err
+		}
+
+		//  类型
+		cards = append(cards, responseGuide.StrategyCard{
+			ID:   strconv.FormatUint(uint64(st.ID), 10),
+			Type: "guide",
+			Author: &responseGuide.AuthorInfo{
+				ID:       strconv.FormatUint(uint64(author.ID), 10),
+				Nickname: author.Nickname,
+				Avatar:   author.Avatar,
+			},
+			CoverImg:  cover,
+			Title:     st.Title,
+			Tag:       tag,
+			LikeCount: st.LikeCount,
+			IsLiked:   s.readLikeStatus(context.Background(), st.ID, memberID),
+		})
+	}
+	return cards, nil
+}
+
+func (s *guideService) FindLikedStrategys(memberID uint, page, size int) ([]entity.Strategy,
+	int64, error) {
+	return s.guideRepo.FindLikedStrategys(memberID, page, size)
+}
+
+// GetCollectStrategys 当前用户收藏的攻略列表（分页）
+func (s *guideService) GetCollectStrategys(memberID uint, page, size int) ([]responseGuide.StrategyCard, int64, error) {
+	strategys, total, err := s.guideRepo.FindCollectStrategys(memberID, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(strategys) == 0 {
+		return []responseGuide.StrategyCard{}, total, nil
+	}
+	cards, err := s.BuildStrategyCards(strategys, memberID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return cards, total, nil
+}
+
+// GetPublishStrategys 当前用户发布的攻略列表（分页）
+func (s *guideService) GetPublishStrategys(memberID uint, page, size int) ([]responseGuide.StrategyCard, int64, error) {
+	strategys, total, err := s.guideRepo.FindPublishStrategys(memberID, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(strategys) == 0 {
+		return []responseGuide.StrategyCard{}, total, nil
+	}
+	cards, err := s.BuildStrategyCards(strategys, memberID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return cards, total, nil
+}
