@@ -74,6 +74,77 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 	}
 }
 
+// UploadAuth 前后台上传接口统一认证中间件
+// 同时兼容两类登录态（任一有效即放行）：
+//   - 后台管理员：`admin:token:{userID}:{md5}` 存在即有效（多端登录，按 token 维度）；
+//   - 前台会员：`member:token:{userID}` 的值必须等于当前 token（单端登录，按用户维度）。
+//
+// 注意顺序：先查管理员白名单，避免后台 token 被数值撞车的前台会员 key 误判为「已在其他设备登
+// 注意顺序：先查管理员白名单，避免后台 token 被数值撞车的前台会员 key 误判为「已在其他设备登录」。
+// Redis 不可用时 fail-open，退化为纯 JWT 校验。
+func UploadAuth(redisRepo repository.RedisRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 从 Header 获取 Authorization
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			response.Unauthorized(c, "请提供认证令牌")
+			c.Abort()
+			return
+		}
+
+		// 解析 Bearer Token
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			response.Unauthorized(c, "令牌格式错误")
+			c.Abort()
+			return
+		}
+
+		// 解析 Token
+		claims, err := jwt.ParseToken(parts[1])
+		if err != nil {
+			response.Unauthorized(c, err.Error())
+			c.Abort()
+			return
+		}
+
+		// Redis 可用时才做白名单校验（fail-open）
+		if redisRepo != nil && redisRepo.Available(c.Request.Context()) {
+			userID := claims.GetUserID()
+
+			// ① 后台管理员白名单：按 token 维度存储，key 存在即有效（多端登录）
+			var adminVal int
+			valid := redisRepo.Get(c.Request.Context(), jwt.AdminTokenKey(userID, parts[1]), &adminVal) == nil
+
+			// ② 前台会员白名单：按用户维度存最新 token，值必须与当前 token 一致（单端登录）
+			if !valid {
+				var stored string
+				memberErr := redisRepo.Get(c.Request.Context(), jwt.MemberTokenKey(userID), &stored)
+				if memberErr == nil && stored == parts[1] {
+					valid = true
+				} else if memberErr == nil && stored != parts[1] {
+					// 会员 key 存在但值是别的 token → 已被顶号/在其他设备登录
+					response.Unauthorized(c, "账号已在其他设备登录")
+					c.Abort()
+					return
+				}
+			}
+
+			if !valid {
+				response.Unauthorized(c, "登录已失效，请重新登录")
+				c.Abort()
+				return
+			}
+		}
+
+		// 将用户信息存入上下文
+		c.Set(ContextUserID, claims.GetUserID())
+		c.Set(ContextUsername, claims.GetUsername())
+
+		c.Next()
+	}
+}
+
 // GetUserID 从上下文获取用户 ID
 func GetUserID(c *gin.Context) uint {
 	if userID, exists := c.Get(ContextUserID); exists {
