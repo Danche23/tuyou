@@ -51,7 +51,7 @@ func (r *adminsRepository) List(ctx context.Context, filters map[string]interfac
 		Joins("LEFT JOIN sys_role AS r ON r.id = a.role_id").
 		Select(`a.id, a.username, IFNULL(a.admin_name, '') AS adminname,
 			IFNULL(r.role_name, '') AS role,
-			IF(a.status = 1, TRUE, FALSE) AS status,
+			IF(a.status = 1, '启用', '禁用') AS status,
 			DATE_FORMAT(a.create_time, '%Y-%m-%d') AS create_time,
 			IFNULL(DATE_FORMAT(a.last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login`)
 	query = applyFilters(query, filters)
