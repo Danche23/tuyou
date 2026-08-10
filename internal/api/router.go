@@ -9,8 +9,9 @@ import (
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
-	uploadCtrl "tuyou/internal/api/v1/upload"
 	adminRoleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
+	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
@@ -42,6 +43,7 @@ type Router struct {
 	webMemberCtrl    *memberCtrl.Controller
 	homeCtrl         *homeCtrl.Controller
 	uploadCtrl       *uploadCtrl.Controller
+	workbenchCtrl    *workbenchCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -63,6 +65,7 @@ func NewRouter(
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
 	uploadCtrl *uploadCtrl.Controller,
+	workbenchCtrl *workbenchCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:         noteCtrl,
@@ -82,6 +85,7 @@ func NewRouter(
 		webMemberCtrl:    webMemberCtrl,
 		homeCtrl:         homeCtrl,
 		uploadCtrl:       uploadCtrl,
+		workbenchCtrl:    workbenchCtrl,
 	}
 }
 
@@ -104,19 +108,47 @@ func (r *Router) Setup(engine *gin.Engine) {
 	// API 路由组
 	apiGroup := engine.Group("/api/v1")
 	{
+
+		// Web 端认证路由
 		r.authHandler.RegisterRoutes(apiGroup)
+
+		// Web 端笔记路由
 		r.noteCtrl.RegisterRoutes(apiGroup)
+
+		// 后台认证路由
 		r.adminHandler.RegisterRoutes(apiGroup)
+
+		// 后台会员管理路由
 		r.memberCtrl.RegisterRoutes(apiGroup)
+
+		// 后台权限-管理员管理路由
 		r.adminPerCtrl.RegisterRoutes(apiGroup)
+
+		// 后台权限-菜单管理路由
 		r.adminMenuCtrl.RegisterRoutes(apiGroup)
+
+		// 后台权限-接口权限管理路由
 		r.adminApiPermCtrl.RegisterRoutes(apiGroup)
+
+		// 后台权限-角色管理路由
 		r.adminRoleCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端攻略路由
 		r.guideCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端活动路由
 		r.activityCtrl.RegisterRoutes(apiGroup)
+
+		// 后台个人中心路由
 		r.centerCtrl.RegisterRoutes(apiGroup)
+
+		// 后台笔记管理路由
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
+
+		// 后台攻略管理路由
 		r.guideAdminCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端标签路由
 		r.tagCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端会员路由
@@ -127,6 +159,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 文件上传路由
 		r.uploadCtrl.RegisterRoutes(apiGroup)
+
+		// 后台工作台路由
+		r.workbenchCtrl.RegisterRoutes(apiGroup)
 	}
 }
 

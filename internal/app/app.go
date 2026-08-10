@@ -24,6 +24,7 @@ import (
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
@@ -43,6 +44,7 @@ import (
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
 	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
 	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
@@ -58,6 +60,7 @@ import (
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
 	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
 	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
@@ -231,6 +234,7 @@ func (a *App) initDependencies() {
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
@@ -249,6 +253,7 @@ func (a *App) initDependencies() {
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	uploadSvc := serviceUpload.NewUploadService(store)
+	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
@@ -268,9 +273,10 @@ func (a *App) initDependencies() {
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 	homeC := homeCtrl.NewController(homeSvc, redisRepo)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
+	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC, uploadC)
+	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
