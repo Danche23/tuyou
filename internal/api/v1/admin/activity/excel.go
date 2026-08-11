@@ -14,7 +14,7 @@ func buildActivityExcel(list []response.ActivityListItem) ([]byte, error) {
 			item.ID, item.CoverImg, item.Title, item.LeaderMemberID, item.LeaderName,
 			item.ActivityType, item.StartTime, item.EndTime, item.Price,
 			item.CurrentPeople, item.MaxPeople, item.Difficulty,
-			item.IsSlide, item.ActivityStatus, item.IsDel, item.DeleteTime,
+			item.IsSlide, item.ActivityStatus, item.Status, item.DeleteTime,
 		})
 	}
 	return excel.Build("活动列表", headers, rows)

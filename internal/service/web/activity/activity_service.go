@@ -163,6 +163,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 	return &responseActivity.ActivityDetailResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
 		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar},
+		IsOwner:         activity.LeaderMemberID == memberID,
 		Title:           activity.Title,
 		CoverImg:        activity.CoverImg,
 		Category:        categoryIntToStr[activity.ActivityType],

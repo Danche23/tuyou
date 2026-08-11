@@ -58,7 +58,7 @@ func (s *activityService) ListActivities(ctx context.Context, req *request.ListA
 		switch req.Fee {
 		case "免费":
 			filters["fee"] = 0
-		case "付费":
+		case "收费":
 			filters["fee"] = 1
 		default:
 			return nil, errors.New(errors.CodeInvalidParam, "费用类型不合法")
@@ -227,7 +227,7 @@ func (s *activityService) UpdateActivity(ctx context.Context, activityID uint, r
 	}
 
 	var isDel int
-	switch req.IsDel {
+	switch req.Status {
 	case "下架":
 		isDel = 1
 	case "正常":
@@ -447,7 +447,7 @@ func (s *activityService) buildListItems(activities []entity.Activity) ([]respon
 			Difficulty:     difficultyIntToStr[a.Difficulty],
 			IsSlide:        isSlide,
 			ActivityStatus: activityStatus,
-			IsDel:          isDel,
+			Status:         isDel,
 			DeleteTime:     deleteTime,
 		})
 	}
