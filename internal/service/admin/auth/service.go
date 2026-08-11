@@ -157,6 +157,14 @@ func buildPermKeys(perms []entity.SysPermission) []string {
 	return keys
 }
 
+// statusStr 将账号状态映射为展示文案：1启用，0禁用
+func statusStr(status int) string {
+	if status == 1 {
+		return "启用"
+	}
+	return "禁用"
+}
+
 // GetProfile 获取当前登录管理员信息
 func (s *authService) GetProfile(ctx context.Context, adminID uint) (*response.AdminInfo, error) {
 	admin, err := s.adminRepo.FindByID(ctx, adminID)
@@ -183,7 +191,7 @@ func (s *authService) GetProfile(ctx context.Context, adminID uint) (*response.A
 		Adminname: admin.AdminName,
 		Role:      role,
 		Avatar:    admin.Avatar,
-		Status:    admin.Status == 1,
+		Status:    statusStr(admin.Status),
 		MenuTree:  buildMenuTree(menus),
 		PermKeys:  buildPermKeys(perms),
 	}, nil

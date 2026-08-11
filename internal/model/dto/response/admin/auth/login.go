@@ -7,7 +7,7 @@ type AdminInfo struct {
 	Adminname string      `json:"adminname"`
 	Role      string      `json:"role"`
 	Avatar    string      `json:"avatar"`
-	Status    bool        `json:"status"`
+	Status    string      `json:"status"`
 	MenuTree  []*MenuTree `json:"menu_tree"`
 	PermKeys  []string    `json:"perm_keys"`
 }
