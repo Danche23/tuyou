@@ -280,7 +280,7 @@ func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([
 	if len(activities) == 0 {
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, memberID, false)
+	list, err := s.buildActivityCards(activities, false)
 	if err != nil {
 		return nil, total, err
 	}
@@ -296,7 +296,7 @@ func (s *personalService) GetJoinActivities(memberID uint, page, size int) ([]re
 	if len(activities) == 0 {
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, memberID, true)
+	list, err := s.buildActivityCards(activities, true)
 	if err != nil {
 		return nil, total, err
 	}
@@ -443,7 +443,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 
 // buildActivityCards 把活动实体组装成列表项（批量查领队 + 报名状态）
 // joined：true 表示该列表中的活动全部视为已报名（如"我参加的活动"），false 表示全部未报名（如"我发布的活动"）
-func (s *personalService) buildActivityCards(activities []entity.Activity, memberID uint, joined bool) ([]responseActivity.ActivityListItem, error) {
+func (s *personalService) buildActivityCards(activities []entity.Activity, joined bool) ([]responseActivity.ActivityListItem, error) {
 	// 批量获取领队信息
 	leaderIDSet := make(map[uint]bool)
 	uniqueLeaderIDs := make([]uint, 0)
