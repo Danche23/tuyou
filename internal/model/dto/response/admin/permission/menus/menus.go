@@ -18,6 +18,9 @@ type MenuListItem struct {
 	MenuType     int    `json:"menu_type"` // 1目录，2菜单
 	MenuTypeName string `json:"menu_type_name"`
 	RoutePath    string `json:"route_path"`
+	Component    string `json:"component"`
+	Icon         string `json:"icon"`
+	HideInMenu   int    `json:"hide_in_menu"` // 0显示，1隐藏
 	Sort         int    `json:"sort"`
 	Status       string `json:"status"` // "启用" 或 "禁用"
 	CreateTime   string `json:"create_time"`

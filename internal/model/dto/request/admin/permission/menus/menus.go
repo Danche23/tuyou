@@ -16,6 +16,9 @@ type InsertMenuReq struct {
 	RoutePath  string `json:"route_path"`
 	Sort       int    `json:"sort"`
 	Status     string `json:"status"` // 空=启用
+	Component  string `json:"component"`
+	Icon       string `json:"icon"`
+	HideInMenu bool   `json:"hide_in_menu"` // true=侧边栏隐藏
 }
 
 // UpdateMenuReq 编辑菜单（指针字段：不传则不改动）
@@ -26,4 +29,7 @@ type UpdateMenuReq struct {
 	RoutePath  *string `json:"route_path"`
 	Sort       *int    `json:"sort"`
 	Status     string  `json:"status"` // 空=不改, 启用/禁用
+	Component  *string `json:"component"`
+	Icon       *string `json:"icon"`
+	HideInMenu *bool   `json:"hide_in_menu"` // 不传=不改
 }
