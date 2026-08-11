@@ -24,7 +24,7 @@ func GenerateToken(userID uint, username string) (string, error) {
 		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.ExpireHours * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.ExpireHours)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "tuyou",
@@ -72,4 +72,15 @@ func RefreshToken(tokenString string) (string, error) {
 func AdminTokenKey(adminID uint, token string) string {
 	hash := md5.Sum([]byte(token))
 	return fmt.Sprintf("admin:token:%d:%x", adminID, hash)
+}
+
+// AdminTokenPrefix 后台登录态白名单 Key 前缀（按账号维度 SCAN 枚举所有在线 token）
+func AdminTokenPrefix(adminID uint) string {
+	return fmt.Sprintf("admin:token:%d:*", adminID)
+}
+
+// MemberTokenKey 前台登录态白名单 Key（按用户维度存储，支持单端登录）
+// 存的是最新 token，新登录覆盖旧值实现顶号
+func MemberTokenKey(userID uint) string {
+	return fmt.Sprintf("member:token:%d", userID)
 }

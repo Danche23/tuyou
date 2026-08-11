@@ -6,6 +6,7 @@ import (
 
 	"tuyou/internal/middleware"
 	requestActivity "tuyou/internal/model/dto/request/web/activity"
+	"tuyou/internal/repository"
 	serviceActivity "tuyou/internal/service/web/activity"
 	"tuyou/pkg/response"
 
@@ -15,11 +16,12 @@ import (
 // Controller 活动控制器
 type Controller struct {
 	activitySvc serviceActivity.ActivityService
+	redisRepo   repository.RedisRepository
 }
 
 // NewController 创建控制器实例
-func NewController(activitySvc serviceActivity.ActivityService) *Controller {
-	return &Controller{activitySvc: activitySvc}
+func NewController(activitySvc serviceActivity.ActivityService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{activitySvc: activitySvc, redisRepo: redisRepo}
 }
 
 // Create 创建活动

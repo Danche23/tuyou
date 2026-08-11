@@ -12,6 +12,7 @@ type Config struct {
 	Log      LogConfig      `mapstructure:"log"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	SMS      SMSConfig      `mapstructure:"sms"`
+	Storage  StorageConfig  `mapstructure:"storage"`
 }
 
 // AppConfig 应用配置
@@ -94,4 +95,18 @@ type SMSConfig struct {
 	ReturnVerifyCode bool   `mapstructure:"return_verify_code"` // 是否返回验证码
 	AutoRetry        int64  `mapstructure:"auto_retry"`         // 自动重试
 	CaseAuthPolicy   int64  `mapstructure:"case_auth_policy"`   // 认证策略
+}
+
+// StorageConfig 文件存储配置
+type StorageConfig struct {
+	Driver string           `mapstructure:"driver"` // 存储驱动：oss（local 预留）
+	OSS    OSSStorageConfig `mapstructure:"oss"`
+}
+
+// OSSStorageConfig 阿里云 OSS 配置
+type OSSStorageConfig struct {
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	AccessKeySecret string `mapstructure:"access_key_secret"`
+	Endpoint        string `mapstructure:"endpoint"` // OSS 区域名（如 cn-beijing），SDK v2 WithRegion 直接吃区域名
+	Bucket          string `mapstructure:"bucket"`
 }

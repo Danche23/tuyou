@@ -9,7 +9,7 @@ import (
 // RegisterRoutes 注册笔记路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	notes := r.Group("/notes")
-	notes.Use(middleware.Auth())
+	notes.Use(middleware.MemberAuth(c.redisRepo))
 	{
 		notes.POST("", c.Create)
 		notes.GET("/:id", c.GetNoteDetail)

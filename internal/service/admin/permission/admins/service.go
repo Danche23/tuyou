@@ -21,6 +21,14 @@ func NewAdminService(adminRepo admins.AdminRepository) AdminService {
 	return &adminService{adminRepo: adminRepo}
 }
 
+// statusToInt 状态中文转 int：启用=1，禁用=0
+func statusToInt(s string) int {
+	if s == "禁用" {
+		return 0
+	}
+	return 1
+}
+
 // ListAdmin 查询会员列表
 func (s *adminService) ListAdmin(ctx context.Context, req *request.ListAdminsReq) (*response.ListAdminResp, error) {
 	filters := map[string]interface{}{}
@@ -30,8 +38,8 @@ func (s *adminService) ListAdmin(ctx context.Context, req *request.ListAdminsReq
 	if req.Role != "" {
 		filters["role"] = req.Role
 	}
-	if req.Status {
-		filters["status"] = true
+	if req.Status != "" {
+		filters["status"] = statusToInt(req.Status)
 	}
 
 	total, err := s.adminRepo.Count(ctx, filters)
@@ -107,10 +115,8 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 		}
 		updates["role_id"] = roleID
 	}
-	if req.Status {
-		updates["status"] = 1
-	} else {
-		updates["status"] = 0
+	if req.Status != "" {
+		updates["status"] = statusToInt(req.Status)
 	}
 
 	if len(updates) == 0 {

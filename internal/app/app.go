@@ -8,40 +8,69 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"tuyou/internal/task"
 
 	"tuyou/internal/api"
+	activityAdminCtrl "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	centerCtrl "tuyou/internal/api/v1/admin/center"
+	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
+	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
+	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
+	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
+	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
 	"tuyou/internal/api/v1/web/guide"
+	homeCtrl "tuyou/internal/api/v1/web/home"
+	webMemberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/api/v1/web/personal"
+	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
+	repoAdminActivity "tuyou/internal/repository/admin/activity"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminCenter "tuyou/internal/repository/admin/center"
+	repoAdminGuide "tuyou/internal/repository/admin/guide"
 	repoAdminMember "tuyou/internal/repository/admin/member"
 	repoAdminNote "tuyou/internal/repository/admin/note"
 	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
+	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
+	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
+	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
 	repoGuide "tuyou/internal/repository/web/guide"
+	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
 	repoPersonal "tuyou/internal/repository/web/personal"
+	repoTag "tuyou/internal/repository/web/tag"
+	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminCenter "tuyou/internal/service/admin/center"
+	serviceAdminGuide "tuyou/internal/service/admin/guide"
 	serviceAdminMember "tuyou/internal/service/admin/member"
 	serviceAdminNote "tuyou/internal/service/admin/note"
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
+	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
+	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
+	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
+	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
 	serviceGuide "tuyou/internal/service/web/guide"
+	serviceHome "tuyou/internal/service/web/home"
 	serviceNote "tuyou/internal/service/web/note"
 	servicePersonal "tuyou/internal/service/web/personal"
+	serviceTag "tuyou/internal/service/web/tag"
+	"tuyou/internal/storage"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
@@ -55,12 +84,13 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg      *config.Config
-	mysqlDB  *gorm.DB
-	redis    *redis.Client
-	router   *api.Router
-	server   *http.Server
-	consumer *stream.Consumer
+	cfg        *config.Config
+	mysqlDB    *gorm.DB
+	redis      *redis.Client
+	router     *api.Router
+	server     *http.Server
+	consumer   *stream.Consumer
+	heatTicker *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -189,48 +219,83 @@ func (a *App) initDependencies() {
 	// ========== 创建 Redis 仓储 ==========
 	redisRepo := repository.NewRedisRepository(a.redis)
 
+	// ========== 创建存储（OSS）==========
+	store, err := storage.New(a.cfg.Storage)
+	if err != nil {
+		logger.Fatal("存储初始化失败", zap.Error(err))
+	}
+
 	// ========== 创建 Repository ==========
 	memberRepo := auth.NewMemberRepository(a.mysqlDB)
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
 	adminPermRepo := repoAdminPerm.NewAdminsRepository(a.mysqlDB)
+	menuRepo := repoAdminMenu.NewMenuRepository(a.mysqlDB)
+	apiPermRepo := repoAdminApiPerm.NewApiPermRepository(a.mysqlDB)
+	roleRepo := repoAdminRole.NewRoleRepository(a.mysqlDB)
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
+	adminGuideRepo := repoAdminGuide.NewGuideRepository(a.mysqlDB)
+	adminActivityRepo := repoAdminActivity.NewActivityRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
+	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
+	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
 
 	// ========== 创建 Service ==========
-	authSvc := serviceAuth.NewAuthService(memberRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
+	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
+	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
+	roleSvc := serviceAdminRole.NewRoleService(roleRepo)
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
+	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
+	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
+	tagSvc := serviceTag.NewTagService(tagRepo)
+	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	uploadSvc := serviceUpload.NewUploadService(store)
+	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 
 	// ========== 创建 Handler ==========
-	authHandler := handlerAuth.NewAuthHandler(authSvc)
+	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
-	noteCtrl := note.NewController(noteSvc)
 	personalCtrl := personal.NewController(personalSvc)
+	noteCtrl := note.NewController(noteSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
 	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
+	menuC := menuCtrl.NewController(menuSvc, redisRepo)
+	apiPermC := apiPermCtrl.NewController(apiPermSvc, redisRepo)
+	roleC := roleCtrl.NewController(roleSvc, redisRepo)
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
-	guideCtrl := guide.NewController(guideSvc)
-	activityCtrl := activity.NewController(activitySvc)
+	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
+	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc)
+	guideCtrl := guide.NewController(guideSvc, redisRepo)
+	activityCtrl := activity.NewController(activitySvc, redisRepo)
+	tagC := tagCtrl.NewController(tagSvc, redisRepo)
+	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
+	homeC := homeCtrl.NewController(homeSvc, redisRepo)
+	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
+	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, guideCtrl, centerC, activityCtrl, noteAdminC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
 	a.consumer.Start()
+	// ========== 启动热度重算定时任务 ==========
+	a.heatTicker = task.StartHeatJob(a.mysqlDB)
 }
 
 // initRouter 初始化路由
@@ -250,8 +315,8 @@ func (a *App) initServer() {
 	a.server = &http.Server{
 		Addr:           fmt.Sprintf(":%d", a.cfg.App.Port),
 		Handler:        engine,
-		ReadTimeout:    60 * time.Second,
-		WriteTimeout:   60 * time.Second,
+		ReadTimeout:    5 * time.Minute,
+		WriteTimeout:   5 * time.Minute,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 }
@@ -292,6 +357,11 @@ func (a *App) gracefulShutdown() {
 	// 停止后台消费者（在关闭 DB/Redis 之前）
 	if a.consumer != nil {
 		a.consumer.Stop()
+	}
+
+	// 停止热度重算定时任务
+	if a.heatTicker != nil {
+		a.heatTicker.Stop()
 	}
 
 	// 关闭路由连接
