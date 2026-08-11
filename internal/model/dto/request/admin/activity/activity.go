@@ -32,9 +32,9 @@ type CreateActivityReq struct {
 
 // UpdateActivityReq 后台活动编辑请求（三个字段必传，值未变也要传当前值）
 type UpdateActivityReq struct {
-	ActivityType string `json:"activity_type" binding:"required"` // 活动类型中文名（徒步/露营/骑行/登山/跑步/攀岩/溯溪）
-	IsSlide      string `json:"is_slide" binding:"required"`      // 是否轮播：是/否
-	Status       string `json:"status" binding:"required"`        // 状态：正常/下架
+	Category string `json:"category" binding:"required"` // 活动类型中文名（徒步/露营/骑行/登山/跑步/攀岩/溯溪）
+	IsSlide  string `json:"is_slide" binding:"required"` // 是否轮播：是/否
+	Status   string `json:"status" binding:"required"`   // 状态：正常/下架
 }
 
 // BatchDeleteReq 批量删除活动请求

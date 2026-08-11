@@ -211,7 +211,7 @@ func (s *activityService) UpdateActivity(ctx context.Context, activityID uint, r
 	}
 
 	// 2. 解析三个必传字段
-	activityType, ok := activityTypeStrToInt[req.ActivityType]
+	activityType, ok := activityTypeStrToInt[req.Category]
 	if !ok {
 		return nil, errors.New(errors.CodeInvalidParam, "活动类型不合法")
 	}
