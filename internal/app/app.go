@@ -10,10 +10,6 @@ import (
 	"time"
 	"tuyou/internal/task"
 
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"tuyou/internal/api"
 	activityAdminCtrl "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
@@ -33,6 +29,7 @@ import (
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	webMemberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
+	"tuyou/internal/api/v1/web/personal"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
@@ -52,6 +49,7 @@ import (
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
+	repoPersonal "tuyou/internal/repository/web/personal"
 	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
@@ -70,12 +68,18 @@ import (
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceHome "tuyou/internal/service/web/home"
 	serviceNote "tuyou/internal/service/web/note"
+	servicePersonal "tuyou/internal/service/web/personal"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/storage"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // App 应用结构体
@@ -236,6 +240,7 @@ func (a *App) initDependencies() {
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
+	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
@@ -255,6 +260,7 @@ func (a *App) initDependencies() {
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
+	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	uploadSvc := serviceUpload.NewUploadService(store)
@@ -263,6 +269,7 @@ func (a *App) initDependencies() {
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
+	personalCtrl := personal.NewController(personalSvc)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
 	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
@@ -282,7 +289,7 @@ func (a *App) initDependencies() {
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
