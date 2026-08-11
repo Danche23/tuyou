@@ -3,6 +3,7 @@ package activity
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,14 +60,13 @@ func (c *Controller) ListActivities(ctx *gin.Context) {
 // GetActivityDetail 获取活动详情
 // GET /api/v1/admin/activities/:id
 func (c *Controller) GetActivityDetail(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
+	id, ok := parseID(ctx.Param("id"))
+	if !ok {
 		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
-	resp, err := c.activitySvc.GetActivityDetail(ctx, uint(id))
+	resp, err := c.activitySvc.GetActivityDetail(ctx, id)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
@@ -77,9 +77,8 @@ func (c *Controller) GetActivityDetail(ctx *gin.Context) {
 // UpdateActivity 编辑活动（分类/轮播/状态三字段整体覆盖）
 // PUT /api/v1/admin/activities/:id
 func (c *Controller) UpdateActivity(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
+	id, ok := parseID(ctx.Param("id"))
+	if !ok {
 		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
@@ -90,7 +89,7 @@ func (c *Controller) UpdateActivity(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := c.activitySvc.UpdateActivity(ctx, uint(id), &req)
+	resp, err := c.activitySvc.UpdateActivity(ctx, id, &req)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
@@ -101,14 +100,13 @@ func (c *Controller) UpdateActivity(ctx *gin.Context) {
 // DeleteActivity 删除活动（硬删，连带报名记录）
 // DELETE /api/v1/admin/activities/:id
 func (c *Controller) DeleteActivity(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil || id == 0 {
+	id, ok := parseID(ctx.Param("id"))
+	if !ok {
 		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
-	if err := c.activitySvc.DeleteActivity(ctx, uint(id)); err != nil {
+	if err := c.activitySvc.DeleteActivity(ctx, id); err != nil {
 		response.BizError(ctx, err)
 		return
 	}
@@ -166,4 +164,14 @@ func (c *Controller) ListLeaderNames(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, resp)
+}
+
+// parseID 解析活动 ID，兼容列表返回的展示格式 "A0001" 与纯数字 ID。
+// 与 service 层 parseActivityIDs 的解析规则保持一致。
+func parseID(idStr string) (uint, bool) {
+	id, err := strconv.ParseUint(strings.TrimPrefix(idStr, "A"), 10, 64)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return uint(id), true
 }
