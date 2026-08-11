@@ -112,7 +112,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 		Role:     role,
 		Avatar:   admin.Avatar,
 		MenuTree: buildMenuTree(menus),
-		PermTree: buildPermTree(perms),
+		PermKeys: buildPermKeys(perms),
 	}, nil
 }
 
@@ -123,12 +123,15 @@ func buildMenuTree(menus []entity.SysMenu) []*response.MenuTree {
 	for i := range menus {
 		m := &menus[i]
 		nodes[m.ID] = &response.MenuTree{
-			ID:        strconv.Itoa(int(m.ID)),
-			MenuName:  m.MenuName,
-			ParentID:  strconv.Itoa(int(m.ParentID)),
-			MenuType:  m.MenuType,
-			RoutePath: m.RoutePath,
-			Sort:      m.Sort,
+			ID:         strconv.Itoa(int(m.ID)),
+			MenuName:   m.MenuName,
+			ParentID:   strconv.Itoa(int(m.ParentID)),
+			MenuType:   m.MenuType,
+			RoutePath:  m.RoutePath,
+			Component:  m.Component,
+			Icon:       m.Icon,
+			HideInMenu: m.HideInMenu,
+			Sort:       m.Sort,
 		}
 	}
 	for _, m := range menus {
@@ -145,29 +148,13 @@ func buildMenuTree(menus []entity.SysMenu) []*response.MenuTree {
 	return roots
 }
 
-// buildPermTree 将扁平权限列表按模块分组成树
-func buildPermTree(perms []entity.SysPermission) []response.PermTree {
-	tree := make([]response.PermTree, 0, len(perms))
-	idx := make(map[string]int, len(perms))
+// buildPermKeys 提取权限标识列表
+func buildPermKeys(perms []entity.SysPermission) []string {
+	keys := make([]string, 0, len(perms))
 	for _, p := range perms {
-		item := response.PermItem{
-			ID:            strconv.Itoa(int(p.ID)),
-			PermName:      p.PermName,
-			PermKey:       p.PermKey,
-			RequestMethod: p.RequestMethod,
-			APIPath:       p.APIPath,
-		}
-		if i, ok := idx[p.Module]; ok {
-			tree[i].Children = append(tree[i].Children, item)
-		} else {
-			idx[p.Module] = len(tree)
-			tree = append(tree, response.PermTree{
-				Module:   p.Module,
-				Children: []response.PermItem{item},
-			})
-		}
+		keys = append(keys, p.PermKey)
 	}
-	return tree
+	return keys
 }
 
 // GetProfile 获取当前登录管理员信息
@@ -180,6 +167,16 @@ func (s *authService) GetProfile(ctx context.Context, adminID uint) (*response.A
 	if err != nil {
 		return nil, err
 	}
+	//查询角色菜单与权限
+	menus, err := s.adminRepo.FindMenusByRoleID(ctx, admin.RoleID)
+	if err != nil {
+		return nil, err
+	}
+	perms, err := s.adminRepo.FindPermsByRoleID(ctx, admin.RoleID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &response.AdminInfo{
 		ID:        strconv.Itoa(int(admin.ID)),
 		Username:  admin.Username,
@@ -187,6 +184,8 @@ func (s *authService) GetProfile(ctx context.Context, adminID uint) (*response.A
 		Role:      role,
 		Avatar:    admin.Avatar,
 		Status:    admin.Status == 1,
+		MenuTree:  buildMenuTree(menus),
+		PermKeys:  buildPermKeys(perms),
 	}, nil
 }
 

@@ -47,7 +47,7 @@ func (r *menuRepository) List(ctx context.Context, filters map[string]interface{
 	query := r.db.WithContext(ctx).Table("sys_menu AS m").
 		Joins("LEFT JOIN sys_menu AS p ON p.id = m.parent_id").
 		Select(`m.id, m.menu_name, m.parent_id, IFNULL(p.menu_name, '') AS parent_name,
-			m.menu_type, m.route_path, m.sort,
+			m.menu_type, m.route_path, m.component, m.icon, m.hide_in_menu, m.sort,
 			IF(m.status = 1, '启用', '禁用') AS status,
 			DATE_FORMAT(m.create_time, '%Y-%m-%d') AS create_time`)
 	query = applyFilters(query, filters)

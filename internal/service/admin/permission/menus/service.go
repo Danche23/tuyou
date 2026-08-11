@@ -49,6 +49,14 @@ func statusToInt(s string) int {
 	return 1
 }
 
+// boolToInt bool 转 int：true=1，false=0
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // ListMenus 查询菜单列表
 func (s *menuService) ListMenus(ctx context.Context, req *request.ListMenusReq) (*response.ListMenuResp, error) {
 	filters := map[string]interface{}{}
@@ -125,23 +133,34 @@ func (s *menuService) InsertMenu(ctx context.Context, req *request.InsertMenuReq
 	}
 
 	status := statusToInt(req.Status)
+	menuType := menuTypeToInt(req.MenuType)
 
 	menu := &entity.SysMenu{
-		MenuName:  req.MenuName,
-		ParentID:  parentID,
-		MenuType:  menuTypeToInt(req.MenuType),
-		RoutePath: req.RoutePath,
-		Sort:      req.Sort,
-		Status:    status,
+		MenuName:   req.MenuName,
+		ParentID:   parentID,
+		MenuType:   menuType,
+		RoutePath:  req.RoutePath,
+		Sort:       req.Sort,
+		Status:     status,
+		Component:  req.Component,
+		Icon:       req.Icon,
+		HideInMenu: boolToInt(req.HideInMenu),
+	}
+	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	if menuType == 1 {
+		menu.Component = "" // 目录不展示组件路径
+	}
+	if parentID != 0 {
+		menu.Icon = "" // 子菜单不展示图标
 	}
 	if err := s.menuRepo.Insert(ctx, menu); err != nil {
 		return nil, err
 	}
 
-	// 类型联动：父菜单有子菜单了，类型自动改为"目录"
+	// 类型联动：父菜单有子菜单了，类型自动改为"目录"；目录不展示组件路径，component 一并清空
 	if parentID != 0 {
 		if parent, err := s.menuRepo.FindByID(ctx, parentID); err == nil && parent.MenuType == 2 {
-			_ = s.menuRepo.Update(ctx, parentID, map[string]interface{}{"menu_type": 1})
+			_ = s.menuRepo.Update(ctx, parentID, map[string]interface{}{"menu_type": 1, "component": ""})
 		}
 	}
 
@@ -153,12 +172,14 @@ func (s *menuService) InsertMenu(ctx context.Context, req *request.InsertMenuReq
 
 // UpdateMenu 编辑菜单
 func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.UpdateMenuReq) error {
-	// 校验菜单存在
-	if _, err := s.menuRepo.FindByID(ctx, id); err != nil {
+	// 校验菜单存在，并记录当前类型（用于类型规则）
+	menu, err := s.menuRepo.FindByID(ctx, id)
+	if err != nil {
 		return err
 	}
 
 	updates := map[string]interface{}{}
+	newParentID := menu.ParentID // 更新后的父级，用于判断是否为子菜单
 	if req.MenuName != nil {
 		updates["menu_name"] = *req.MenuName
 	}
@@ -167,6 +188,7 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 		if err != nil {
 			return err
 		}
+		newParentID = parentID
 		updates["parent_id"] = parentID
 	}
 	if req.MenuType != nil {
@@ -181,9 +203,30 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 	if req.Status != "" {
 		updates["status"] = statusToInt(req.Status)
 	}
+	if req.Component != nil {
+		updates["component"] = *req.Component
+	}
+	if req.Icon != nil {
+		updates["icon"] = *req.Icon
+	}
+	if req.HideInMenu != nil {
+		updates["hide_in_menu"] = boolToInt(*req.HideInMenu)
+	}
 
 	if len(updates) == 0 {
 		return appErrors.ErrMissingParam
+	}
+
+	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	menuType := menu.MenuType
+	if req.MenuType != nil {
+		menuType = menuTypeToInt(*req.MenuType)
+	}
+	if menuType == 1 {
+		updates["component"] = ""
+	}
+	if newParentID != 0 {
+		updates["icon"] = ""
 	}
 
 	return s.menuRepo.Update(ctx, id, updates)
