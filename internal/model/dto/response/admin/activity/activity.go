@@ -17,7 +17,7 @@ type ActivityListItem struct {
 	IsSlide        string  `json:"is_slide"`         // 是否轮播：是/否
 	ActivityStatus string  `json:"activity_status"`  // 活动状态：报名中/进行中/已结束
 	IsDel          string  `json:"is_del"`           // 逻辑删除标记：正常/下架
-	DeleteTime     *string `json:"delete_time"`      // 删除时间，未删除时为 null
+	DeleteTime     string  `json:"delete_time"`      // 删除时间，未删除时为空字符串
 }
 
 // ListActivityResp 后台活动分页响应
@@ -27,4 +27,16 @@ type ListActivityResp struct {
 	Page      int                `json:"page"`
 	Size      int                `json:"size"`
 	TotalPage int                `json:"total_page"`
+}
+
+// LeaderNameItem 领队名称列表项
+type LeaderNameItem struct {
+	ID         uint   `json:"id"`          // 领队 ID（原始数字，不带前缀）
+	LeaderName string `json:"leader_name"` // 领队名称
+}
+
+// ActivityDetailResp 后台活动详情响应（列表项全部字段 + 活动详情内容）
+type ActivityDetailResp struct {
+	ActivityListItem
+	ActivityContent string `json:"activity_content"` // 活动详情内容
 }
