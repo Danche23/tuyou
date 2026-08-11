@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -16,12 +19,14 @@ import (
 
 type activityService struct {
 	activityRepo repo.ActivityRepository
+	webRepo      webActivityWriter
 	db           *gorm.DB
 }
 
 // NewActivityService 创建后台活动服务实例
-func NewActivityService(activityRepo repo.ActivityRepository, db *gorm.DB) ActivityService {
-	return &activityService{activityRepo: activityRepo, db: db}
+// webRepo 复用前台活动仓库的通用写操作（创建活动、发布计数），避免同表操作重复实现
+func NewActivityService(activityRepo repo.ActivityRepository, webRepo webActivityWriter, db *gorm.DB) ActivityService {
+	return &activityService{activityRepo: activityRepo, webRepo: webRepo, db: db}
 }
 
 // ListActivities 分页查询活动列表
@@ -95,7 +100,7 @@ func (s *activityService) ListActivities(ctx context.Context, req *request.ListA
 	}
 
 	// ========== 3. 组装列表项 ==========
-	list, err := s.buildListItems(ctx, activities)
+	list, err := s.buildListItems(activities)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +108,279 @@ func (s *activityService) ListActivities(ctx context.Context, req *request.ListA
 	return s.buildResp(list, total, req), nil
 }
 
+// CreateActivity 创建活动（后台代领队发布）
+func (s *activityService) CreateActivity(ctx context.Context, req *request.CreateActivityReq) error {
+	// ========== 1. 校验领队 ==========
+	leader, err := s.activityRepo.FindLeaderByName(ctx, req.LeaderName)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "查询领队信息失败", err)
+	}
+	if leader == nil {
+		return errors.New(errors.CodeInvalidParam, "领队不存在")
+	}
+
+	// ========== 2. 活动类型/难度校验 ==========
+	activityType, ok := activityTypeStrToInt[req.ActivityType]
+	if !ok {
+		return errors.New(errors.CodeInvalidParam, "活动类型不合法")
+	}
+	difficulty, ok := difficultyStrToInt[req.Difficulty]
+	if !ok {
+		return errors.New(errors.CodeInvalidParam, "难度不合法")
+	}
+
+	// ========== 3. 时间解析（yyyy-MM-dd）==========
+	startTime, err := time.ParseInLocation("2006-01-02", req.StartTime, time.Local)
+	if err != nil {
+		return errors.New(errors.CodeInvalidParam, "活动开始日期格式不正确")
+	}
+	endTime, err := time.ParseInLocation("2006-01-02", req.EndTime, time.Local)
+	if err != nil {
+		return errors.New(errors.CodeInvalidParam, "活动结束日期格式不正确")
+	}
+	if !endTime.After(startTime) {
+		return errors.New(errors.CodeInvalidParam, "结束日期必须晚于开始日期")
+	}
+
+	// ========== 4. 报名时间自动计算 ==========
+	now := time.Now()
+	signUpStart := now
+	signUpEnd := startTime.Add(-48 * time.Hour)
+
+	// ========== 5. 事务写入（建活动 + 领队发布计数 +1）==========
+	activity := &entity.Activity{
+		LeaderMemberID:  leader.ID,
+		Title:           req.Title,
+		CoverImg:        req.CoverImg,
+		ActivityContent: req.ActivityContent,
+		Address:         req.Address,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		SignUpStart:     signUpStart,
+		SignUpEnd:       signUpEnd,
+		MaxPeople:       req.MaxPeople,
+		Price:           req.Price,
+		ActivityStatus:  1,
+		Difficulty:      difficulty,
+		ActivityType:    activityType,
+	}
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.webRepo.Create(tx, activity); err != nil {
+			return err
+		}
+		return s.webRepo.IncrPublishCount(tx, leader.ID)
+	})
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "创建活动失败", err)
+	}
+
+	return nil
+}
+
+// GetActivityDetail 获取活动详情（复用 buildListItems 的字段映射，仅追加活动详情内容）
+func (s *activityService) GetActivityDetail(ctx context.Context, activityID uint) (*response.ActivityDetailResp, error) {
+	activity, err := s.activityRepo.FindByID(ctx, activityID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取活动详情失败", err)
+	}
+	if activity == nil {
+		return nil, errors.New(errors.CodeNotFound, "活动不存在")
+	}
+
+	list, err := s.buildListItems([]entity.Activity{*activity})
+	if err != nil {
+		return nil, err
+	}
+
+	return &response.ActivityDetailResp{
+		ActivityListItem: list[0],
+		ActivityContent:  activity.ActivityContent,
+	}, nil
+}
+
+// UpdateActivity 编辑活动（分类/轮播/状态三字段整体覆盖），返回更新后的详情
+func (s *activityService) UpdateActivity(ctx context.Context, activityID uint, req *request.UpdateActivityReq) (*response.ActivityDetailResp, error) {
+	// 1. 校验活动存在
+	activity, err := s.activityRepo.FindByID(ctx, activityID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取活动失败", err)
+	}
+	if activity == nil {
+		return nil, errors.New(errors.CodeNotFound, "活动不存在")
+	}
+
+	// 2. 解析三个必传字段
+	activityType, ok := activityTypeStrToInt[req.ActivityType]
+	if !ok {
+		return nil, errors.New(errors.CodeInvalidParam, "活动类型不合法")
+	}
+
+	var isSlide int
+	switch req.IsSlide {
+	case "是":
+		isSlide = 1
+	case "否":
+		isSlide = 0
+	default:
+		return nil, errors.New(errors.CodeInvalidParam, "是否轮播参数不合法")
+	}
+
+	var isDel int
+	switch req.IsDel {
+	case "下架":
+		isDel = 1
+	case "正常":
+		isDel = 0
+	default:
+		return nil, errors.New(errors.CodeInvalidParam, "状态参数不合法")
+	}
+
+	// 3. 事务内：更新活动 + 状态变化时同步发布数
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{
+			"activity_type": activityType,
+			"is_slide":      isSlide,
+			"is_del":        isDel,
+		}
+		// 下架统一关联 delete_time（前后台一致）：下架写删除时间，恢复正常清除
+		if activity.IsDel != isDel {
+			if isDel == 1 {
+				updates["delete_time"] = time.Now()
+			} else {
+				updates["delete_time"] = nil
+			}
+		}
+		if err := s.activityRepo.Update(tx, activityID, updates); err != nil {
+			return err
+		}
+
+		// 状态变化才同步发布数（活动无评论，不涉及评论状态）
+		if activity.IsDel != isDel {
+			if isDel == 1 { // 正常→下架：发布数 -1
+				return s.webRepo.DecrPublishCount(tx, activity.LeaderMemberID)
+			}
+			return s.webRepo.IncrPublishCount(tx, activity.LeaderMemberID) // 下架→正常：发布数 +1
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑活动失败", err)
+	}
+
+	// 4. 返回更新后的详情
+	return s.GetActivityDetail(ctx, activityID)
+}
+
+// DeleteActivity 删除活动（硬删，连带报名记录；仍上架的活动领队发布数 -1）
+func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) error {
+	activity, err := s.activityRepo.FindByID(ctx, activityID)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取活动失败", err)
+	}
+	if activity == nil {
+		return errors.New(errors.CodeNotFound, "活动不存在")
+	}
+
+	decrPublish := activity.IsDel == 0 // 仍上架（is_del=0）的活动才减发布数
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.activityRepo.Delete(tx, activityID); err != nil {
+			return err
+		}
+		if decrPublish {
+			return s.webRepo.DecrPublishCount(tx, activity.LeaderMemberID)
+		}
+		return nil
+	}); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "删除活动失败", err)
+	}
+	return nil
+}
+
+// BatchDeleteActivities 批量硬删除活动（连带报名记录；不存在的 ID 自动跳过；仍上架的活动领队发布数 -1）
+func (s *activityService) BatchDeleteActivities(ctx context.Context, req *request.BatchDeleteReq) error {
+	ids, err := parseActivityIDs(req.IDs)
+	if err != nil {
+		return errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	// 一次查出存在的活动（IN 子句自动去重，重复/不存在的 ID 自动跳过）
+	activities, err := s.activityRepo.FindActivitiesByIDs(ctx, ids)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "获取活动失败", err)
+	}
+	if len(activities) == 0 {
+		return nil
+	}
+
+	// 单事务逐条硬删；仍上架（is_del=0）的活动领队发布数 -1（与单个 DeleteActivity 语义一致）
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		for i := range activities {
+			a := &activities[i]
+			if err := s.activityRepo.Delete(tx, a.ID); err != nil {
+				return err
+			}
+			if a.IsDel == 0 {
+				if err := s.webRepo.DecrPublishCount(tx, a.LeaderMemberID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "批量删除活动失败", err)
+	}
+	return nil
+}
+
+// ExportActivities 按 ID 批量导出活动列表项（不含软删过滤，已下架也导出）
+func (s *activityService) ExportActivities(ctx context.Context, req *request.ExportActivityReq) ([]response.ActivityListItem, error) {
+	ids, err := parseActivityIDs(req.IDs)
+	if err != nil {
+		return nil, errors.New(errors.CodeInvalidParam, "ID参数不合法")
+	}
+
+	activities, err := s.activityRepo.FindActivitiesByIDs(ctx, ids)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取活动失败", err)
+	}
+
+	return s.buildListItems(activities)
+}
+
+// parseActivityIDs 解析活动 ID 列表（兼容 "A0001" 展示格式与纯数字）
+func parseActivityIDs(ids []string) ([]uint, error) {
+	result := make([]uint, 0, len(ids))
+	for _, s := range ids {
+		id, err := strconv.ParseUint(strings.TrimPrefix(s, "A"), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, uint(id))
+	}
+	return result, nil
+}
+
+// ListLeaderNames 获取领队名称列表
+func (s *activityService) ListLeaderNames(ctx context.Context) ([]response.LeaderNameItem, error) {
+	leaders, err := s.activityRepo.FindLeaders(ctx)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "获取领队名称列表失败", err)
+	}
+
+	list := make([]response.LeaderNameItem, 0, len(leaders))
+	for _, l := range leaders {
+		list = append(list, response.LeaderNameItem{
+			ID:         l.ID,
+			LeaderName: l.Nickname,
+		})
+	}
+	return list, nil
+}
+
 // buildListItems 批量查询领队并组装列表项
-func (s *activityService) buildListItems(ctx context.Context, activities []entity.Activity) ([]response.ActivityListItem, error) {
+func (s *activityService) buildListItems(activities []entity.Activity) ([]response.ActivityListItem, error) {
 	list := make([]response.ActivityListItem, 0, len(activities))
 	if len(activities) == 0 {
 		return list, nil
@@ -119,7 +395,8 @@ func (s *activityService) buildListItems(ctx context.Context, activities []entit
 			leaderIDs = append(leaderIDs, a.LeaderMemberID)
 		}
 	}
-	members, err := s.activityRepo.FindMembersByIDs(ctx, leaderIDs)
+	// 复用前台活动仓库的批量成员查询（同一张 member 表，不重复实现）
+	members, err := s.webRepo.GetMembersByIDs(leaderIDs)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询领队信息失败", err)
 	}
@@ -150,17 +427,16 @@ func (s *activityService) buildListItems(ctx context.Context, activities []entit
 			isDel = "下架"
 		}
 
-		var deleteTime *string
+		deleteTime := ""
 		if a.DeletedAt.Valid {
-			t := a.DeletedAt.Time.Format("2006-01-02 15:04:05")
-			deleteTime = &t
+			deleteTime = a.DeletedAt.Time.Format("2006-01-02 15:04:05")
 		}
 
 		list = append(list, response.ActivityListItem{
-			ID:             fmt.Sprintf("A%03d", a.ID),
+			ID:             fmt.Sprintf("A%04d", a.ID),
 			CoverImg:       a.CoverImg,
 			Title:          a.Title,
-			LeaderMemberID: fmt.Sprintf("M%03d", a.LeaderMemberID),
+			LeaderMemberID: strconv.FormatUint(uint64(a.LeaderMemberID), 10),
 			LeaderName:     leaderName,
 			ActivityType:   activityTypeIntToStr[a.ActivityType],
 			StartTime:      a.StartTime.Format("2006-01-02"),
