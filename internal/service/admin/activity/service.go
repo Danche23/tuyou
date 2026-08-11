@@ -129,14 +129,14 @@ func (s *activityService) CreateActivity(ctx context.Context, req *request.Creat
 		return errors.New(errors.CodeInvalidParam, "难度不合法")
 	}
 
-	// ========== 3. 时间解析（yyyy-MM-dd）==========
-	startTime, err := time.ParseInLocation("2006-01-02", req.StartTime, time.Local)
+	// ========== 3. 时间解析（yyyy-MM-dd HH:mm，不含秒，与前台一致）==========
+	startTime, err := time.ParseInLocation("2006-01-02 15:04", req.StartTime, time.Local)
 	if err != nil {
-		return errors.New(errors.CodeInvalidParam, "活动开始日期格式不正确")
+		return errors.New(errors.CodeInvalidParam, "活动开始时间格式不正确")
 	}
-	endTime, err := time.ParseInLocation("2006-01-02", req.EndTime, time.Local)
+	endTime, err := time.ParseInLocation("2006-01-02 15:04", req.EndTime, time.Local)
 	if err != nil {
-		return errors.New(errors.CodeInvalidParam, "活动结束日期格式不正确")
+		return errors.New(errors.CodeInvalidParam, "活动结束时间格式不正确")
 	}
 	if !endTime.After(startTime) {
 		return errors.New(errors.CodeInvalidParam, "结束日期必须晚于开始日期")
@@ -439,8 +439,8 @@ func (s *activityService) buildListItems(activities []entity.Activity) ([]respon
 			LeaderMemberID: strconv.FormatUint(uint64(a.LeaderMemberID), 10),
 			LeaderName:     leaderName,
 			ActivityType:   activityTypeIntToStr[a.ActivityType],
-			StartTime:      a.StartTime.Format("2006-01-02"),
-			EndTime:        a.EndTime.Format("2006-01-02"),
+			StartTime:      a.StartTime.Format("2006-01-02 15:04"),
+			EndTime:        a.EndTime.Format("2006-01-02 15:04"),
 			Price:          a.Price,
 			CurrentPeople:  a.CurrentPeople,
 			MaxPeople:      a.MaxPeople,

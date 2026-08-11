@@ -22,8 +22,8 @@ type CreateActivityReq struct {
 	CoverImg        string  `json:"cover_img"`                           // 活动封面图
 	ActivityType    string  `json:"activity_type" binding:"required"`    // 活动类型中文名
 	Address         string  `json:"address"`                             // 活动地点
-	StartTime       string  `json:"start_time" binding:"required"`       // 活动开始日期 yyyy-MM-dd
-	EndTime         string  `json:"end_time" binding:"required"`         // 活动结束日期 yyyy-MM-dd
+	StartTime       string  `json:"start_time" binding:"required"`       // 活动开始时间 yyyy-MM-dd HH:mm（不含秒）
+	EndTime         string  `json:"end_time" binding:"required"`         // 活动结束时间 yyyy-MM-dd HH:mm（不含秒）
 	MaxPeople       int     `json:"max_people" binding:"required,min=1"` // 最大报名人数
 	Price           float64 `json:"price"`                               // 费用（元）
 	Difficulty      string  `json:"difficulty" binding:"required"`       // 难度中文名
