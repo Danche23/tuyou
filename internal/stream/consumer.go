@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -92,7 +93,13 @@ func (c *Consumer) consume() {
 		// 收到关闭信号时，刷完最后一批再退出
 		select {
 		case <-c.ctx.Done():
-			c.flush(counts, msgIDs)
+			for i := 0; i < 2; i++ {
+				if c.flush(counts, msgIDs) == nil {
+					return
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+			logger.Warn("Consumer: 停止前刷盘失败，数据可能少量丢失")
 			return
 		default:
 		}
@@ -103,7 +110,12 @@ func (c *Consumer) consume() {
 		// 批量条件：消息数达标 或 定时到期且有积压
 		n := len(msgIDs)
 		if n >= BatchMax || (n > 0 && time.Since(lastFlush) >= FlushInterval) {
-			c.flush(counts, msgIDs)
+			if err := c.flush(counts, msgIDs); err != nil {
+				// 失败！保留 counts 和 msgIDs，不重置，睡一会儿再重试
+				logger.Warn("flush 写入失败，保留内存数据等待下一轮重试", zap.Error(err))
+				time.Sleep(2 * time.Second) // 避免疯狂的死循环把数据库压垮
+				continue                    // 跳过重置代码，直接进入下一轮循环
+			}
 			// 重置批次
 			counts = make(map[string]map[uint]int64)
 			msgIDs = nil
@@ -122,7 +134,7 @@ func (c *Consumer) pullAndMerge(counts map[string]map[uint]int64, msgIDs *[]stri
 	if err != nil {
 		// BLOCK 超时 → 没有新消息，正常跳过
 		// 其他错误 → 打日志后等一秒重试
-		if err != redis.Nil && c.ctx.Err() == nil {
+		if !errors.Is(err, redis.Nil) && c.ctx.Err() == nil {
 			logger.Warn("Consumer: XReadGroup 失败", zap.Error(err))
 			time.Sleep(time.Second)
 		}
@@ -148,10 +160,9 @@ func (c *Consumer) pullAndMerge(counts map[string]map[uint]int64, msgIDs *[]stri
 }
 
 // flush 将聚合后的计数批量写入 MySQL，成功则 XAck 确认消息消费完成。
-// 任何一条 UPDATE 失败都放弃本批次，消息留在 Stream 中等待下次重试。
-func (c *Consumer) flush(counts map[string]map[uint]int64, msgIDs []string) {
+func (c *Consumer) flush(counts map[string]map[uint]int64, msgIDs []string) error {
 	if len(msgIDs) == 0 {
-		return
+		return nil
 	}
 
 	// 批量 UPDATE view_count
@@ -165,7 +176,7 @@ func (c *Consumer) flush(counts map[string]map[uint]int64, msgIDs []string) {
 					zap.Int64("count", n),
 					zap.Error(err),
 				)
-				return // 不 XAck，等重试
+				return err // 不 XAck
 			}
 		}
 	}
@@ -174,6 +185,7 @@ func (c *Consumer) flush(counts map[string]map[uint]int64, msgIDs []string) {
 	_ = c.redisRepo.XAck(c.ctx, StreamKey, ConsumerGroup, msgIDs...)
 	// 截断防止 Stream 无限增长
 	_ = c.redisRepo.XTrimMaxLen(c.ctx, StreamKey, StreamMaxLen)
+	return nil
 }
 
 // restartOnPanic 捕获 panic 并重启消费循环。

@@ -2,6 +2,7 @@ package activity
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
@@ -85,15 +86,70 @@ func (r *activityRepository) FindList(ctx context.Context, filters map[string]in
 	return activities, nil
 }
 
-// FindMembersByIDs 批量查询领队信息
-func (r *activityRepository) FindMembersByIDs(ctx context.Context, memberIDs []uint) ([]entity.Member, error) {
-	if len(memberIDs) == 0 {
-		return []entity.Member{}, nil
+// FindByID 查询单个活动（Unscoped 含已删除/下架，不存在返回 nil, nil）
+func (r *activityRepository) FindByID(ctx context.Context, activityID uint) (*entity.Activity, error) {
+	var activity entity.Activity
+	err := r.db.WithContext(ctx).Unscoped().First(&activity, activityID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-
-	members := make([]entity.Member, 0)
-	if err := r.db.WithContext(ctx).Where("id IN ?", memberIDs).Find(&members).Error; err != nil {
+	if err != nil {
 		return nil, err
 	}
-	return members, nil
+	return &activity, nil
+}
+
+// FindActivitiesByIDs 批量查询活动（Unscoped 含已删除/下架；IN 子句自动去重，不存在的 ID 自动跳过）
+func (r *activityRepository) FindActivitiesByIDs(ctx context.Context, ids []uint) ([]entity.Activity, error) {
+	activities := make([]entity.Activity, 0)
+	if len(ids) == 0 {
+		return activities, nil
+	}
+	if err := r.db.WithContext(ctx).Unscoped().Where("id IN ?", ids).Order("id DESC").Find(&activities).Error; err != nil {
+		return nil, err
+	}
+	return activities, nil
+}
+
+// FindLeaderByName 按昵称查找领队（role=0 且 status=1 正常），不存在返回 (nil, nil)
+func (r *activityRepository) FindLeaderByName(ctx context.Context, name string) (*entity.Member, error) {
+	var member entity.Member
+	err := r.db.WithContext(ctx).
+		Where("nickname = ? AND role = ? AND status = ?", name, 0, 1).
+		First(&member).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+// FindLeaders 查询所有领队（role=0 且 status=1 正常），按 ID 升序
+func (r *activityRepository) FindLeaders(ctx context.Context) ([]entity.Member, error) {
+	leaders := make([]entity.Member, 0)
+	if err := r.db.WithContext(ctx).
+		Where("role = ?", 0).
+		Where("status = ?", 1).
+		Order("id ASC").
+		Find(&leaders).Error; err != nil {
+		return nil, err
+	}
+	return leaders, nil
+}
+
+// Update 更新活动字段（Unscoped 以支持恢复已下架/已删除活动）
+func (r *activityRepository) Update(tx *gorm.DB, id uint, updates map[string]interface{}) error {
+	return tx.Unscoped().Model(&entity.Activity{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// Delete 事务内硬删除活动及其关联数据（报名记录 + 主行）
+func (r *activityRepository) Delete(tx *gorm.DB, activityID uint) error {
+	// 关联数据：报名记录（活动无图片/标签/点赞/收藏表，评论 target_type 不含活动）
+	if err := tx.Unscoped().Where("activity_id = ?", activityID).Delete(&entity.ActivityJoin{}).Error; err != nil {
+		return err
+	}
+	// 主行
+	return tx.Unscoped().Delete(&entity.Activity{}, activityID).Error
 }
