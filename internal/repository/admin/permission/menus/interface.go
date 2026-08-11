@@ -7,12 +7,10 @@ import (
 )
 
 type MenuRepository interface {
-	// Count 计算总数
-	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
-	// List 分页查询菜单列表
-	List(ctx context.Context, filters map[string]interface{}, page, size int) ([]menus.MenuListItem, error)
-	// ListAll 查询全部菜单（父菜单选择器用，不分页）
+	// ListAll 查询全部一级菜单（父菜单选择器用，仅 id 和菜单名）
 	ListAll(ctx context.Context) ([]menus.MenuOptionItem, error)
+	// ListTree 查询全部菜单（含父菜单名，不分页，供组装树；可按名称/状态筛选）
+	ListTree(ctx context.Context, filters map[string]interface{}) ([]menus.MenuListItem, error)
 	// FindByName 按菜单名查询（重名校验 / 父菜单解析）
 	FindByName(ctx context.Context, menuName string) (*entity.SysMenu, error)
 	// FindByID 按 ID 查询菜单

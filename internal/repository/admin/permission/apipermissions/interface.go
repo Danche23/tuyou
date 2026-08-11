@@ -9,6 +9,8 @@ import (
 type ApiPermRepository interface {
 	// Count 计算总数
 	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
+	// GetModules 查询所有业务模块（去重）
+	GetModules(ctx context.Context) ([]string, error)
 	// List 分页查询接口权限列表
 	List(ctx context.Context, filters map[string]interface{}, page, size int) ([]response.ApiPermListItem, error)
 	// FindByPermKey 按权限标识查询（唯一性校验）

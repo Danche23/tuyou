@@ -60,6 +60,20 @@ func (r *apiPermRepository) List(ctx context.Context, filters map[string]interfa
 	return list, nil
 }
 
+// GetModules 查询所有业务模块（去重）
+func (r *apiPermRepository) GetModules(ctx context.Context) ([]string, error) {
+	var modules []string
+	err := r.db.WithContext(ctx).Model(&entity.SysPermission{}).
+		Where("module IS NOT NULL AND module != ''").
+		Distinct().
+		Order("module ASC").
+		Pluck("module", &modules).Error
+	if err != nil {
+		return nil, err
+	}
+	return modules, nil
+}
+
 // FindByPermKey 按权限标识查询（唯一性校验）
 func (r *apiPermRepository) FindByPermKey(ctx context.Context, permKey string) (*entity.SysPermission, error) {
 	var perm entity.SysPermission

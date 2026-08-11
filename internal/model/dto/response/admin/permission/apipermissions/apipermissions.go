@@ -26,3 +26,9 @@ type InsertApiPermResp struct {
 	ID       string `json:"id"`
 	PermName string `json:"perm_name"`
 }
+
+// ModuleItem 业务模块列表项（获取所有模块下拉用）
+type ModuleItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
