@@ -19,6 +19,7 @@ import (
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	memberCtrl "tuyou/internal/api/v1/web/member"
 	"tuyou/internal/api/v1/web/note"
+	"tuyou/internal/api/v1/web/personal"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/middleware"
 
@@ -31,6 +32,7 @@ type Router struct {
 	adminHandler      *handlerAdmin.AdminHandler
 	centerCtrl        *center.Controller
 	noteCtrl          *note.Controller
+	personalCtrl      *personal.Controller
 	memberCtrl        *member.Controller
 	adminPerCtrl      *adminPermCtrl.Controller
 	adminMenuCtrl     *adminMenuCtrl.Controller
@@ -51,6 +53,7 @@ type Router struct {
 // NewRouter 创建路由
 func NewRouter(
 	noteCtrl *note.Controller,
+	personalCtrl *personal.Controller,
 	authHandler *handlerAuth.AuthHandler,
 	adminHandler *handlerAdmin.AdminHandler,
 	memberCtrl *member.Controller,
@@ -72,6 +75,7 @@ func NewRouter(
 ) *Router {
 	return &Router{
 		noteCtrl:          noteCtrl,
+		personalCtrl:      personalCtrl,
 		authHandler:       authHandler,
 		adminHandler:      adminHandler,
 		memberCtrl:        memberCtrl,
@@ -121,6 +125,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台认证路由
 		r.adminHandler.RegisterRoutes(apiGroup)
+		r.personalCtrl.RegisterRoutes(apiGroup)
 
 		// 后台会员管理路由
 		r.memberCtrl.RegisterRoutes(apiGroup)
