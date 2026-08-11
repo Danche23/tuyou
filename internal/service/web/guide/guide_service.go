@@ -167,6 +167,7 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 		Type:         "guide",
 		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
+		IsOwner:      strategy.MemberID == memberID,
 		Title:        strategy.Title,
 		CoverImg:     coverImg,
 		Images:       images,

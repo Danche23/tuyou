@@ -173,6 +173,7 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		Type:         "note",
 		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
+		IsOwner:      note.MemberID == memberID,
 		Title:        note.Title,
 		CoverImg:     coverImg,
 		Images:       images,
