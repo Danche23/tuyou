@@ -29,43 +29,30 @@ func applyFilters(query *gorm.DB, filters map[string]interface{}) *gorm.DB {
 	return query
 }
 
-// Count 计算总数
-func (r *menuRepository) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
-	var total int64
-	query := r.db.WithContext(ctx).Table("sys_menu AS m")
-	query = applyFilters(query, filters)
-	if err := query.Count(&total).Error; err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
-// List 分页查询菜单列表
-func (r *menuRepository) List(ctx context.Context, filters map[string]interface{}, page, size int) ([]menus.MenuListItem, error) {
+// ListTree 查询全部菜单（含父菜单名，不分页，供组装树；可按名称/状态筛选）
+func (r *menuRepository) ListTree(ctx context.Context, filters map[string]interface{}) ([]menus.MenuListItem, error) {
 	var list []menus.MenuListItem
-
 	query := r.db.WithContext(ctx).Table("sys_menu AS m").
 		Joins("LEFT JOIN sys_menu AS p ON p.id = m.parent_id").
 		Select(`m.id, m.menu_name, m.parent_id, IFNULL(p.menu_name, '') AS parent_name,
-			m.menu_type, m.route_path, m.sort,
+			m.menu_type, m.route_path, m.component, m.icon, m.hide_in_menu, m.sort,
 			IF(m.status = 1, '启用', '禁用') AS status,
 			DATE_FORMAT(m.create_time, '%Y-%m-%d') AS create_time`)
 	query = applyFilters(query, filters)
-
-	offset := (page - 1) * size
-	if err := query.Order("m.sort ASC, m.id ASC").Offset(offset).Limit(size).Scan(&list).Error; err != nil {
+	if err := query.Order("m.sort ASC, m.id ASC").Scan(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
 }
 
-// ListAll 查询全部菜单（父菜单选择器用，不分页）
+// ListAll 查询全部一级菜单（父菜单选择器用，仅 id 和菜单名）
 func (r *menuRepository) ListAll(ctx context.Context) ([]menus.MenuOptionItem, error) {
 	var list []menus.MenuOptionItem
 	err := r.db.WithContext(ctx).
 		Table("sys_menu").
-		Select("id, menu_name, parent_id, menu_type, IF(status = 1, '启用', '禁用') AS status").
-		Order("sort ASC, id ASC").
+		Select("id, menu_name").
+		Where("parent_id = 0").
+		Order("id ASC").
 		Scan(&list).Error
 	return list, err
 }

@@ -3,7 +3,6 @@ package menus
 import (
 	"context"
 	"errors"
-	"math"
 	"strconv"
 
 	request "tuyou/internal/model/dto/request/admin/permission/menus"
@@ -49,25 +48,35 @@ func statusToInt(s string) int {
 	return 1
 }
 
-// ListMenus 查询菜单列表
+// boolToInt bool 转 int：true=1，false=0
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// ListMenus 查询菜单列表（树形，可按名称/状态筛选）
 func (s *menuService) ListMenus(ctx context.Context, req *request.ListMenusReq) (*response.ListMenuResp, error) {
 	filters := map[string]interface{}{}
 	if req.MenuName != "" {
 		filters["menu_name"] = req.MenuName
 	}
-
 	if req.Status != "" {
 		filters["status"] = statusToInt(req.Status)
 	}
 
-	total, err := s.menuRepo.Count(ctx, filters)
+	list, err := s.menuRepo.ListTree(ctx, filters)
 	if err != nil {
 		return nil, appErrors.ErrInternalError
 	}
 
-	list, err := s.menuRepo.List(ctx, filters, int(req.Page), int(req.Size))
-	if err != nil {
-		return nil, appErrors.ErrInternalError
+	// 有筛选时补充命中菜单的祖先，保证树路径完整
+	if len(filters) > 0 {
+		list, err = s.includeAncestors(ctx, list)
+		if err != nil {
+			return nil, appErrors.ErrInternalError
+		}
 	}
 
 	// 补充菜单类型中文名
@@ -75,16 +84,85 @@ func (s *menuService) ListMenus(ctx context.Context, req *request.ListMenusReq) 
 		list[i].MenuTypeName = menuTypeName(list[i].MenuType)
 	}
 
-	return &response.ListMenuResp{
-		Total:     int(total),
-		Page:      int(req.Page),
-		Size:      int(req.Size),
-		TotalPage: int(math.Ceil(float64(total) / float64(req.Size))),
-		List:      list,
-	}, nil
+	tree := buildMenuTree(list)
+	return &tree, nil
 }
 
-// ListAllMenus 查询全部菜单（父菜单选择器用）
+// includeAncestors 补充命中菜单的全部祖先（筛选时保证树结构完整）
+func (s *menuService) includeAncestors(ctx context.Context, matched []response.MenuListItem) ([]response.MenuListItem, error) {
+	if len(matched) == 0 {
+		return matched, nil
+	}
+
+	all, err := s.menuRepo.ListTree(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]response.MenuListItem, len(all))
+	for _, it := range all {
+		byID[it.ID] = it
+	}
+
+	seen := make(map[string]bool, len(matched))
+	result := make([]response.MenuListItem, 0, len(matched))
+	for _, it := range matched {
+		seen[it.ID] = true
+		result = append(result, it)
+	}
+
+	// 逐级上溯父链，补全祖先
+	for _, it := range matched {
+		pid := it.ParentID
+		for pid != "" && pid != "0" && !seen[pid] {
+			parent, ok := byID[pid]
+			if !ok {
+				break
+			}
+			seen[pid] = true
+			result = append(result, parent)
+			pid = parent.ParentID
+		}
+	}
+	return result, nil
+}
+
+// buildMenuTree 将扁平列表组装成树（一级为根，其余挂到 children）
+// 两遍扫描避免 slice 扩容导致 roots 中的副本 Children 过期
+func buildMenuTree(list []response.MenuListItem) response.ListMenuResp {
+	items := make([]response.MenuTreeItem, len(list))
+	index := make(map[string]int, len(list))
+	for i, it := range list {
+		items[i] = response.MenuTreeItem{MenuListItem: it, Children: []response.MenuTreeItem{}}
+		index[it.ID] = i
+	}
+
+	// 第一遍：挂载所有 children
+	for i := range items {
+		pid := items[i].ParentID
+		if pid == "" || pid == "0" || pid == items[i].ID {
+			continue
+		}
+		if parentIdx, ok := index[pid]; ok {
+			items[parentIdx].Children = append(items[parentIdx].Children, items[i])
+		}
+	}
+
+	// 第二遍：收集根节点（此时所有 Children 已就位，不会再有扩容）
+	roots := response.ListMenuResp{}
+	for i := range items {
+		pid := items[i].ParentID
+		if pid == "" || pid == "0" || pid == items[i].ID {
+			roots = append(roots, items[i])
+			continue
+		}
+		if _, ok := index[pid]; !ok {
+			roots = append(roots, items[i])
+		}
+	}
+	return roots
+}
+
+// ListAllMenus 查询全部一级菜单（父菜单选择器用）
 func (s *menuService) ListAllMenus(ctx context.Context) ([]response.MenuOptionItem, error) {
 	list, err := s.menuRepo.ListAll(ctx)
 	if err != nil {
@@ -125,23 +203,34 @@ func (s *menuService) InsertMenu(ctx context.Context, req *request.InsertMenuReq
 	}
 
 	status := statusToInt(req.Status)
+	menuType := menuTypeToInt(req.MenuType)
 
 	menu := &entity.SysMenu{
-		MenuName:  req.MenuName,
-		ParentID:  parentID,
-		MenuType:  menuTypeToInt(req.MenuType),
-		RoutePath: req.RoutePath,
-		Sort:      req.Sort,
-		Status:    status,
+		MenuName:   req.MenuName,
+		ParentID:   parentID,
+		MenuType:   menuType,
+		RoutePath:  req.RoutePath,
+		Sort:       req.Sort,
+		Status:     status,
+		Component:  req.Component,
+		Icon:       req.Icon,
+		HideInMenu: boolToInt(req.HideInMenu),
+	}
+	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	if menuType == 1 {
+		menu.Component = "" // 目录不展示组件路径
+	}
+	if parentID != 0 {
+		menu.Icon = "" // 子菜单不展示图标
 	}
 	if err := s.menuRepo.Insert(ctx, menu); err != nil {
 		return nil, err
 	}
 
-	// 类型联动：父菜单有子菜单了，类型自动改为"目录"
+	// 类型联动：父菜单有子菜单了，类型自动改为"目录"；目录不展示组件路径，component 一并清空
 	if parentID != 0 {
 		if parent, err := s.menuRepo.FindByID(ctx, parentID); err == nil && parent.MenuType == 2 {
-			_ = s.menuRepo.Update(ctx, parentID, map[string]interface{}{"menu_type": 1})
+			_ = s.menuRepo.Update(ctx, parentID, map[string]interface{}{"menu_type": 1, "component": ""})
 		}
 	}
 
@@ -153,12 +242,14 @@ func (s *menuService) InsertMenu(ctx context.Context, req *request.InsertMenuReq
 
 // UpdateMenu 编辑菜单
 func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.UpdateMenuReq) error {
-	// 校验菜单存在
-	if _, err := s.menuRepo.FindByID(ctx, id); err != nil {
+	// 校验菜单存在，并记录当前类型（用于类型规则）
+	menu, err := s.menuRepo.FindByID(ctx, id)
+	if err != nil {
 		return err
 	}
 
 	updates := map[string]interface{}{}
+	newParentID := menu.ParentID // 更新后的父级，用于判断是否为子菜单
 	if req.MenuName != nil {
 		updates["menu_name"] = *req.MenuName
 	}
@@ -167,6 +258,7 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 		if err != nil {
 			return err
 		}
+		newParentID = parentID
 		updates["parent_id"] = parentID
 	}
 	if req.MenuType != nil {
@@ -181,9 +273,30 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 	if req.Status != "" {
 		updates["status"] = statusToInt(req.Status)
 	}
+	if req.Component != nil {
+		updates["component"] = *req.Component
+	}
+	if req.Icon != nil {
+		updates["icon"] = *req.Icon
+	}
+	if req.HideInMenu != nil {
+		updates["hide_in_menu"] = boolToInt(*req.HideInMenu)
+	}
 
 	if len(updates) == 0 {
 		return appErrors.ErrMissingParam
+	}
+
+	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	menuType := menu.MenuType
+	if req.MenuType != nil {
+		menuType = menuTypeToInt(*req.MenuType)
+	}
+	if menuType == 1 {
+		updates["component"] = ""
+	}
+	if newParentID != 0 {
+		updates["icon"] = ""
 	}
 
 	return s.menuRepo.Update(ctx, id, updates)

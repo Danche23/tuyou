@@ -36,6 +36,16 @@ func (c *Controller) List(ctx *gin.Context) {
 	response.Success(ctx, resp)
 }
 
+// Modules 获取所有业务模块
+func (c *Controller) Modules(ctx *gin.Context) {
+	resp, err := c.apiPermSvc.GetModules(ctx)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, resp)
+}
+
 // Insert 新增接口权限
 func (c *Controller) Insert(ctx *gin.Context) {
 	var req request.InsertApiPermReq

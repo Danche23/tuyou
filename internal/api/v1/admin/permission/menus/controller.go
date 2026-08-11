@@ -19,7 +19,7 @@ func NewController(menuSvc service.MenuService, redisRepo repository.RedisReposi
 	return &Controller{menuSvc: menuSvc, redisRepo: redisRepo}
 }
 
-// ListAll 查询全部菜单（父菜单选择器用）
+// ListAll 查询全部一级菜单（父菜单选择器用）
 func (c *Controller) ListAll(ctx *gin.Context) {
 	resp, err := c.menuSvc.ListAllMenus(ctx)
 	if err != nil {
@@ -29,7 +29,7 @@ func (c *Controller) ListAll(ctx *gin.Context) {
 	response.Success(ctx, resp)
 }
 
-// List 查询菜单列表
+// List 查询菜单列表（树形）
 func (c *Controller) List(ctx *gin.Context) {
 	var req request.ListMenusReq
 	if err := ctx.ShouldBind(&req); err != nil {
