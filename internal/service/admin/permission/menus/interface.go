@@ -8,10 +8,10 @@ import (
 
 // MenuService 菜单管理服务接口
 type MenuService interface {
-	// ListMenus 查询菜单列表
+	// ListMenus 查询菜单列表（树形，可按名称/状态筛选）
 	ListMenus(ctx context.Context, req *request.ListMenusReq) (*response.ListMenuResp, error)
 
-	// ListAllMenus 查询全部菜单（父菜单选择器用）
+	// ListAllMenus 查询全部一级菜单（父菜单选择器用）
 	ListAllMenus(ctx context.Context) ([]response.MenuOptionItem, error)
 
 	// InsertMenu 新增菜单

@@ -1,11 +1,9 @@
 package menus
 
-// ListMenusReq 查询菜单列表
+// ListMenusReq 查询菜单列表（树形）
 type ListMenusReq struct {
 	MenuName string `form:"menu_name"`
 	Status   string `form:"status"` // 空/不传=全部, 启用/禁用 过滤
-	Page     uint   `form:"page" binding:"required,min=1"`
-	Size     uint   `form:"size" binding:"required,min=1,max=100"`
 }
 
 // InsertMenuReq 新增菜单

@@ -61,6 +61,22 @@ func (s *apiPermService) ListApiPerms(ctx context.Context, req *request.ListApiP
 	}, nil
 }
 
+// GetModules 获取所有业务模块
+func (s *apiPermService) GetModules(ctx context.Context) ([]response.ModuleItem, error) {
+	modules, err := s.apiPermRepo.GetModules(ctx)
+	if err != nil {
+		return nil, appErrors.ErrInternalError
+	}
+	items := make([]response.ModuleItem, 0, len(modules))
+	for i, name := range modules {
+		items = append(items, response.ModuleItem{
+			ID:   strconv.Itoa(i + 1),
+			Name: name,
+		})
+	}
+	return items, nil
+}
+
 // InsertApiPerm 新增接口权限
 func (s *apiPermService) InsertApiPerm(ctx context.Context, req *request.InsertApiPermReq) (*response.InsertApiPermResp, error) {
 	// 权限标识唯一性校验

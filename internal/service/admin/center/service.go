@@ -34,6 +34,14 @@ func (s *centerService) UpdateUsername(ctx context.Context, adminID uint, userna
 	return s.getProfile(ctx, adminID)
 }
 
+// statusStr 将账号状态映射为展示文案：1启用，0禁用
+func statusStr(status int) string {
+	if status == 1 {
+		return "启用"
+	}
+	return "禁用"
+}
+
 // getProfile 查询更新后的管理员信息
 func (s *centerService) getProfile(ctx context.Context, adminID uint) (*response.AdminInfo, error) {
 	admin, err := s.adminRepo.FindByID(ctx, adminID)
@@ -50,6 +58,6 @@ func (s *centerService) getProfile(ctx context.Context, adminID uint) (*response
 		Adminname: admin.AdminName,
 		Role:      role,
 		Avatar:    admin.Avatar,
-		Status:    admin.Status == 1,
+		Status:    statusStr(admin.Status),
 	}, nil
 }

@@ -11,6 +11,9 @@ type ApiPermService interface {
 	// ListApiPerms 查询接口权限列表
 	ListApiPerms(ctx context.Context, req *request.ListApiPermsReq) (*response.ListApiPermResp, error)
 
+	// GetModules 获取所有业务模块
+	GetModules(ctx context.Context) ([]response.ModuleItem, error)
+
 	// InsertApiPerm 新增接口权限
 	InsertApiPerm(ctx context.Context, req *request.InsertApiPermReq) (*response.InsertApiPermResp, error)
 
