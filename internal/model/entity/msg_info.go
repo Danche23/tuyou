@@ -11,6 +11,7 @@ type MsgInfo struct {
 	TemplateID     uint      `gorm:"column:template_id;index;comment:关联消息模板id" json:"templateId"`
 	MsgContent     string    `gorm:"type:text;column:msg_content;comment:渲染完成后的最终消息正文" json:"msgContent"`
 	SendTime       time.Time `gorm:"column:send_time;index;comment:消息生成发送时间" json:"sendTime"`
+	CommentID      uint      `gorm:"column:comment_id;default:0;index;comment:互动消息关联的评论id（评论通知用，用于回复评论）" json:"commentId"`
 	IsDel          int       `gorm:"type:tinyint;column:is_del;default:0;comment:逻辑删除（后台新添加）" json:"-"`
 }
 

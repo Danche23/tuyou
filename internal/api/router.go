@@ -18,6 +18,7 @@ import (
 	"tuyou/internal/api/v1/web/guide"
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	memberCtrl "tuyou/internal/api/v1/web/member"
+	messageCtrl "tuyou/internal/api/v1/web/message"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/api/v1/web/personal"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
@@ -46,6 +47,7 @@ type Router struct {
 	tagCtrl           *tagCtrl.Controller
 	webMemberCtrl     *memberCtrl.Controller
 	homeCtrl          *homeCtrl.Controller
+	messageCtrl       *messageCtrl.Controller
 	uploadCtrl        *uploadCtrl.Controller
 	workbenchCtrl     *workbenchCtrl.Controller
 }
@@ -70,6 +72,7 @@ func NewRouter(
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
+	messageCtrl *messageCtrl.Controller,
 	uploadCtrl *uploadCtrl.Controller,
 	workbenchCtrl *workbenchCtrl.Controller,
 ) *Router {
@@ -92,6 +95,7 @@ func NewRouter(
 		tagCtrl:           tagCtrl,
 		webMemberCtrl:     webMemberCtrl,
 		homeCtrl:          homeCtrl,
+		messageCtrl:       messageCtrl,
 		uploadCtrl:        uploadCtrl,
 		workbenchCtrl:     workbenchCtrl,
 	}
@@ -168,6 +172,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// Web 端社区首页路由
 		r.homeCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端消息路由
+		r.messageCtrl.RegisterRoutes(apiGroup)
 
 		// 文件上传路由
 		r.uploadCtrl.RegisterRoutes(apiGroup)
