@@ -11,6 +11,7 @@ import (
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	adminRoleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	tagAdmin "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
@@ -44,6 +45,7 @@ type Router struct {
 	noteAdminCtrl     *noteAdmin.Controller
 	guideAdminCtrl    *guideAdmin.Controller
 	activityAdminCtrl *activityAdmin.Controller
+	tagAdminCtrl      *tagAdmin.Controller
 	tagCtrl           *tagCtrl.Controller
 	webMemberCtrl     *memberCtrl.Controller
 	homeCtrl          *homeCtrl.Controller
@@ -69,6 +71,7 @@ func NewRouter(
 	noteAdminCtrl *noteAdmin.Controller,
 	guideAdminCtrl *guideAdmin.Controller,
 	activityAdminCtrl *activityAdmin.Controller,
+	tagAdminCtrl *tagAdmin.Controller,
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
@@ -92,6 +95,7 @@ func NewRouter(
 		noteAdminCtrl:     noteAdminCtrl,
 		guideAdminCtrl:    guideAdminCtrl,
 		activityAdminCtrl: activityAdminCtrl,
+		tagAdminCtrl:      tagAdminCtrl,
 		tagCtrl:           tagCtrl,
 		webMemberCtrl:     webMemberCtrl,
 		homeCtrl:          homeCtrl,
@@ -163,6 +167,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台活动管理路由
 		r.activityAdminCtrl.RegisterRoutes(apiGroup)
+
+		// 后台标签管理路由
+		r.tagAdminCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端标签路由
 		r.tagCtrl.RegisterRoutes(apiGroup)
