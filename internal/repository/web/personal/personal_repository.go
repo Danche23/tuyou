@@ -15,12 +15,25 @@ func NewPersonalRepository(db *gorm.DB) PersonalRepository {
 	return &personalRepository{db: db}
 }
 
+// 个人信息
+func (r *personalRepository) FindByID(id uint) (*entity.Member, error) {
+	var member entity.Member
+	if err := r.db.First(&member, id).Error; err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+func (r *personalRepository) UpdateProfile(memberID uint, updates map[string]interface{}) error {
+	return r.db.Model(&entity.Member{}).Where("id = ?", memberID).Updates(updates).Error
+}
+
 // FindFollowedMembers 分页查询当前用户关注的所有用户信息
 func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int) ([]entity.Member, int64, error) {
 	var total int64
 	if err := r.db.Table("member").
 		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
-		Where("follow.follower_id = ?", followerID).
+		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -29,7 +42,7 @@ func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
 		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
-		Where("follow.follower_id = ?", followerID).
+		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
 		Limit(size).
@@ -44,7 +57,7 @@ func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]e
 	var total int64
 	if err := r.db.Table("member").
 		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
-		Where("follow.followee_id = ?", memberID).
+		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -53,7 +66,7 @@ func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]e
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
 		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
-		Where("follow.followee_id = ?", memberID).
+		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
 		Limit(size).
@@ -80,31 +93,51 @@ func (r *personalRepository) FindFollowedIDs(followerID uint) (map[uint]bool, er
 	return followed, nil
 }
 
-func (r *personalRepository) CreateFollow(followerID, followeeID uint) error {
-	var count int64
-	if err := r.db.Model(&entity.Follow{}).
-		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
-		Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-	return r.db.Create(&entity.Follow{
+// CreateFollow 关注：写入 follow 记录（调用方需先 DeleteFollow，保证不重复）
+func (r *personalRepository) CreateFollow(tx *gorm.DB, followerID, followeeID uint) error {
+	return tx.Create(&entity.Follow{
 		FollowerID: followerID,
 		FolloweeID: followeeID,
 	}).Error
 }
 
 // DeleteFollow 取关：硬删除，返回是否真的删掉了（true=之前处于已关注状态）
-func (r *personalRepository) DeleteFollow(followerID, followeeID uint) (bool, error) {
-	res := r.db.Unscoped().
+func (r *personalRepository) DeleteFollow(tx *gorm.DB, followerID, followeeID uint) (bool, error) {
+	res := tx.Unscoped().
 		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
 		Delete(&entity.Follow{})
 	if res.Error != nil {
 		return false, res.Error
 	}
 	return res.RowsAffected > 0, nil
+}
+
+// IncrFollowCount 我的关注数 +1
+func (r *personalRepository) IncrFollowCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("follow_count", gorm.Expr("follow_count + 1")).Error
+}
+
+// DecrFollowCount 我的关注数 -1
+func (r *personalRepository) DecrFollowCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("follow_count", gorm.Expr("follow_count - 1")).Error
+}
+
+// IncrFansCount 对方粉丝数 +1
+func (r *personalRepository) IncrFansCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("fans_count", gorm.Expr("fans_count + 1")).Error
+}
+
+// DecrFansCount 对方粉丝数 -1
+func (r *personalRepository) DecrFansCount(tx *gorm.DB, memberID uint) error {
+	return tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("fans_count", gorm.Expr("fans_count - 1")).Error
 }
 
 func (r *personalRepository) FindNoteLists(memberID uint, page, size int) ([]entity.Note, int64, error) {
@@ -123,4 +156,329 @@ func (r *personalRepository) FindNoteLists(memberID uint, page, size int) ([]ent
 		return nil, total, err
 	}
 	return notes, total, nil
+}
+
+// FindLikedStrategys 分页查询当前用户点赞过的攻略，按点赞时间倒序（仅上架）
+func (r *personalRepository) FindLikedStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_like ON strategy_like.strategy_id = strategy.id").
+		Where("strategy_like.member_id = ? AND strategy.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_like ON strategy_like.strategy_id = strategy.id").
+		Where("strategy_like.member_id = ? AND strategy.status = 1", memberID).
+		Order("strategy_like.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}
+
+// FindCollectStrategys 分页查询当前用户收藏过的攻略，按收藏时间倒序（仅上架）
+func (r *personalRepository) FindCollectStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_collect ON strategy_collect.strategy_id = strategy.id").
+		Where("strategy_collect.member_id = ? AND strategy.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Model(&entity.Strategy{}).
+		Joins("JOIN strategy_collect ON strategy_collect.strategy_id = strategy.id").
+		Where("strategy_collect.member_id = ? AND strategy.status = 1", memberID).
+		Order("strategy_collect.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}
+
+// FindPublishStrategys 分页查询当前用户发布的攻略，按发布时间倒序（仅上架）
+func (r *personalRepository) FindPublishStrategys(memberID uint, page, size int) ([]entity.Strategy, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Strategy{}).
+		Where("member_id = ? AND status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var strategys []entity.Strategy
+	if err := r.db.Where("member_id = ? AND status = 1", memberID).
+		Order("publish_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&strategys).Error; err != nil {
+		return nil, total, err
+	}
+	return strategys, total, nil
+}
+
+// FindCollectNotes 分页查询当前用户收藏过的笔记，按收藏时间倒序（仅上架）
+func (r *personalRepository) FindCollectNotes(memberID uint, page, size int) ([]entity.Note, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Note{}).
+		Joins("JOIN note_collect ON note_collect.note_id = note.id").
+		Where("note_collect.member_id = ? AND note.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var notes []entity.Note
+	if err := r.db.Model(&entity.Note{}).
+		Joins("JOIN note_collect ON note_collect.note_id = note.id").
+		Where("note_collect.member_id = ? AND note.status = 1", memberID).
+		Order("note_collect.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&notes).Error; err != nil {
+		return nil, total, err
+	}
+	return notes, total, nil
+}
+
+// FindLikedNotes 分页查询当前用户点赞过的笔记，按点赞时间倒序（仅上架）
+func (r *personalRepository) FindLikedNotes(memberID uint, page, size int) ([]entity.Note, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Note{}).
+		Joins("JOIN note_like ON note_like.note_id = note.id").
+		Where("note_like.member_id = ? AND note.status = 1", memberID).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var notes []entity.Note
+	if err := r.db.Model(&entity.Note{}).
+		Joins("JOIN note_like ON note_like.note_id = note.id").
+		Where("note_like.member_id = ? AND note.status = 1", memberID).
+		Order("note_like.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&notes).Error; err != nil {
+		return nil, total, err
+	}
+	return notes, total, nil
+}
+
+// FindPublishActivities 分页查询当前用户发布的活动（未删除，按开始时间倒序）
+func (r *personalRepository) FindPublishActivities(memberID uint, page, size int) ([]entity.Activity, int64, error) {
+	var total int64
+	db := r.db.Model(&entity.Activity{}).
+		Where("leader_member_id = ? AND is_del = ?", memberID, 0)
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var list []entity.Activity
+	if err := db.Offset((page - 1) * size).Limit(size).
+		Order("start_time DESC").
+		Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+// FindJoinActivities 分页查询当前用户报名参加的活动（未取消、活动未删除，按报名时间倒序）
+func (r *personalRepository) FindJoinActivities(memberID uint, page, size int) ([]entity.Activity, int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Activity{}).
+		Joins("JOIN activity_join ON activity_join.activity_id = activity.id").
+		Where("activity_join.member_id = ? AND activity_join.is_cancel = ? AND activity.is_del = ?", memberID, 0, 0).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var list []entity.Activity
+	if err := r.db.Model(&entity.Activity{}).
+		Joins("JOIN activity_join ON activity_join.activity_id = activity.id").
+		Where("activity_join.member_id = ? AND activity_join.is_cancel = ? AND activity.is_del = ?", memberID, 0, 0).
+		Order("activity_join.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+// ========== 卡片批量查询（避免 N+1，仅本模块使用，不改动 note/guide 仓储） ==========
+
+// FindNoteImagesByIDs 批量查询多个笔记的图片，按 sort 升序（返回 noteID -> 图片列表）
+func (r *personalRepository) FindNoteImagesByIDs(noteIDs []uint) (map[uint][]entity.NoteImage, error) {
+	result := make(map[uint][]entity.NoteImage, len(noteIDs))
+	if len(noteIDs) == 0 {
+		return result, nil
+	}
+	var images []entity.NoteImage
+	if err := r.db.Where("note_id IN ?", noteIDs).
+		Order("sort ASC").
+		Find(&images).Error; err != nil {
+		return nil, err
+	}
+	for _, img := range images {
+		result[img.NoteID] = append(result[img.NoteID], img)
+	}
+	return result, nil
+}
+
+// FindNoteTagsByIDs 批量查询多个笔记的标签（返回 noteID -> 标签列表）
+func (r *personalRepository) FindNoteTagsByIDs(noteIDs []uint) (map[uint][]entity.Tag, error) {
+	result := make(map[uint][]entity.Tag, len(noteIDs))
+	if len(noteIDs) == 0 {
+		return result, nil
+	}
+
+	// 1. 先查 note_tag 关联表，得到 noteID -> tagIDs
+	var noteTags []entity.NoteTag
+	if err := r.db.Where("note_id IN ?", noteIDs).Find(&noteTags).Error; err != nil {
+		return nil, err
+	}
+	tagIDSet := make(map[uint]bool)
+	tagIDs := make([]uint, 0, len(noteTags))
+	noteTagMap := make(map[uint][]uint, len(noteTags))
+	for _, nt := range noteTags {
+		noteTagMap[nt.NoteID] = append(noteTagMap[nt.NoteID], nt.TagID)
+		if !tagIDSet[nt.TagID] {
+			tagIDSet[nt.TagID] = true
+			tagIDs = append(tagIDs, nt.TagID)
+		}
+	}
+
+	// 2. 再一次性查标签
+	var tags []entity.Tag
+	if err := r.db.Where("id IN ?", tagIDs).Find(&tags).Error; err != nil {
+		return nil, err
+	}
+	tagMap := make(map[uint]entity.Tag, len(tags))
+	for _, t := range tags {
+		tagMap[t.ID] = t
+	}
+
+	for noteID, ids := range noteTagMap {
+		for _, tagID := range ids {
+			if t, ok := tagMap[tagID]; ok {
+				result[noteID] = append(result[noteID], t)
+			}
+		}
+	}
+	return result, nil
+}
+
+// FindStrategyImagesByIDs 批量查询多个攻略的图片，按 sort 升序（返回 strategyID -> 图片列表）
+func (r *personalRepository) FindStrategyImagesByIDs(strategyIDs []uint) (map[uint][]entity.StrategyImage, error) {
+	result := make(map[uint][]entity.StrategyImage, len(strategyIDs))
+	if len(strategyIDs) == 0 {
+		return result, nil
+	}
+	var images []entity.StrategyImage
+	if err := r.db.Where("strategy_id IN ?", strategyIDs).
+		Order("sort ASC").
+		Find(&images).Error; err != nil {
+		return nil, err
+	}
+	for _, img := range images {
+		result[img.StrategyID] = append(result[img.StrategyID], img)
+	}
+	return result, nil
+}
+
+// FindStrategyTagsByIDs 批量查询多个攻略的标签（返回 strategyID -> 标签列表）
+func (r *personalRepository) FindStrategyTagsByIDs(strategyIDs []uint) (map[uint][]entity.Tag, error) {
+	result := make(map[uint][]entity.Tag, len(strategyIDs))
+	if len(strategyIDs) == 0 {
+		return result, nil
+	}
+
+	// 1. 先查 strategy_tag 关联表，得到 strategyID -> tagIDs
+	var strategyTags []entity.StrategyTag
+	if err := r.db.Where("strategy_id IN ?", strategyIDs).Find(&strategyTags).Error; err != nil {
+		return nil, err
+	}
+	tagIDSet := make(map[uint]bool)
+	tagIDs := make([]uint, 0, len(strategyTags))
+	strategyTagMap := make(map[uint][]uint, len(strategyTags))
+	for _, st := range strategyTags {
+		strategyTagMap[st.StrategyID] = append(strategyTagMap[st.StrategyID], st.TagID)
+		if !tagIDSet[st.TagID] {
+			tagIDSet[st.TagID] = true
+			tagIDs = append(tagIDs, st.TagID)
+		}
+	}
+
+	// 2. 再一次性查标签
+	var tags []entity.Tag
+	if err := r.db.Where("id IN ?", tagIDs).Find(&tags).Error; err != nil {
+		return nil, err
+	}
+	tagMap := make(map[uint]entity.Tag, len(tags))
+	for _, t := range tags {
+		tagMap[t.ID] = t
+	}
+
+	for strategyID, ids := range strategyTagMap {
+		for _, tagID := range ids {
+			if t, ok := tagMap[tagID]; ok {
+				result[strategyID] = append(result[strategyID], t)
+			}
+		}
+	}
+	return result, nil
+}
+
+// FindMembersByIDs 批量查询会员信息（走 Model 自动过滤已删除用户）
+func (r *personalRepository) FindMembersByIDs(memberIDs []uint) ([]entity.Member, error) {
+	if len(memberIDs) == 0 {
+		return nil, nil
+	}
+	var members []entity.Member
+	if err := r.db.Where("id IN ?", memberIDs).Find(&members).Error; err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+// FindLikedNoteIDs 批量查询用户点赞过的笔记ID集合
+func (r *personalRepository) FindLikedNoteIDs(noteIDs []uint, memberID uint) (map[uint]bool, error) {
+	result := make(map[uint]bool, len(noteIDs))
+	if len(noteIDs) == 0 {
+		return result, nil
+	}
+	var ids []uint
+	if err := r.db.Model(&entity.NoteLike{}).
+		Where("note_id IN ? AND member_id = ?", noteIDs, memberID).
+		Pluck("note_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		result[id] = true
+	}
+	return result, nil
+}
+
+// FindLikedStrategyIDs 批量查询用户点赞过的攻略ID集合
+func (r *personalRepository) FindLikedStrategyIDs(strategyIDs []uint, memberID uint) (map[uint]bool, error) {
+	result := make(map[uint]bool, len(strategyIDs))
+	if len(strategyIDs) == 0 {
+		return result, nil
+	}
+	var ids []uint
+	if err := r.db.Model(&entity.StrategyLike{}).
+		Where("strategy_id IN ? AND member_id = ?", strategyIDs, memberID).
+		Pluck("strategy_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		result[id] = true
+	}
+	return result, nil
 }

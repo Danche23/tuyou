@@ -4,7 +4,7 @@ package admins
 type ListAdminsReq struct {
 	Username string `form:"username"`
 	Role     string `form:"role"`
-	Status   bool   `form:"status"`
+	Status   string `form:"status"` // 空/不传=全部, 启用/禁用 过滤
 	Page     uint   `form:"page" binding:"required,min=1"`
 	Size     uint   `form:"size" binding:"required,min=1,max=100"`
 }
@@ -22,7 +22,7 @@ type UpdateAdminReq struct {
 	Username  string `json:"username"`
 	Adminname string `json:"adminname"`
 	Role      string `json:"role"`
-	Status    bool   `json:"status"`
+	Status    string `json:"status"` // 空=不改, 启用/禁用
 }
 
 // ResetAdminPasswordReq 重置管理员密码

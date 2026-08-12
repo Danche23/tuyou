@@ -111,10 +111,4 @@ type NoteRepository interface {
 
 	// XAddViewCount 发送浏览量消息到 Redis Stream（异步批量写 DB）
 	XAddViewCount(ctx context.Context, noteID uint) error
-
-	// FindCollectNotes 分页查询当前用户收藏过的笔记，按收藏时间倒序（仅上架）
-	FindCollectNotes(memberID uint, page, size int) ([]entity.Note, int64, error)
-
-	// FindLikedNotes 分页查询当前用户点赞过的笔记，按点赞时间倒序（仅上架）
-	FindLikedNotes(memberID uint, page, size int) ([]entity.Note, int64, error)
 }

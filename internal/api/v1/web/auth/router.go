@@ -7,6 +7,7 @@ func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 	{
 		authGroup.POST("/register", h.Register)
 		authGroup.POST("/login", h.Login)
+		authGroup.POST("/logout", h.Logout)
 		authGroup.POST("/reset-password", h.ResetPassword)
 		authGroup.POST("/send-code", h.SendCode)
 	}

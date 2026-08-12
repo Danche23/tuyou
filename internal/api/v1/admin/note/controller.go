@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"tuyou/internal/repository"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,7 +17,8 @@ import (
 
 // Controller 后台笔记管理控制器
 type Controller struct {
-	noteSvc service.NoteService
+	noteSvc   service.NoteService
+	redisRepo repository.RedisRepository
 }
 
 // NewController 创建控制器实例

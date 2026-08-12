@@ -56,7 +56,7 @@ func (r *activityRepository) FindJoinedMembers(activityID uint) ([]entity.Member
 	if err := r.db.Table("activity_join").
 		Select("member.id, member.nickname, member.avatar").
 		Joins("JOIN member ON member.id = activity_join.member_id").
-		Where("activity_join.activity_id = ?", activityID).
+		Where("activity_join.activity_id = ? AND member.delete_time IS NULL", activityID).
 		Find(&members).Error; err != nil {
 		return nil, err
 	}
@@ -163,45 +163,4 @@ func (r *activityRepository) FindJoinedActivityIDs(activityIDs []uint, memberID 
 		result[j.ActivityID] = true
 	}
 	return result, nil
-}
-
-// FindPublishActivities 分页查询当前用户发布的活动（未删除，按开始时间倒序）
-func (r *activityRepository) FindPublishActivities(memberID uint, page, size int) ([]entity.Activity, int64, error) {
-	var total int64
-	db := r.db.Model(&entity.Activity{}).
-		Where("leader_member_id = ? AND is_del = ?", memberID, 0)
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	var list []entity.Activity
-	if err := db.Offset((page - 1) * size).Limit(size).
-		Order("start_time DESC").
-		Find(&list).Error; err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
-}
-
-// FindJoinActivities 分页查询当前用户报名参加的活动（未取消、活动未删除，按报名时间倒序）
-func (r *activityRepository) FindJoinActivities(memberID uint, page, size int) ([]entity.Activity, int64, error) {
-	var total int64
-	if err := r.db.Model(&entity.Activity{}).
-		Joins("JOIN activity_join ON activity_join.activity_id = activity.id").
-		Where("activity_join.member_id = ? AND activity_join.is_cancel = ? AND activity.is_del = ?", memberID, 0, 0).
-		Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	var list []entity.Activity
-	if err := r.db.Model(&entity.Activity{}).
-		Joins("JOIN activity_join ON activity_join.activity_id = activity.id").
-		Where("activity_join.member_id = ? AND activity_join.is_cancel = ? AND activity.is_del = ?", memberID, 0, 0).
-		Order("activity_join.create_time DESC").
-		Offset((page - 1) * size).
-		Limit(size).
-		Find(&list).Error; err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
 }

@@ -58,7 +58,7 @@ func (r *memberRepository) List(ctx context.Context, filters map[string]interfac
 
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
-			CONCAT(LEFT(phone, 3), '****', RIGHT(phone, 4)) AS phone,
+			phone,
 			IF(status = 1, TRUE, FALSE) AS status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
@@ -79,7 +79,7 @@ func (r *memberRepository) GetDetailByID(ctx context.Context, id uint) (*respons
 
 	err := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, bg_img, nickname,
-			CONCAT(LEFT(phone, 3), '****', RIGHT(phone, 4)) AS phone,
+			phone,
 			bio,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			IF(status = 1, TRUE, FALSE) AS status,
@@ -138,7 +138,7 @@ func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]respo
 	var list []response.MemberListItem
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
-			CONCAT(LEFT(phone, 3), '****', RIGHT(phone, 4)) AS phone,
+			phone,
 			IF(status = 1, TRUE, FALSE) AS status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,

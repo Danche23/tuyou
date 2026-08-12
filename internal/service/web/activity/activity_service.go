@@ -334,16 +334,6 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 	}
 
 	// ========== 6. 组装响应 ==========
-	list, err := s.buildActivityItems(activities, memberMap, joinedMap)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return list, total, nil
-}
-
-// buildActivityItems 组装活动列表项（领队信息 + 报名状态 + 活动状态按时间计算）
-func (s *activityService) buildActivityItems(activities []entity.Activity, memberMap map[uint]*entity.Member, joinedMap map[uint]bool) ([]responseActivity.ActivityListItem, error) {
 	list := make([]responseActivity.ActivityListItem, 0, len(activities))
 	for _, a := range activities {
 		// 领队信息
@@ -358,11 +348,6 @@ func (s *activityService) buildActivityItems(activities []entity.Activity, membe
 
 		// 活动状态按时间计算
 		_, statusStr := computeActivityStatus(a.SignUpEnd, a.EndTime)
-
-		joined := false
-		if joinedMap != nil {
-			joined = joinedMap[a.ID]
-		}
 
 		list = append(list, responseActivity.ActivityListItem{
 			ID:             strconv.FormatUint(uint64(a.ID), 10),
@@ -379,85 +364,10 @@ func (s *activityService) buildActivityItems(activities []entity.Activity, membe
 			CurrentPeople:  a.CurrentPeople,
 			Difficulty:     difficultyIntToStr[a.Difficulty],
 			ActivityStatus: statusStr,
-			Joined:         joined,
+			Joined:         joinedMap[a.ID],
 		})
 	}
-	return list, nil
-}
 
-// GetPublishActivities 当前用户发布的活动列表（分页）
-func (s *activityService) GetPublishActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error) {
-	activities, total, err := s.activityRepo.FindPublishActivities(memberID, page, size)
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(activities) == 0 {
-		return []responseActivity.ActivityListItem{}, total, nil
-	}
-
-	// 批量获取领队信息
-	leaderIDSet := make(map[uint]bool)
-	uniqueLeaderIDs := make([]uint, 0)
-	for _, a := range activities {
-		if !leaderIDSet[a.LeaderMemberID] {
-			leaderIDSet[a.LeaderMemberID] = true
-			uniqueLeaderIDs = append(uniqueLeaderIDs, a.LeaderMemberID)
-		}
-	}
-	members, err := s.activityRepo.GetMembersByIDs(uniqueLeaderIDs)
-	if err != nil {
-		return nil, 0, err
-	}
-	memberMap := make(map[uint]*entity.Member, len(members))
-	for i := range members {
-		memberMap[members[i].ID] = &members[i]
-	}
-
-	list, err := s.buildActivityItems(activities, memberMap, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
-}
-
-// GetJoinActivities 当前用户报名参加的活动列表（分页）
-func (s *activityService) GetJoinActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error) {
-	activities, total, err := s.activityRepo.FindJoinActivities(memberID, page, size)
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(activities) == 0 {
-		return []responseActivity.ActivityListItem{}, total, nil
-	}
-
-	// 批量获取领队信息
-	leaderIDSet := make(map[uint]bool)
-	uniqueLeaderIDs := make([]uint, 0)
-	for _, a := range activities {
-		if !leaderIDSet[a.LeaderMemberID] {
-			leaderIDSet[a.LeaderMemberID] = true
-			uniqueLeaderIDs = append(uniqueLeaderIDs, a.LeaderMemberID)
-		}
-	}
-	members, err := s.activityRepo.GetMembersByIDs(uniqueLeaderIDs)
-	if err != nil {
-		return nil, 0, err
-	}
-	memberMap := make(map[uint]*entity.Member, len(members))
-	for i := range members {
-		memberMap[members[i].ID] = &members[i]
-	}
-
-	// 报名状态：我参加的活动 joined 恒为 true
-	joinedMap := make(map[uint]bool, len(activities))
-	for _, a := range activities {
-		joinedMap[a.ID] = true
-	}
-
-	list, err := s.buildActivityItems(activities, memberMap, joinedMap)
-	if err != nil {
-		return nil, 0, err
-	}
 	return list, total, nil
 }
 
