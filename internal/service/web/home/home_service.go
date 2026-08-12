@@ -147,7 +147,11 @@ func toActivitySlide(act entity.Activity) responseHome.SlideItem {
 }
 
 // toNoteSlide 笔记 → 轮播项（封面/标签来自批量查询结果）
+// 降级标签渲染：无启用标签时兜底为内容分类名
 func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
+	if tag == "" {
+		tag = activityCategory[n.Category]
+	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(n.ID), 10),
 		Type:  "note",
@@ -158,7 +162,11 @@ func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
 }
 
 // toStrategySlide 攻略 → 轮播项（封面/标签来自批量查询结果）
+// 降级标签渲染：无启用标签时兜底为内容分类名
 func toStrategySlide(st entity.Strategy, cover, tag string) responseHome.SlideItem {
+	if tag == "" {
+		tag = activityCategory[st.Category]
+	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(st.ID), 10),
 		Type:  "guide",
@@ -362,6 +370,8 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			item.LikeCount = noteCounts[e.id]
 			if tag, ok := noteTags[e.id]; ok {
 				item.Tags = []string{tag}
+			} else {
+				item.Tags = []string{activityCategory[e.category]}
 			}
 			if cover, ok := noteCovers[e.id]; ok {
 				item.Images = []string{cover}
@@ -375,6 +385,8 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			item.LikeCount = strategyCounts[e.id]
 			if tag, ok := strategyTags[e.id]; ok {
 				item.Tags = []string{tag}
+			} else {
+				item.Tags = []string{activityCategory[e.category]}
 			}
 			if cover, ok := strategyCovers[e.id]; ok {
 				item.Images = []string{cover}

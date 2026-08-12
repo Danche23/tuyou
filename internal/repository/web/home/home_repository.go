@@ -113,7 +113,7 @@ func (r *homeRepository) FindFirstTagsByNoteIDs(noteIDs []uint) (map[uint]string
 	}
 	if err := r.db.Table("note_tag").
 		Select("note_tag.note_id, tag.tag_name").
-		Joins("JOIN tag ON tag.id = note_tag.tag_id AND tag.status = 1").
+		Joins("JOIN tag ON tag.id = note_tag.tag_id AND tag.status = 1 AND tag.delete_time IS NULL").
 		Where("note_tag.note_id IN ?", noteIDs).
 		Order("note_tag.id ASC").
 		Scan(&rows).Error; err != nil {
@@ -139,7 +139,7 @@ func (r *homeRepository) FindFirstTagsByStrategyIDs(strategyIDs []uint) (map[uin
 	}
 	if err := r.db.Table("strategy_tag").
 		Select("strategy_tag.strategy_id, tag.tag_name").
-		Joins("JOIN tag ON tag.id = strategy_tag.tag_id AND tag.status = 1").
+		Joins("JOIN tag ON tag.id = strategy_tag.tag_id AND tag.status = 1 AND tag.delete_time IS NULL").
 		Where("strategy_tag.strategy_id IN ?", strategyIDs).
 		Order("strategy_tag.id ASC").
 		Scan(&rows).Error; err != nil {

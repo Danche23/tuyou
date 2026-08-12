@@ -25,6 +25,7 @@ import (
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	tagAdminCtrl "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
@@ -48,6 +49,7 @@ import (
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
 	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
 	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminTag "tuyou/internal/repository/admin/tag"
 	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
@@ -67,6 +69,7 @@ import (
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
 	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminTag "tuyou/internal/service/admin/tag"
 	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
 	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
@@ -239,6 +242,7 @@ func (a *App) initDependencies() {
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
 	adminGuideRepo := repoAdminGuide.NewGuideRepository(a.mysqlDB)
 	adminActivityRepo := repoAdminActivity.NewActivityRepository(a.mysqlDB)
+	adminTagRepo := repoAdminTag.NewTagRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
@@ -261,6 +265,7 @@ func (a *App) initDependencies() {
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
+	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
@@ -284,6 +289,7 @@ func (a *App) initDependencies() {
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
 	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc)
+	tagAdminC := tagAdminCtrl.NewController(adminTagSvc)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
@@ -294,7 +300,7 @@ func (a *App) initDependencies() {
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, msgC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, msgC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
