@@ -49,12 +49,6 @@ type NoteRepository interface {
 	// DeleteCollect 删除收藏记录（硬删除）
 	DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error
 
-	// IncrCollectCount 笔记收藏数 +1
-	IncrCollectCount(tx *gorm.DB, noteID uint) error
-
-	// DecrCollectCount 笔记收藏数 -1
-	DecrCollectCount(tx *gorm.DB, noteID uint) error
-
 	// UpdateStatus 更新笔记上下架状态
 	UpdateStatus(tx *gorm.DB, noteID uint, status int) error
 
@@ -78,12 +72,6 @@ type NoteRepository interface {
 
 	// DeleteLike 删除点赞记录
 	DeleteLike(tx *gorm.DB, noteID uint, memberID uint) error
-
-	// IncrLikeCount 笔记点赞数 +1
-	IncrLikeCount(tx *gorm.DB, noteID uint) error
-
-	// DecrLikeCount 笔记点赞数 -1
-	DecrLikeCount(tx *gorm.DB, noteID uint) error
 
 	// GetCachedLikeStatus 读取点赞状态缓存（found=false 表示缓存未命中）
 	GetCachedLikeStatus(ctx context.Context, noteID, memberID uint) (isLiked bool, found bool, err error)
