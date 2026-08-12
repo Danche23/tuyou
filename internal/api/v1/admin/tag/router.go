@@ -12,5 +12,9 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin.Use(middleware.Auth(c.redisRepo))
 	{
 		admin.GET("/tags", c.ListTags)
+		admin.POST("/tags", c.CreateTag)
+		admin.PUT("/tags/:id", c.UpdateTag)
+		admin.DELETE("/tags/:id", c.DeleteTag)
+		admin.POST("/tags/batch-delete", c.BatchDeleteTags)
 	}
 }
