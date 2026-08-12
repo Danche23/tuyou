@@ -1,6 +1,8 @@
 package tag
 
 import (
+	"strconv"
+
 	request "tuyou/internal/model/dto/request/admin/tag"
 	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/tag"
@@ -35,4 +37,74 @@ func (c *Controller) ListTags(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, resp)
+}
+
+// CreateTag 新增标签
+// POST /api/v1/admin/tags
+func (c *Controller) CreateTag(ctx *gin.Context) {
+	var req request.CreateTagReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败")
+		return
+	}
+
+	if err := c.tagSvc.CreateTag(ctx, &req); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// UpdateTag 编辑标签（状态/热门 必填；标签名称不可修改）
+// PUT /api/v1/admin/tags/:id
+func (c *Controller) UpdateTag(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "标签ID不合法")
+		return
+	}
+
+	var req request.UpdateTagReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败")
+		return
+	}
+
+	if err := c.tagSvc.UpdateTag(ctx, uint(id), &req); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// DeleteTag 删除标签（硬删，连带清理关联）
+// DELETE /api/v1/admin/tags/:id
+func (c *Controller) DeleteTag(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "标签ID不合法")
+		return
+	}
+
+	if err := c.tagSvc.DeleteTag(ctx, uint(id)); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// BatchDeleteTags 批量删除标签（硬删，连带清理关联）
+// POST /api/v1/admin/tags/batch-delete  body: {"ids":["1","2"]}
+func (c *Controller) BatchDeleteTags(ctx *gin.Context) {
+	var req request.BatchDeleteTagReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(ctx, "参数校验失败")
+		return
+	}
+
+	if err := c.tagSvc.BatchDeleteTags(ctx, &req); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
 }
