@@ -29,6 +29,9 @@ type ActivityRepository interface {
 	// ExistsJoin 检查用户是否已报名该活动
 	ExistsJoin(activityID uint, memberID uint) (bool, error)
 
+	// ExistsFollow 检查用户是否已关注领队
+	ExistsFollow(followerID uint, followeeID uint) (bool, error)
+
 	// UpdateActivityStatus 更新活动状态
 	UpdateActivityStatus(activityID uint, status int) error
 

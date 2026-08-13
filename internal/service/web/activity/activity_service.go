@@ -152,6 +152,15 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 		return nil, errors.New(errors.CodeInternalError, "查询报名状态失败")
 	}
 
+	// 当前用户是否已关注领队（自己发布的活动默认不关注）
+	isFollowed := false
+	if activity.LeaderMemberID != memberID {
+		isFollowed, err = s.activityRepo.ExistsFollow(memberID, activity.LeaderMemberID)
+		if err != nil {
+			return nil, errors.New(errors.CodeInternalError, "查询关注状态失败")
+		}
+	}
+
 	// 活动状态按时间自动计算，和 DB 不一致时同步更新
 	realStatusInt, activityStatus := computeActivityStatus(activity.SignUpEnd, activity.EndTime)
 	if activity.ActivityStatus != realStatusInt {
@@ -178,6 +187,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 		Price:           activity.Price,
 		Difficulty:      difficultyIntToStr[activity.Difficulty],
 		ActivityStatus:  activityStatus,
+		IsFollowed:      isFollowed,
 		Joined:          joined,
 		Members:         memberInfos,
 	}, nil
