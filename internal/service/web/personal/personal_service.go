@@ -13,6 +13,7 @@ import (
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoNote "tuyou/internal/repository/web/note"
 	repoPersonal "tuyou/internal/repository/web/personal"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 
 	"gorm.io/gorm"
@@ -26,11 +27,12 @@ type personalService struct {
 	noteRepo     repoNote.NoteRepository
 	guideRepo    repoGuide.GuideRepository
 	activityRepo repoActivity.ActivityRepository
+	notifier     *serviceMsg.Notifier
 }
 
 // NewPersonalService 创建服务实例
-func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository) PersonalService {
-	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo}
+func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository, notifier *serviceMsg.Notifier) PersonalService {
+	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo, notifier: notifier}
 }
 
 // strOr 空串返回默认值，非空返回原值
@@ -165,6 +167,11 @@ func (s *personalService) ToggleFollow(followerID uint, followeeID uint) (*respo
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// 关注成功 → 给被关注者发实时通知（取关不通知）
+	if isFollowed {
+		s.notifier.NotifyFollow(followeeID, followerID)
 	}
 
 	return &responsePersonal.FollowToggleResponse{IsFollowed: isFollowed}, nil
@@ -359,6 +366,7 @@ func (s *personalService) buildNoteCards(notes []entity.Note, memberID uint) ([]
 			Type:      "note",
 			Author:    author,
 			CoverImg:  cover,
+			IsVideo:   n.VideoURL != "",
 			Title:     n.Title,
 			Tag:       tag,
 			LikeCount: n.LikeCount,
@@ -427,6 +435,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 			Type:      "strategy",
 			Author:    author,
 			CoverImg:  cover,
+			IsVideo:   g.VideoURL != "",
 			Title:     g.Title,
 			Tag:       tag,
 			LikeCount: g.LikeCount,

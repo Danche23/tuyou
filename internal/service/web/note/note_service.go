@@ -9,6 +9,7 @@ import (
 	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
 	repoNote "tuyou/internal/repository/web/note"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
 
@@ -18,11 +19,12 @@ import (
 type noteService struct {
 	noteRepo repoNote.NoteRepository
 	db       *gorm.DB
+	notifier *serviceMsg.Notifier
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db}
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, notifier *serviceMsg.Notifier) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, notifier: notifier}
 }
 
 // CreateNote 发布笔记
@@ -50,6 +52,7 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 		Category:    req.Category,
 		VideoURL:    req.VideoURL,
 		Status:      1,
+		Heat:        10, // 初始基础热度，与 heat.go 公式中的基础热度10保持一致
 		PublishTime: time.Now(),
 	}
 
@@ -173,6 +176,7 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		Type:         "note",
 		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
+		IsOwner:      note.MemberID == memberID,
 		Title:        note.Title,
 		CoverImg:     coverImg,
 		Images:       images,
@@ -205,37 +209,32 @@ func (s *noteService) ToggleLikeNote(noteID uint, memberID uint) (*responseNote.
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
 	}
 
-	likeCount := note.LikeCount
+	// 事务：仓库方法内部已按「实际插入/删除是否成功」决定是否增减计数，天然幂等
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if liked {
-			if err := s.noteRepo.DeleteLike(tx, noteID, memberID); err != nil {
-				return err
-			}
-			if err := s.noteRepo.DecrLikeCount(tx, noteID); err != nil {
-				return err
-			}
-			likeCount--
-			return nil
+			return s.noteRepo.DeleteLike(tx, noteID, memberID)
 		}
-		if err := s.noteRepo.CreateLike(tx, noteID, memberID); err != nil {
-			return err
-		}
-		if err := s.noteRepo.IncrLikeCount(tx, noteID); err != nil {
-			return err
-		}
-		likeCount++
-		return nil
+		return s.noteRepo.CreateLike(tx, noteID, memberID)
 	})
 	if err != nil {
 		logger.Errorf("点赞事务失败 noteID=%d memberID=%d err=%v", noteID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "点赞操作失败", err)
 	}
 
+	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 点赞成功 → 给内容作者发实时通知（取消赞不通知；自己赞自己不通知）
+	if !liked {
+		s.notifier.NotifyLike(note.MemberID, memberID, note.Title)
+	}
+
 	// 同步缓存
 	s.noteRepo.SetCachedLikeStatus(ctx, noteID, memberID, !liked)
-	s.noteRepo.SetCachedLikeCount(ctx, noteID, likeCount)
+	if fresh, err := s.noteRepo.FindByID(noteID); err == nil {
+		note = fresh
+	}
+	s.noteRepo.SetCachedLikeCount(ctx, noteID, note.LikeCount)
 
-	return &responseNote.LikeToggleResponse{IsLiked: !liked, LikeCount: likeCount}, nil
+	return &responseNote.LikeToggleResponse{IsLiked: !liked, LikeCount: note.LikeCount}, nil
 }
 
 // ToggleCollectNote 收藏/取消收藏（写：MySQL 为准 → 事务 → 同步 Redis）
@@ -252,35 +251,29 @@ func (s *noteService) ToggleCollectNote(noteID uint, memberID uint) (*responseNo
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
 	}
 
-	collectCount := note.CollectCount
+	// 事务：仓库方法内部已按「实际插入/删除是否成功」决定是否增减计数，天然幂等
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if favorite {
-			if err := s.noteRepo.DeleteCollect(tx, noteID, memberID); err != nil {
-				return err
-			}
-			if err := s.noteRepo.DecrCollectCount(tx, noteID); err != nil {
-				return err
-			}
-			collectCount--
-			return nil
+			return s.noteRepo.DeleteCollect(tx, noteID, memberID)
 		}
-		if err := s.noteRepo.CreateCollect(tx, noteID, memberID); err != nil {
-			return err
-		}
-		if err := s.noteRepo.IncrCollectCount(tx, noteID); err != nil {
-			return err
-		}
-		collectCount++
-		return nil
+		return s.noteRepo.CreateCollect(tx, noteID, memberID)
 	})
 	if err != nil {
 		logger.Errorf("收藏事务失败 noteID=%d memberID=%d err=%v", noteID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "收藏操作失败", err)
 	}
 
-	s.noteRepo.SetCachedCollectStatus(ctx, noteID, memberID, !favorite)
+	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 收藏成功 → 给内容作者发实时通知（取消收藏不通知）
+	if !favorite {
+		s.notifier.NotifyCollect(note.MemberID, memberID, note.Title)
+	}
 
-	s.noteRepo.SetCachedCollectCount(ctx, noteID, collectCount)
+	s.noteRepo.SetCachedCollectStatus(ctx, noteID, memberID, !favorite)
+	if fresh, err := s.noteRepo.FindByID(noteID); err == nil {
+		note = fresh
+	}
+	s.noteRepo.SetCachedCollectCount(ctx, noteID, note.CollectCount)
 
 	return &responseNote.CollectToggleResponse{IsFavorited: !favorite}, nil
 }

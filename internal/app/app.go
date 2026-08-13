@@ -3,6 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +25,7 @@ import (
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	tagAdminCtrl "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
@@ -29,8 +34,10 @@ import (
 	"tuyou/internal/api/v1/web/guide"
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	webMemberCtrl "tuyou/internal/api/v1/web/member"
+	messageCtrl "tuyou/internal/api/v1/web/message"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/api/v1/web/personal"
+	searchCtrl "tuyou/internal/api/v1/web/search"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
@@ -44,14 +51,17 @@ import (
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
 	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
 	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminTag "tuyou/internal/repository/admin/tag"
 	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
 	repoComment "tuyou/internal/repository/web/comment"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoHome "tuyou/internal/repository/web/home"
+	repoMsg "tuyou/internal/repository/web/message"
 	repoNote "tuyou/internal/repository/web/note"
 	repoPersonal "tuyou/internal/repository/web/personal"
+	repoSearch "tuyou/internal/repository/web/search"
 	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
@@ -63,6 +73,7 @@ import (
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
 	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminTag "tuyou/internal/service/admin/tag"
 	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
 	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
@@ -70,19 +81,16 @@ import (
 	serviceComment "tuyou/internal/service/web/comment"
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceHome "tuyou/internal/service/web/home"
+	serviceMsg "tuyou/internal/service/web/message"
 	serviceNote "tuyou/internal/service/web/note"
 	servicePersonal "tuyou/internal/service/web/personal"
+	serviceSearch "tuyou/internal/service/web/search"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/storage"
 	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
-
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 // App 应用结构体
@@ -95,6 +103,7 @@ type App struct {
 	consumer          *stream.Consumer
 	heatTicker        *time.Ticker
 	commentHeatTicker *time.Ticker
+	remindTicker      *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -222,6 +231,8 @@ func (a *App) initDatabase() error {
 func (a *App) initDependencies() {
 	// ========== 创建 Redis 仓储 ==========
 	redisRepo := repository.NewRedisRepository(a.redis)
+	sseHub := stream.NewSSEHub()
+	adminSSEHub := stream.NewSSEHub()
 
 	// ========== 创建存储（OSS）==========
 	store, err := storage.New(a.cfg.Storage)
@@ -234,6 +245,7 @@ func (a *App) initDependencies() {
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
+	adminMsgRepo := repoAdminCenter.NewAdminMsgRepository(a.mysqlDB)
 	adminPermRepo := repoAdminPerm.NewAdminsRepository(a.mysqlDB)
 	menuRepo := repoAdminMenu.NewMenuRepository(a.mysqlDB)
 	apiPermRepo := repoAdminApiPerm.NewApiPermRepository(a.mysqlDB)
@@ -241,6 +253,7 @@ func (a *App) initDependencies() {
 	adminNoteRepo := repoAdminNote.NewNoteRepository(a.mysqlDB)
 	adminGuideRepo := repoAdminGuide.NewGuideRepository(a.mysqlDB)
 	adminActivityRepo := repoAdminActivity.NewActivityRepository(a.mysqlDB)
+	adminTagRepo := repoAdminTag.NewTagRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
@@ -248,14 +261,19 @@ func (a *App) initDependencies() {
 	commentRepo := repoComment.NewCommentRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
+	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
+
+	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
+	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
-	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
+	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo, adminMsgRepo, adminSSEHub)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
-	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
+	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo, adminMsgRepo, adminSSEHub)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
 	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
 	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
@@ -263,12 +281,15 @@ func (a *App) initDependencies() {
 	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
-	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
-	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
-	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
+	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
+	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
+	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
+	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
 	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	searchSvc := serviceSearch.NewSearchService(searchRepo)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 
@@ -279,7 +300,7 @@ func (a *App) initDependencies() {
 	noteCtrl := note.NewController(noteSvc, redisRepo)
 	commentC := commentCtrl.NewController(commentSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
-	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
+	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo, adminSSEHub)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	menuC := menuCtrl.NewController(menuSvc, redisRepo)
 	apiPermC := apiPermCtrl.NewController(apiPermSvc, redisRepo)
@@ -287,16 +308,19 @@ func (a *App) initDependencies() {
 	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
 	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc)
+	tagAdminC := tagAdminCtrl.NewController(adminTagSvc)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 	homeC := homeCtrl.NewController(homeSvc, redisRepo)
+	searchC := searchCtrl.NewController(searchSvc, redisRepo)
+	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
@@ -305,6 +329,8 @@ func (a *App) initDependencies() {
 	a.heatTicker = task.StartHeatJob(a.mysqlDB)
 	// ========== 启动评论热度/评论数校准定时任务 ==========
 	a.commentHeatTicker = task.StartCommentHeatJob(a.mysqlDB)
+	// ========== 启动活动快开始提醒定时任务 ==========
+	a.remindTicker = task.StartActivityRemindJob(a.mysqlDB, notifier)
 }
 
 // initRouter 初始化路由
@@ -376,6 +402,10 @@ func (a *App) gracefulShutdown() {
 	// 停止评论热度/评论数校准定时任务
 	if a.commentHeatTicker != nil {
 		a.commentHeatTicker.Stop()
+	}
+	// 停止活动快开始提醒定时任务
+	if a.remindTicker != nil {
+		a.remindTicker.Stop()
 	}
 
 	// 关闭路由连接

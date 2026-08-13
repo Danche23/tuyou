@@ -26,11 +26,20 @@ type HomeRepository interface {
 	// CountFeedStrategies 统计符合条件的攻略总数
 	CountFeedStrategies(category int) (int64, error)
 
-	// FindFeedNotes 按排序窗口取笔记（limit = offset+size）
-	FindFeedNotes(category int, order string, limit int) ([]entity.Note, error)
+	// FindHotTagIDs 查询热门标签ID（is_hot=1 且启用未删）
+	FindHotTagIDs() ([]uint, error)
 
-	// FindFeedStrategies 按排序窗口取攻略（limit = offset+size）
-	FindFeedStrategies(category int, order string, limit int) ([]entity.Strategy, error)
+	// FindHotNoteIDs 查询带热门标签的笔记ID集合（去重）
+	FindHotNoteIDs(hotTagIDs []uint) ([]uint, error)
+
+	// FindHotStrategyIDs 查询带热门标签的攻略ID集合（去重）
+	FindHotStrategyIDs(hotTagIDs []uint) ([]uint, error)
+
+	// FindFeedNotes 按排序窗口取笔记（limit = offset+size；hotIDs 非空时热门置顶）
+	FindFeedNotes(category int, order string, limit int, hotIDs []uint) ([]entity.Note, error)
+
+	// FindFeedStrategies 按排序窗口取攻略（limit = offset+size；hotIDs 非空时热门置顶）
+	FindFeedStrategies(category int, order string, limit int, hotIDs []uint) ([]entity.Strategy, error)
 
 	// FindMembersByIDs 批量查询会员信息
 	FindMembersByIDs(memberIDs []uint) (map[uint]*entity.Member, error)

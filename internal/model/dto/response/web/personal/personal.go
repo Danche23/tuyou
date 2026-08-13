@@ -47,6 +47,7 @@ type StrategyCard struct {
 	Type      string      `json:"type"`
 	Author    *AuthorInfo `json:"author"`
 	CoverImg  string      `json:"coverImg"`
+	IsVideo   bool        `json:"isVideo"` // 是否视频内容
 	Title     string      `json:"title"`
 	Tag       string      `json:"tag"`
 	LikeCount int64       `json:"likeCount"`
@@ -59,6 +60,7 @@ type NoteCard struct {
 	Type      string      `json:"type"`
 	Author    *AuthorInfo `json:"author"`
 	CoverImg  string      `json:"coverImg"`
+	IsVideo   bool        `json:"isVideo"` // 是否视频内容
 	Title     string      `json:"title"`
 	Tag       string      `json:"tag"`
 	LikeCount int64       `json:"likeCount"`

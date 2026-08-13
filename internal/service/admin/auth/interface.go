@@ -7,8 +7,8 @@ import (
 )
 
 type AdminAuthService interface {
-	// Login 登录
-	Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResp, error)
+	// Login 登录（userAgent 用于生成设备登录提醒文案）
+	Login(ctx context.Context, req *request.LoginRequest, userAgent string) (*response.LoginResp, error)
 
 	// GetCaptcha 获取图形验证码
 	GetCaptcha(ctx context.Context) (*response.CaptchaResp, error)

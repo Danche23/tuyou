@@ -9,6 +9,7 @@ import (
 	"tuyou/internal/repository"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type guideRepository struct {
@@ -176,24 +177,28 @@ func (r *guideRepository) ExistsLike(strategyID uint, memberID uint) (bool, erro
 	return count > 0, nil
 }
 
-// CreateLike 创建点赞记录
+// CreateLike 创建点赞记录；仅实际插入成功才同步 like_count +1（并发重复点赞不重复计数）
 func (r *guideRepository) CreateLike(tx *gorm.DB, strategyID uint, memberID uint) error {
-	return tx.Create(&entity.StrategyLike{StrategyID: strategyID, MemberID: memberID}).Error
-}
-
-// DeleteLike 删除点赞记录（硬删除）
-func (r *guideRepository) DeleteLike(tx *gorm.DB, strategyID uint, memberID uint) error {
-	return tx.Unscoped().Where("strategy_id = ? AND member_id = ?", strategyID, memberID).Delete(&entity.StrategyLike{}).Error
-}
-
-// IncrLikeCount 攻略点赞数 +1
-func (r *guideRepository) IncrLikeCount(tx *gorm.DB, strategyID uint) error {
+	res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity.StrategyLike{StrategyID: strategyID, MemberID: memberID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 已点赞过，不重复计数
+	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
 }
 
-// DecrLikeCount 攻略点赞数 -1
-func (r *guideRepository) DecrLikeCount(tx *gorm.DB, strategyID uint) error {
+// DeleteLike 删除点赞记录（硬删除）；仅实际删除成功才同步 like_count -1（避免并发重复取消把计数减超）
+func (r *guideRepository) DeleteLike(tx *gorm.DB, strategyID uint, memberID uint) error {
+	res := tx.Unscoped().Where("strategy_id = ? AND member_id = ?", strategyID, memberID).Delete(&entity.StrategyLike{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 本来就没点赞，不减计数
+	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
 }
@@ -235,24 +240,28 @@ func (r *guideRepository) ExistsCollect(strategyID uint, memberID uint) (bool, e
 	return count > 0, nil
 }
 
-// CreateCollect 创建收藏记录
+// CreateCollect 创建收藏记录；仅实际插入成功才同步 collect_count +1（并发重复收藏不重复计数）
 func (r *guideRepository) CreateCollect(tx *gorm.DB, strategyID uint, memberID uint) error {
-	return tx.Create(&entity.StrategyCollect{StrategyID: strategyID, MemberID: memberID}).Error
-}
-
-// DeleteCollect 删除收藏记录（硬删除）
-func (r *guideRepository) DeleteCollect(tx *gorm.DB, strategyID uint, memberID uint) error {
-	return tx.Unscoped().Where("strategy_id = ? AND member_id = ?", strategyID, memberID).Delete(&entity.StrategyCollect{}).Error
-}
-
-// IncrCollectCount 攻略收藏数 +1
-func (r *guideRepository) IncrCollectCount(tx *gorm.DB, strategyID uint) error {
+	res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity.StrategyCollect{StrategyID: strategyID, MemberID: memberID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 已收藏过，不重复计数
+	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count + 1")).Error
 }
 
-// DecrCollectCount 攻略收藏数 -1
-func (r *guideRepository) DecrCollectCount(tx *gorm.DB, strategyID uint) error {
+// DeleteCollect 删除收藏记录（硬删除）；仅实际删除成功才同步 collect_count -1（避免并发重复取消把计数减超）
+func (r *guideRepository) DeleteCollect(tx *gorm.DB, strategyID uint, memberID uint) error {
+	res := tx.Unscoped().Where("strategy_id = ? AND member_id = ?", strategyID, memberID).Delete(&entity.StrategyCollect{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 本来就没收藏，不减计数
+	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error
 }

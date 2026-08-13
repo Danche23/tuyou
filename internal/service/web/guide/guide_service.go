@@ -9,6 +9,7 @@ import (
 	responseGuide "tuyou/internal/model/dto/response/web/guide"
 	"tuyou/internal/model/entity"
 	repoGuide "tuyou/internal/repository/web/guide"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
 
@@ -22,11 +23,12 @@ var difficultyIntToStr = map[int]string{1: "入门", 2: "中等", 3: "中高等"
 type guideService struct {
 	guideRepo repoGuide.GuideRepository
 	db        *gorm.DB
+	notifier  *serviceMsg.Notifier
 }
 
 // NewGuideService 创建攻略服务实例
-func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB) GuideService {
-	return &guideService{guideRepo: guideRepo, db: db}
+func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, notifier *serviceMsg.Notifier) GuideService {
+	return &guideService{guideRepo: guideRepo, db: db, notifier: notifier}
 }
 
 // CreateGuide 发布攻略
@@ -61,6 +63,7 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 		Category:    req.Category,
 		VideoURL:    req.VideoURL,
 		Status:      1,
+		Heat:        10, // 初始基础热度，与 heat.go 公式中的基础热度10保持一致
 		PublishTime: time.Now(),
 		Distance:    req.Distance,
 		Duration:    req.Duration,
@@ -167,6 +170,7 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 		Type:         "guide",
 		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
+		IsOwner:      strategy.MemberID == memberID,
 		Title:        strategy.Title,
 		CoverImg:     coverImg,
 		Images:       images,
@@ -228,37 +232,32 @@ func (s *guideService) ToggleLikeGuide(strategyID uint, memberID uint) (*respons
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
 	}
 
-	likeCount := strategy.LikeCount
+	// 事务：仓库方法内部已按「实际插入/删除是否成功」决定是否增减计数，天然幂等
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if liked {
-			if err := s.guideRepo.DeleteLike(tx, strategyID, memberID); err != nil {
-				return err
-			}
-			if err := s.guideRepo.DecrLikeCount(tx, strategyID); err != nil {
-				return err
-			}
-			likeCount--
-			return nil
+			return s.guideRepo.DeleteLike(tx, strategyID, memberID)
 		}
-		if err := s.guideRepo.CreateLike(tx, strategyID, memberID); err != nil {
-			return err
-		}
-		if err := s.guideRepo.IncrLikeCount(tx, strategyID); err != nil {
-			return err
-		}
-		likeCount++
-		return nil
+		return s.guideRepo.CreateLike(tx, strategyID, memberID)
 	})
 	if err != nil {
 		logger.Errorf("点赞事务失败 strategyID=%d memberID=%d err=%v", strategyID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "点赞操作失败", err)
 	}
 
+	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 点赞成功 → 给内容作者发实时通知（取消赞不通知；自己赞自己不通知）
+	if !liked {
+		s.notifier.NotifyLike(strategy.MemberID, memberID, strategy.Title)
+	}
+
 	// 同步缓存
 	s.guideRepo.SetCachedLikeStatus(ctx, strategyID, memberID, !liked)
-	s.guideRepo.SetCachedLikeCount(ctx, strategyID, likeCount)
+	if fresh, err := s.guideRepo.FindByID(strategyID); err == nil {
+		strategy = fresh
+	}
+	s.guideRepo.SetCachedLikeCount(ctx, strategyID, strategy.LikeCount)
 
-	return &responseGuide.LikeToggleResponse{IsLiked: !liked, LikeCount: likeCount}, nil
+	return &responseGuide.LikeToggleResponse{IsLiked: !liked, LikeCount: strategy.LikeCount}, nil
 }
 
 // readCollectStatus 读缓存（Redis → MySQL → 回填）
@@ -280,7 +279,7 @@ func (s *guideService) readCollectStatus(ctx context.Context, strategyID, member
 func (s *guideService) ToggleCollectGuide(strategyID uint, memberID uint) (*responseGuide.CollectToggleResponse, error) {
 	ctx := context.Background()
 
-	_, err := s.guideRepo.FindByID(strategyID)
+	strategy, err := s.guideRepo.FindByID(strategyID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "攻略不存在", err)
 	}
@@ -290,21 +289,22 @@ func (s *guideService) ToggleCollectGuide(strategyID uint, memberID uint) (*resp
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询收藏状态失败", err)
 	}
 
+	// 事务：仓库方法内部已按「实际插入/删除是否成功」决定是否增减计数，天然幂等
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if favorited {
-			if err := s.guideRepo.DeleteCollect(tx, strategyID, memberID); err != nil {
-				return err
-			}
-			return s.guideRepo.DecrCollectCount(tx, strategyID)
+			return s.guideRepo.DeleteCollect(tx, strategyID, memberID)
 		}
-		if err := s.guideRepo.CreateCollect(tx, strategyID, memberID); err != nil {
-			return err
-		}
-		return s.guideRepo.IncrCollectCount(tx, strategyID)
+		return s.guideRepo.CreateCollect(tx, strategyID, memberID)
 	})
 	if err != nil {
 		logger.Errorf("收藏事务失败 strategyID=%d memberID=%d err=%v", strategyID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "收藏操作失败", err)
+	}
+
+	// 同步缓存（攻略收藏数无 Redis 缓存，只更新状态）
+	// 收藏成功 → 给内容作者发实时通知（取消收藏不通知）
+	if !favorited {
+		s.notifier.NotifyCollect(strategy.MemberID, memberID, strategy.Title)
 	}
 
 	// 同步缓存

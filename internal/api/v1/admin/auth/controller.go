@@ -41,7 +41,7 @@ func (h *AdminHandler) Login(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.authSvc.Login(c.Request.Context(), &req)
+	resp, err := h.authSvc.Login(c.Request.Context(), &req, c.Request.UserAgent())
 	if err != nil {
 		response.BizError(c, err)
 		return
