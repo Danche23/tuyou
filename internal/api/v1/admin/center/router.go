@@ -13,5 +13,12 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		admin.PUT("/avatar", c.UpdateAvatar)
 		admin.PUT("/profile", c.UpdateProfile)
+		admin.GET("/notifications", c.GetNotifications)
+		admin.GET("/notifications/unread", c.GetUnreadCount)
+		admin.GET("/notifications/stream", c.Stream)
+		admin.PUT("/notifications/:id/read", c.MarkRead)
+		admin.PUT("/notifications/read-all", c.MarkAllRead)
+		admin.DELETE("/notifications/:id", c.Delete)
+		admin.DELETE("/notifications", c.ClearAll)
 	}
 }

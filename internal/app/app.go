@@ -228,6 +228,7 @@ func (a *App) initDependencies() {
 	// ========== 创建 Redis 仓储 ==========
 	redisRepo := repository.NewRedisRepository(a.redis)
 	sseHub := stream.NewSSEHub()
+	adminSSEHub := stream.NewSSEHub()
 
 	// ========== 创建存储（OSS）==========
 	store, err := storage.New(a.cfg.Storage)
@@ -240,6 +241,7 @@ func (a *App) initDependencies() {
 	adminRepo := repoAdmin.NewAdminRepository(a.mysqlDB)
 	adminMemberRepo := repoAdminMember.NewMemberRepository(a.mysqlDB)
 	adminCenterRepo := repoAdminCenter.NewCenterRepository(a.mysqlDB)
+	adminMsgRepo := repoAdminCenter.NewAdminMsgRepository(a.mysqlDB)
 	adminPermRepo := repoAdminPerm.NewAdminsRepository(a.mysqlDB)
 	menuRepo := repoAdminMenu.NewMenuRepository(a.mysqlDB)
 	apiPermRepo := repoAdminApiPerm.NewApiPermRepository(a.mysqlDB)
@@ -263,10 +265,10 @@ func (a *App) initDependencies() {
 
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
-	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
+	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo, adminMsgRepo, adminSSEHub)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
-	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
+	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo, adminMsgRepo, adminSSEHub)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
 	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
 	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
@@ -291,7 +293,7 @@ func (a *App) initDependencies() {
 	personalCtrl := personal.NewController(personalSvc)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
-	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
+	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo, adminSSEHub)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
 	menuC := menuCtrl.NewController(menuSvc, redisRepo)
 	apiPermC := apiPermCtrl.NewController(apiPermSvc, redisRepo)
