@@ -8,6 +8,7 @@ import (
 	responseActivity "tuyou/internal/model/dto/response/web/activity"
 	"tuyou/internal/model/entity"
 	repoActivity "tuyou/internal/repository/web/activity"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
 
@@ -17,11 +18,12 @@ import (
 type activityService struct {
 	activityRepo repoActivity.ActivityRepository
 	db           *gorm.DB
+	notifier     *serviceMsg.Notifier
 }
 
 // NewActivityService 创建活动服务实例
-func NewActivityService(activityRepo repoActivity.ActivityRepository, db *gorm.DB) ActivityService {
-	return &activityService{activityRepo: activityRepo, db: db}
+func NewActivityService(activityRepo repoActivity.ActivityRepository, db *gorm.DB, notifier *serviceMsg.Notifier) ActivityService {
+	return &activityService{activityRepo: activityRepo, db: db, notifier: notifier}
 }
 
 // CreateActivity 创建活动（仅领队 role=0 可创建）
@@ -256,6 +258,11 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
 	}
 
+	// 报名成功 → 给活动领队发实时通知（取消报名不通知）
+	s.notifier.NotifySignup(activity.LeaderMemberID, memberID, activity.Title)
+	// 给报名者本人发"报名成功"系统通知
+	s.notifier.NotifySignupSuccess(memberID, activity.Title)
+
 	return &responseActivity.SignupToggleResponse{
 		IsJoined:      true,
 		CurrentPeople: activity.CurrentPeople + 1,
@@ -272,6 +279,13 @@ func (s *activityService) DeleteActivity(activityID uint, memberID uint) error {
 		return errors.New(errors.CodeForbidden, "无权删除他人活动")
 	}
 
+	// 删除前先取已报名成员，删除成功后用于通知（best-effort，查不到不阻塞删除）
+	members, err := s.activityRepo.FindJoinedMembers(activityID)
+	if err != nil {
+		logger.Errorf("删除前查询报名成员失败 activityID=%d err=%v", activityID, err)
+		members = nil
+	}
+
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.activityRepo.SoftDelete(tx, activityID); err != nil {
 			return err
@@ -282,6 +296,13 @@ func (s *activityService) DeleteActivity(activityID uint, memberID uint) error {
 		logger.Errorf("删除活动事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
 		return errors.NewWithErr(errors.CodeInternalError, "删除活动失败", err)
 	}
+
+	// 删除成功 → 给所有已报名成员发活动删除通知
+	memberIDs := make([]uint, 0, len(members))
+	for _, m := range members {
+		memberIDs = append(memberIDs, m.ID)
+	}
+	s.notifier.NotifyActivityDeleted(memberIDs, memberID, activity.Title)
 
 	return nil
 }

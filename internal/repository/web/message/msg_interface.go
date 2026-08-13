@@ -35,4 +35,12 @@ type MessageRepository interface {
 	FindCommentByID(commentID uint) (*entity.Comment, error)
 	// CreateComment 在事务中插入回复评论
 	CreateComment(tx *gorm.DB, c *entity.Comment) error
+	// FindMemberNickname 查询会员昵称（消息正文渲染用）
+	FindMemberNickname(memberID uint) (string, error)
+	// CreateMessage 在事务中插入消息主表
+	CreateMessage(tx *gorm.DB, info *entity.MsgInfo) error
+	// CreateUserRecord 在事务中插入用户接收记录
+	CreateUserRecord(tx *gorm.DB, record *entity.MsgUserRecord) error
+	// DeleteUserMessage 软删除消息（is_user_del=1，该会员无此消息记录时返回 gorm.ErrRecordNotFound）
+	DeleteUserMessage(memberID, msgID uint) error
 }

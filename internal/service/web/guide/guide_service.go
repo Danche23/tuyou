@@ -9,6 +9,7 @@ import (
 	responseGuide "tuyou/internal/model/dto/response/web/guide"
 	"tuyou/internal/model/entity"
 	repoGuide "tuyou/internal/repository/web/guide"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
 
@@ -22,11 +23,12 @@ var difficultyIntToStr = map[int]string{1: "入门", 2: "中等", 3: "中高等"
 type guideService struct {
 	guideRepo repoGuide.GuideRepository
 	db        *gorm.DB
+	notifier  *serviceMsg.Notifier
 }
 
 // NewGuideService 创建攻略服务实例
-func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB) GuideService {
-	return &guideService{guideRepo: guideRepo, db: db}
+func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, notifier *serviceMsg.Notifier) GuideService {
+	return &guideService{guideRepo: guideRepo, db: db, notifier: notifier}
 }
 
 // CreateGuide 发布攻略
@@ -243,6 +245,12 @@ func (s *guideService) ToggleLikeGuide(strategyID uint, memberID uint) (*respons
 	}
 
 	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 点赞成功 → 给内容作者发实时通知（取消赞不通知；自己赞自己不通知）
+	if !liked {
+		s.notifier.NotifyLike(strategy.MemberID, memberID, strategy.Title)
+	}
+
+	// 同步缓存
 	s.guideRepo.SetCachedLikeStatus(ctx, strategyID, memberID, !liked)
 	if fresh, err := s.guideRepo.FindByID(strategyID); err == nil {
 		strategy = fresh
@@ -271,7 +279,7 @@ func (s *guideService) readCollectStatus(ctx context.Context, strategyID, member
 func (s *guideService) ToggleCollectGuide(strategyID uint, memberID uint) (*responseGuide.CollectToggleResponse, error) {
 	ctx := context.Background()
 
-	_, err := s.guideRepo.FindByID(strategyID)
+	strategy, err := s.guideRepo.FindByID(strategyID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "攻略不存在", err)
 	}
@@ -294,6 +302,12 @@ func (s *guideService) ToggleCollectGuide(strategyID uint, memberID uint) (*resp
 	}
 
 	// 同步缓存（攻略收藏数无 Redis 缓存，只更新状态）
+	// 收藏成功 → 给内容作者发实时通知（取消收藏不通知）
+	if !favorited {
+		s.notifier.NotifyCollect(strategy.MemberID, memberID, strategy.Title)
+	}
+
+	// 同步缓存
 	s.guideRepo.SetCachedCollectStatus(ctx, strategyID, memberID, !favorited)
 
 	return &responseGuide.CollectToggleResponse{IsFavorited: !favorited}, nil

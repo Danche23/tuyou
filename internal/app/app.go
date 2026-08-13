@@ -89,13 +89,14 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg        *config.Config
-	mysqlDB    *gorm.DB
-	redis      *redis.Client
-	router     *api.Router
-	server     *http.Server
-	consumer   *stream.Consumer
-	heatTicker *time.Ticker
+	cfg          *config.Config
+	mysqlDB      *gorm.DB
+	redis        *redis.Client
+	router       *api.Router
+	server       *http.Server
+	consumer     *stream.Consumer
+	heatTicker   *time.Ticker
+	remindTicker *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -223,6 +224,7 @@ func (a *App) initDatabase() error {
 func (a *App) initDependencies() {
 	// ========== 创建 Redis 仓储 ==========
 	redisRepo := repository.NewRedisRepository(a.redis)
+	sseHub := stream.NewSSEHub()
 
 	// ========== 创建存储（OSS）==========
 	store, err := storage.New(a.cfg.Storage)
@@ -252,10 +254,13 @@ func (a *App) initDependencies() {
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
 
+	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
+	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
+
 	// ========== 创建 Service ==========
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo)
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
@@ -266,12 +271,12 @@ func (a *App) initDependencies() {
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
-	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
-	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
-	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
+	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
+	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
+	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
-	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 
@@ -295,7 +300,7 @@ func (a *App) initDependencies() {
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 	homeC := homeCtrl.NewController(homeSvc, redisRepo)
-	msgC := messageCtrl.NewController(msgSvc, redisRepo)
+	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
@@ -307,6 +312,8 @@ func (a *App) initDependencies() {
 	a.consumer.Start()
 	// ========== 启动热度重算定时任务 ==========
 	a.heatTicker = task.StartHeatJob(a.mysqlDB)
+	// ========== 启动活动快开始提醒定时任务 ==========
+	a.remindTicker = task.StartActivityRemindJob(a.mysqlDB, notifier)
 }
 
 // initRouter 初始化路由
@@ -373,6 +380,11 @@ func (a *App) gracefulShutdown() {
 	// 停止热度重算定时任务
 	if a.heatTicker != nil {
 		a.heatTicker.Stop()
+	}
+
+	// 停止活动快开始提醒定时任务
+	if a.remindTicker != nil {
+		a.remindTicker.Stop()
 	}
 
 	// 关闭路由连接

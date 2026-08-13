@@ -87,7 +87,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 	//值为登录时间戳（毫秒），供按账号维度限制同时在线设备数使用
 	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), time.Now().UnixMilli(), config.Get().JWT.ExpireHours)
 	//限制每账号同时在线设备数：先插入再清理，超限时踢掉最旧的 token
-	s.evictOldestSessions(ctx, admin.ID)
+	//s.evictOldestSessions(ctx, admin.ID)
 
 	//查询角色名称
 	role, err := s.adminRepo.FindRoleNameByRoleID(ctx, admin.RoleID)
