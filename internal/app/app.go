@@ -36,6 +36,7 @@ import (
 	messageCtrl "tuyou/internal/api/v1/web/message"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/api/v1/web/personal"
+	searchCtrl "tuyou/internal/api/v1/web/search"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
@@ -58,6 +59,7 @@ import (
 	repoMsg "tuyou/internal/repository/web/message"
 	repoNote "tuyou/internal/repository/web/note"
 	repoPersonal "tuyou/internal/repository/web/personal"
+	repoSearch "tuyou/internal/repository/web/search"
 	repoTag "tuyou/internal/repository/web/tag"
 	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
@@ -79,6 +81,7 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	serviceNote "tuyou/internal/service/web/note"
 	servicePersonal "tuyou/internal/service/web/personal"
+	serviceSearch "tuyou/internal/service/web/search"
 	serviceTag "tuyou/internal/service/web/tag"
 	"tuyou/internal/storage"
 	"tuyou/internal/stream"
@@ -253,6 +256,7 @@ func (a *App) initDependencies() {
 	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
 
@@ -278,6 +282,7 @@ func (a *App) initDependencies() {
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	searchSvc := serviceSearch.NewSearchService(searchRepo)
 	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
@@ -302,12 +307,13 @@ func (a *App) initDependencies() {
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
 	webMemberC := webMemberCtrl.NewController(authSvc, redisRepo)
 	homeC := homeCtrl.NewController(homeSvc, redisRepo)
+	searchC := searchCtrl.NewController(searchSvc, redisRepo)
 	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, msgC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

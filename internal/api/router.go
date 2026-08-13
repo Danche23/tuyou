@@ -22,6 +22,7 @@ import (
 	messageCtrl "tuyou/internal/api/v1/web/message"
 	"tuyou/internal/api/v1/web/note"
 	"tuyou/internal/api/v1/web/personal"
+	searchCtrl "tuyou/internal/api/v1/web/search"
 	tagCtrl "tuyou/internal/api/v1/web/tag"
 	"tuyou/internal/middleware"
 
@@ -49,6 +50,7 @@ type Router struct {
 	tagCtrl           *tagCtrl.Controller
 	webMemberCtrl     *memberCtrl.Controller
 	homeCtrl          *homeCtrl.Controller
+	searchCtrl        *searchCtrl.Controller
 	messageCtrl       *messageCtrl.Controller
 	uploadCtrl        *uploadCtrl.Controller
 	workbenchCtrl     *workbenchCtrl.Controller
@@ -75,6 +77,7 @@ func NewRouter(
 	tagCtrl *tagCtrl.Controller,
 	webMemberCtrl *memberCtrl.Controller,
 	homeCtrl *homeCtrl.Controller,
+	searchCtrl *searchCtrl.Controller,
 	messageCtrl *messageCtrl.Controller,
 	uploadCtrl *uploadCtrl.Controller,
 	workbenchCtrl *workbenchCtrl.Controller,
@@ -99,6 +102,7 @@ func NewRouter(
 		tagCtrl:           tagCtrl,
 		webMemberCtrl:     webMemberCtrl,
 		homeCtrl:          homeCtrl,
+		searchCtrl:        searchCtrl,
 		messageCtrl:       messageCtrl,
 		uploadCtrl:        uploadCtrl,
 		workbenchCtrl:     workbenchCtrl,
@@ -179,6 +183,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// Web 端社区首页路由
 		r.homeCtrl.RegisterRoutes(apiGroup)
+
+		// Web 端全量搜索路由
+		r.searchCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端消息路由
 		r.messageCtrl.RegisterRoutes(apiGroup)
