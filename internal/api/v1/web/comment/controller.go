@@ -1,5 +1,24 @@
 package comment
 
+// 前台评论模块 —— 控制器层（HTTP 入口）
+//
+// 整个评论功能在项目里的分层是固定的：
+//
+//	Controller（本文件）→ Service（业务逻辑）→ Repository（SQL）→ MySQL
+//	     │                                                        │
+//	     └── 只做：取登录用户 → 绑参 → 调 Service → 包装响应 ──────┘
+//
+// 本文件的每个 Handler 都是"薄封装"，模式完全一样，4 步：
+//  1. middleware.GetUserID 拿当前登录用户 ID（未登录返回 401）
+//  2. ShouldBindJSON / ShouldBindQuery 把前端参数绑定到 request DTO
+//  3. 调 service 层对应方法，拿结果或错误
+//  4. response.Success / response.BizError 统一包装
+//
+// 细粒度权限（"评论者本人或作品作者才能删"）由 service 层判断，
+// controller 不碰任何业务规则，只负责 HTTP 层面的收和发。
+//
+// 本模块共 5 个接口（见 routes.go）：
+//  发表评论 / 评论列表 / 删除评论 / 点赞·取消点赞 / 二级评论列表
 import (
 	"net/http"
 	"strconv"

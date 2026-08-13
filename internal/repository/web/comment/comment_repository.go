@@ -1,5 +1,18 @@
 package comment
 
+// 前台评论模块 —— 仓储层实现（真正写 SQL 的地方）
+//
+// 这一层就是"把 Go 结构体翻译成 SQL"，几个贯穿全文件的约定：
+//   - 默认作用域：不带 Unscoped() 的查询会自动过滤掉软删记录
+//     （delete_time IS NULL，由 GORM 自动追加），所以前台"看不见已删除的评论"。
+//   - 软删除：DeleteCommentByID 用 tx.Delete(...)，本质是 UPDATE 置 delete_time，
+//     评论行还在，只是被藏起来。
+//   - 原子加减：comment_count / like_count 的增减用 gorm.Expr 拼 SQL 表达式，
+//     在数据库端原子执行，避免"先查后改"在多并发下互相覆盖。
+//   - 批量查询：Find*ByIDs 都一次性 IN 查回 map，避免 N+1 查询。
+//   - RecomputeHeatExpr：评论热度公式，见下方常量的注释。
+//
+// 前台（web）与后台（admin）各有一个评论仓储：前台默认"隐藏软删"，后台用 Unscoped() "连软删一起看"。
 import (
 	"tuyou/internal/model/entity"
 
