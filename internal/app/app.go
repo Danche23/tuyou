@@ -21,6 +21,7 @@ import (
 	commentAdminCtrl "tuyou/internal/api/v1/admin/comment"
 	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
+	adminMsgCtrl "tuyou/internal/api/v1/admin/message"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
@@ -48,6 +49,7 @@ import (
 	repoAdminComment "tuyou/internal/repository/admin/comment"
 	repoAdminGuide "tuyou/internal/repository/admin/guide"
 	repoAdminMember "tuyou/internal/repository/admin/member"
+	repoAdminMsg "tuyou/internal/repository/admin/message"
 	repoAdminNote "tuyou/internal/repository/admin/note"
 	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
@@ -71,6 +73,7 @@ import (
 	serviceAdminComment "tuyou/internal/service/admin/comment"
 	serviceAdminGuide "tuyou/internal/service/admin/guide"
 	serviceAdminMember "tuyou/internal/service/admin/member"
+	serviceAdminMsg "tuyou/internal/service/admin/message"
 	serviceAdminNote "tuyou/internal/service/admin/note"
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
@@ -270,6 +273,7 @@ func (a *App) initDependencies() {
 	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
+	adminMsgMgrRepo := repoAdminMsg.NewMessageRepository(a.mysqlDB)
 
 	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
 	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
@@ -284,9 +288,9 @@ func (a *App) initDependencies() {
 	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
 	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
 	roleSvc := serviceAdminRole.NewRoleService(roleRepo)
-	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
-	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
-	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
+	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB, notifier)
+	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB, notifier)
+	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB, notifier)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
@@ -302,6 +306,7 @@ func (a *App) initDependencies() {
 	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
+	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
@@ -331,9 +336,10 @@ func (a *App) initDependencies() {
 	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
+	adminMsgC := adminMsgCtrl.NewController(adminMsgSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
