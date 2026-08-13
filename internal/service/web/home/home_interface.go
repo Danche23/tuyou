@@ -12,4 +12,7 @@ type HomeService interface {
 
 	// GetFeed 获取Feed流（笔记/攻略跨表合并，瀑布流分页）
 	GetFeed(memberID uint, req *requestHome.FeedRequest) (*responseHome.FeedResponse, error)
+
+	// BuildFeedItems 组装 FeedItem 列表（GetFeed 与 search 模块共用的唯一实现）
+	BuildFeedItems(memberID uint, entries []FeedEntry) ([]responseHome.FeedItem, error)
 }

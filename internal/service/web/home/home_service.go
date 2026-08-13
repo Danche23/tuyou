@@ -2,6 +2,7 @@ package home
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -147,7 +148,11 @@ func toActivitySlide(act entity.Activity) responseHome.SlideItem {
 }
 
 // toNoteSlide 笔记 → 轮播项（封面/标签来自批量查询结果）
+// 降级标签渲染：无启用标签时兜底为内容分类名
 func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
+	if tag == "" {
+		tag = activityCategory[n.Category]
+	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(n.ID), 10),
 		Type:  "note",
@@ -158,7 +163,11 @@ func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
 }
 
 // toStrategySlide 攻略 → 轮播项（封面/标签来自批量查询结果）
+// 降级标签渲染：无启用标签时兜底为内容分类名
 func toStrategySlide(st entity.Strategy, cover, tag string) responseHome.SlideItem {
+	if tag == "" {
+		tag = activityCategory[st.Category]
+	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(st.ID), 10),
 		Type:  "guide",
@@ -186,12 +195,10 @@ func collectStrategyIDs(strategies []entity.Strategy) []uint {
 
 // GetFeed 获取Feed流（笔记/攻略跨表合并，瀑布流分页）
 //
-// 排序：推荐=点赞数倒序→热度倒序→发布时间倒序；最新=发布时间倒序；最热=热度倒序→点赞数倒序。
+// 排序：推荐=热门标签内容置顶→发布时间倒序（无热门标签时退化为纯发布时间倒序）；最新=发布时间倒序；最热=热度倒序→点赞数倒序。
 // 分页：笔记/攻略各按同一排序子句取 offset+size 条，内存归并排序后截取当前页，保证跨表分页正确。
 // 点赞状态/点赞数：Redis 缓存优先 → 未命中用 DB/主表字段兜底 → 回填缓存（与详情页读写一致）。
 func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*responseHome.FeedResponse, error) {
-	ctx := context.Background()
-
 	// ========== 参数默认值 ==========
 	page, size := req.Page, req.Size
 	if page < 1 {
@@ -214,6 +221,33 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 		category = 0
 	}
 
+	// ========== 推荐模式：热门标签内容置顶 ==========
+	// 热门标签 is_hot=1 的标签 → 带这些标签的笔记/攻略 ID 集合；
+	// 无热门标签时集合为空，排序退化为纯发布时间倒序（等于「最新」）。
+	var hotNoteIDs, hotStrategyIDs []uint
+	hotNoteSet := make(map[uint]bool)
+	hotStrategySet := make(map[uint]bool)
+	if sortMode == "推荐" {
+		hotTagIDs, err := s.homeRepo.FindHotTagIDs()
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门标签失败", err)
+		}
+		hotNoteIDs, err = s.homeRepo.FindHotNoteIDs(hotTagIDs)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门笔记失败", err)
+		}
+		hotStrategyIDs, err = s.homeRepo.FindHotStrategyIDs(hotTagIDs)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门攻略失败", err)
+		}
+		for _, id := range hotNoteIDs {
+			hotNoteSet[id] = true
+		}
+		for _, id := range hotStrategyIDs {
+			hotStrategySet[id] = true
+		}
+	}
+
 	// ========== 跨表统计总数 ==========
 	totalNotes, err := s.homeRepo.CountFeedNotes(category)
 	if err != nil {
@@ -225,18 +259,18 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 	}
 	total := totalNotes + totalStrategies
 	if total == 0 {
-		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: 0, Page: page, Size: size}, nil
+		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: 0, TotalPage: int(math.Ceil(float64(0) / float64(size))), Page: page, Size: size}, nil
 	}
 
 	// ========== 窗口拉取（每表取 offset+size 条，足够覆盖全局第 offset 条） ==========
 	offset := (page - 1) * size
 	limit := offset + size
 
-	notes, err := s.homeRepo.FindFeedNotes(category, order, limit)
+	notes, err := s.homeRepo.FindFeedNotes(category, order, limit, hotNoteIDs)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询笔记失败", err)
 	}
-	strategies, err := s.homeRepo.FindFeedStrategies(category, order, limit)
+	strategies, err := s.homeRepo.FindFeedStrategies(category, order, limit, hotStrategyIDs)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询攻略失败", err)
 	}
@@ -248,6 +282,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			isNote: true, id: n.ID, memberID: n.MemberID, title: n.Title,
 			videoURL: n.VideoURL, category: n.Category,
 			likeCount: n.LikeCount, heat: int64(n.Heat), publish: n.PublishTime,
+			isHot: hotNoteSet[n.ID],
 		})
 	}
 	for _, st := range strategies {
@@ -255,6 +290,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			isNote: false, id: st.ID, memberID: st.MemberID, title: st.Title,
 			videoURL: st.VideoURL, category: st.Category,
 			likeCount: st.LikeCount, heat: int64(st.Heat), publish: st.PublishTime,
+			isHot: hotStrategySet[st.ID],
 		})
 	}
 	sort.Slice(merged, func(i, j int) bool {
@@ -271,12 +307,9 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			if a.likeCount != b.likeCount {
 				return a.likeCount > b.likeCount
 			}
-		default: // 推荐
-			if a.likeCount != b.likeCount {
-				return a.likeCount > b.likeCount
-			}
-			if a.heat != b.heat {
-				return a.heat > b.heat
+		default: // 推荐：热门置顶 → 发布时间倒序 → id 倒序
+			if a.isHot != b.isHot {
+				return a.isHot
 			}
 			if !a.publish.Equal(b.publish) {
 				return a.publish.After(b.publish)
@@ -287,7 +320,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 
 	// ========== 截取当前页 ==========
 	if offset >= len(merged) {
-		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: total, Page: page, Size: size}, nil
+		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: total, TotalPage: int(math.Ceil(float64(total) / float64(size))), Page: page, Size: size}, nil
 	}
 	end := offset + size
 	if end > len(merged) {
@@ -295,8 +328,27 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 	}
 	pageEntries := merged[offset:end]
 
-	// ========== 批量取关联数据（避免 N+1） ==========
-	noteIDs, strategyIDs, memberIDs := splitFeedIDs(pageEntries)
+	// ========== 组装 FeedItem：精简 FeedEntry → 复用 BuildFeedItems（唯一组装实现，search 模块共用） ==========
+	feedEntries := make([]FeedEntry, len(pageEntries))
+	for i, e := range pageEntries {
+		feedEntries[i] = FeedEntry{
+			IsNote: e.isNote, ID: e.id, MemberID: e.memberID, Title: e.title,
+			VideoURL: e.videoURL, Category: e.category, LikeCount: e.likeCount,
+		}
+	}
+	items, err := s.BuildFeedItems(memberID, feedEntries)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "组装Feed失败", err)
+	}
+
+	return &responseHome.FeedResponse{List: items, Total: total, TotalPage: int(math.Ceil(float64(total) / float64(size))), Page: page, Size: size}, nil
+}
+
+// BuildFeedItems 组装 FeedItem 列表（唯一实现，GetFeed 与 search 模块共用）
+// entries 只带展示所需精简字段（IsNote/ID/MemberID/Title/VideoURL/Category/LikeCount），
+// 封面/标签/作者/点赞状态/点赞数均在此批量查询 + Redis 缓存优先解析。
+func (s *homeService) BuildFeedItems(memberID uint, entries []FeedEntry) ([]responseHome.FeedItem, error) {
+	noteIDs, strategyIDs, memberIDs := splitFeedIDs(entries)
 
 	noteCovers, err := s.homeRepo.FindFirstImagesByNoteIDs(noteIDs)
 	if err != nil {
@@ -319,6 +371,8 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询作者失败", err)
 	}
 
+	ctx := context.Background()
+
 	// 点赞状态：Redis 优先 → 批量 DB 兜底 → 回填缓存
 	noteLikes, err := s.resolveNoteLikes(ctx, noteIDs, memberID)
 	if err != nil {
@@ -332,61 +386,65 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 	// ========== 点赞数：Redis 缓存优先 → 主表字段兜底 → 回填缓存 ==========
 	noteCountFallback := make(map[uint]int64, len(noteIDs))
 	strategyCountFallback := make(map[uint]int64, len(strategyIDs))
-	for _, e := range pageEntries {
-		if e.isNote {
-			noteCountFallback[e.id] = e.likeCount
+	for _, e := range entries {
+		if e.IsNote {
+			noteCountFallback[e.ID] = e.LikeCount
 		} else {
-			strategyCountFallback[e.id] = e.likeCount
+			strategyCountFallback[e.ID] = e.LikeCount
 		}
 	}
 	noteCounts := s.resolveNoteLikeCounts(ctx, noteIDs, noteCountFallback)
 	strategyCounts := s.resolveStrategyLikeCounts(ctx, strategyIDs, strategyCountFallback)
 
 	// ========== 组装（对齐契约：视频内容 images=[]，图文内容 videoUrl=null） ==========
-	items := make([]responseHome.FeedItem, 0, len(pageEntries))
-	for _, e := range pageEntries {
+	items := make([]responseHome.FeedItem, 0, len(entries))
+	for _, e := range entries {
 		item := responseHome.FeedItem{
-			ID:        strconv.FormatUint(uint64(e.id), 10),
-			Title:     e.title,
+			ID:        strconv.FormatUint(uint64(e.ID), 10),
+			Title:     e.Title,
 			Images:    []string{},
 			Tags:      []string{},
-			LikeCount: e.likeCount,
-			Category:  e.category,
+			LikeCount: e.LikeCount,
+			Category:  e.Category,
 		}
-		if m, ok := members[e.memberID]; ok && m != nil {
+		if m, ok := members[e.MemberID]; ok && m != nil {
 			item.Member = &responseHome.FeedAuthor{Nickname: m.Nickname, Avatar: m.Avatar}
 		}
-		if e.isNote {
+		if e.IsNote {
 			item.Type = "note"
-			item.IsLiked = noteLikes[e.id]
-			item.LikeCount = noteCounts[e.id]
-			if tag, ok := noteTags[e.id]; ok {
+			item.IsLiked = noteLikes[e.ID]
+			item.LikeCount = noteCounts[e.ID]
+			if tag, ok := noteTags[e.ID]; ok {
 				item.Tags = []string{tag}
+			} else {
+				item.Tags = []string{activityCategory[e.Category]}
 			}
-			if cover, ok := noteCovers[e.id]; ok {
+			if cover, ok := noteCovers[e.ID]; ok {
 				item.Images = []string{cover}
 			}
-			if e.videoURL != "" {
-				item.VideoURL = &e.videoURL
+			if e.VideoURL != "" {
+				item.VideoURL = &e.VideoURL
 			}
 		} else {
 			item.Type = "guide"
-			item.IsLiked = strategyLikes[e.id]
-			item.LikeCount = strategyCounts[e.id]
-			if tag, ok := strategyTags[e.id]; ok {
+			item.IsLiked = strategyLikes[e.ID]
+			item.LikeCount = strategyCounts[e.ID]
+			if tag, ok := strategyTags[e.ID]; ok {
 				item.Tags = []string{tag}
+			} else {
+				item.Tags = []string{activityCategory[e.Category]}
 			}
-			if cover, ok := strategyCovers[e.id]; ok {
+			if cover, ok := strategyCovers[e.ID]; ok {
 				item.Images = []string{cover}
 			}
-			if e.videoURL != "" {
-				item.VideoURL = &e.videoURL
+			if e.VideoURL != "" {
+				item.VideoURL = &e.VideoURL
 			}
 		}
 		items = append(items, item)
 	}
 
-	return &responseHome.FeedResponse{List: items, Total: total, Page: page, Size: size}, nil
+	return items, nil
 }
 
 // resolveNoteLikes 笔记点赞状态：Redis 缓存优先，未命中批量查 DB 并回填缓存
@@ -475,17 +533,17 @@ func (s *homeService) resolveStrategyLikeCounts(ctx context.Context, strategyIDs
 	return result
 }
 
-// splitFeedIDs 拆分当前页条目的笔记ID、攻略ID、作者ID（去重）
-func splitFeedIDs(entries []feedEntry) (noteIDs, strategyIDs, memberIDs []uint) {
+// splitFeedIDs 拆分条目的笔记ID、攻略ID、作者ID（去重）
+func splitFeedIDs(entries []FeedEntry) (noteIDs, strategyIDs, memberIDs []uint) {
 	noteIDs = make([]uint, 0, len(entries))
 	strategyIDs = make([]uint, 0, len(entries))
 	memberIDs = make([]uint, 0, len(entries))
 	for _, e := range entries {
-		memberIDs = append(memberIDs, e.memberID)
-		if e.isNote {
-			noteIDs = append(noteIDs, e.id)
+		memberIDs = append(memberIDs, e.MemberID)
+		if e.IsNote {
+			noteIDs = append(noteIDs, e.ID)
 		} else {
-			strategyIDs = append(strategyIDs, e.id)
+			strategyIDs = append(strategyIDs, e.ID)
 		}
 	}
 	return dedupeUint(noteIDs), dedupeUint(strategyIDs), dedupeUint(memberIDs)
@@ -510,15 +568,17 @@ var activityCategory = map[int]string{
 }
 
 // feedOrderMap 排序模式 → SQL 排序子句（含 id 兜底，保证跨表分页窗口稳定）
+// 推荐：热门置顶 CASE 由仓储在 hotIDs 非空时动态拼接，此处为基础时间序；无热门时即等于「最新」。
 var feedOrderMap = map[string]string{
-	"推荐": "like_count DESC, heat DESC, publish_time DESC, id DESC",
+	"推荐": "publish_time DESC, id DESC",
 	"最新": "publish_time DESC, id DESC",
 	"最热": "heat DESC, like_count DESC, id DESC",
 }
 
-// feedEntry 跨表归并排序用的中间结构
+// feedEntry 跨表归并排序用的中间结构（home 私有：带推荐/最热排序字段）
 type feedEntry struct {
 	isNote    bool
+	isHot     bool // 推荐模式：是否带热门标签（is_hot=1），热门整体置顶
 	id        uint
 	memberID  uint
 	title     string
@@ -527,4 +587,16 @@ type feedEntry struct {
 	likeCount int64
 	heat      int64
 	publish   time.Time
+}
+
+// FeedEntry 精简跨表条目（导出，GetFeed 与 search 模块组装 FeedItem 共用）。
+// 只携带展示所需字段，不带 home 排序用的 isHot/heat/publish。
+type FeedEntry struct {
+	IsNote    bool   // true=笔记，false=攻略
+	ID        uint   // 笔记ID或攻略ID
+	MemberID  uint   // 作者ID
+	Title     string // 标题
+	VideoURL  string // 视频URL（图文为空）
+	Category  int    // 分类枚举
+	LikeCount int64  // 主表点赞数字段（点赞数缓存未命中时兜底）
 }

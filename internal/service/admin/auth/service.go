@@ -3,30 +3,37 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	response "tuyou/internal/model/dto/response/admin/auth"
+	responseCenter "tuyou/internal/model/dto/response/admin/center"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/auth"
+	repoCenter "tuyou/internal/repository/admin/center"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 
 	"tuyou/internal/service/admin/auth/b64c"
+	"tuyou/internal/stream"
 	"tuyou/pkg/config"
 )
 
 type authService struct {
-	adminRepo auth.AdminRepository
-	redisRepo repository.RedisRepository
+	adminRepo    auth.AdminRepository
+	redisRepo    repository.RedisRepository
+	adminMsgRepo repoCenter.AdminMsgRepository
+	adminHub     *stream.SSEHub
 }
 
-func NewAdminAuthService(adminRepo auth.AdminRepository, redisRepo repository.RedisRepository) AdminAuthService {
-	return &authService{adminRepo: adminRepo, redisRepo: redisRepo}
+func NewAdminAuthService(adminRepo auth.AdminRepository, redisRepo repository.RedisRepository, adminMsgRepo repoCenter.AdminMsgRepository, adminHub *stream.SSEHub) AdminAuthService {
+	return &authService{adminRepo: adminRepo, redisRepo: redisRepo, adminMsgRepo: adminMsgRepo, adminHub: adminHub}
 }
 
 // GetCaptcha 获取图形验证码
@@ -42,7 +49,7 @@ func (s *authService) GetCaptcha(ctx context.Context) (*response.CaptchaResp, er
 }
 
 // Login 登录，只返回 token，管理员信息通过 GetProfile 获取
-func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResp, error) {
+func (s *authService) Login(ctx context.Context, req *request.LoginRequest, userAgent string) (*response.LoginResp, error) {
 
 	if req.Password == "" {
 		return nil, appErrors.ErrMissingParam
@@ -87,7 +94,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 	//值为登录时间戳（毫秒），供按账号维度限制同时在线设备数使用
 	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), time.Now().UnixMilli(), config.Get().JWT.ExpireHours*time.Hour)
 	//限制每账号同时在线设备数：先插入再清理，超限时踢掉最旧的 token
-	s.evictOldestSessions(ctx, admin.ID)
+	//s.evictOldestSessions(ctx, admin.ID)
 
 	//查询角色名称
 	role, err := s.adminRepo.FindRoleNameByRoleID(ctx, admin.RoleID)
@@ -105,6 +112,9 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 		return nil, err
 	}
 
+	// 异步生成设备登录提醒（系统通知，写 msg_info + msg_user_record 并推送未读数），best-effort
+	go s.notifyLogin(context.Background(), admin.ID, userAgent)
+
 	return &response.LoginResp{
 		Token:    token,
 		ID:       strconv.Itoa(int(admin.ID)),
@@ -114,6 +124,45 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 		MenuTree: buildMenuTree(menus),
 		PermKeys: buildPermKeys(perms),
 	}, nil
+}
+
+// notifyLogin 生成设备登录提醒（系统通知）并推送最新未读数，best-effort，失败不影响登录
+func (s *authService) notifyLogin(ctx context.Context, adminID uint, userAgent string) {
+	content := fmt.Sprintf("您的账号于%s在%s登录，如非本人操作，请尽快修改密码",
+		time.Now().Format("2006-01-02 15:04:05"), deviceOf(userAgent))
+	if err := s.adminMsgRepo.Create(ctx, adminID, content); err != nil {
+		return
+	}
+	if cnt, err := s.adminMsgRepo.UnreadCount(ctx, adminID); err == nil {
+		s.adminHub.Publish(adminID, "unread", &responseCenter.AdminUnreadCount{UnreadCount: cnt})
+	}
+}
+
+// deviceOf 从 User-Agent 粗略识别设备与浏览器，用于登录提醒文案
+func deviceOf(ua string) string {
+	os := "未知设备"
+	switch {
+	case strings.Contains(ua, "Windows"):
+		os = "Windows"
+	case strings.Contains(ua, "Macintosh"), strings.Contains(ua, "Mac OS"):
+		os = "macOS"
+	case strings.Contains(ua, "iPhone"), strings.Contains(ua, "iPad"):
+		os = "iOS"
+	case strings.Contains(ua, "Android"):
+		os = "Android"
+	}
+	browser := "未知浏览器"
+	switch {
+	case strings.Contains(ua, "Edg"):
+		browser = "Edge"
+	case strings.Contains(ua, "Chrome"):
+		browser = "Chrome"
+	case strings.Contains(ua, "Firefox"):
+		browser = "Firefox"
+	case strings.Contains(ua, "Safari"):
+		browser = "Safari"
+	}
+	return os + " - " + browser
 }
 
 // buildMenuTree 将扁平菜单列表组装成树

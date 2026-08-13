@@ -1,5 +1,18 @@
 package comment
 
+// 前台评论模块 —— 仓储层接口
+//
+// 分层思想：Service 层只面向这个接口编程（依赖接口，不依赖实现），
+// 好处是：
+//   - Service 的单元测试可以拿一个 mock 实现替换掉真实的 MySQL（见 service 的测试）。
+//   - 换数据库 / 改 SQL 只动 repository.go，Service 一行不改。
+//
+// 方法分类看名字就能懂：
+//   - Find/Count 开头：各种查询（评论、用户、目标、点赞态）
+//   - Create/Delete/Incr/Decr 开头：写操作，几乎都带 tx *gorm.DB（事务对象）
+//
+// 带 tx 参数 = 这个方法必须在调用方开的"事务里"执行，由 service 用 s.db.Transaction 包起来；
+// 不带 tx = 独立查询，直接用仓储自己的 db。这是本项目约定好的规矩。
 import (
 	"tuyou/internal/model/entity"
 
@@ -9,7 +22,7 @@ import (
 // CommentRepository 前台评论仓储接口
 type CommentRepository interface {
 	FindByID(id uint) (*entity.Comment, error)                             // 查评论（不存在→service 转 404）
-	LockCommentByID(tx *gorm.DB, id uint) (*entity.Comment, error)          // 事务内锁评论行（SELECT FOR UPDATE，并发点赞串行化）
+	LockCommentByID(tx *gorm.DB, id uint) (*entity.Comment, error)         // 事务内锁评论行（SELECT FOR UPDATE，并发点赞串行化）
 	CreateCommentLike(tx *gorm.DB, commentID, memberID uint) error         // 点赞
 	DeleteCommentLike(tx *gorm.DB, commentID, memberID uint) (bool, error) // 取消点赞（返回是否真删了）
 	IncrLikeCount(tx *gorm.DB, commentID uint) error                       // 点赞数 +1

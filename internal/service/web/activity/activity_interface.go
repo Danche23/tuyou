@@ -1,6 +1,8 @@
 package activity
 
 import (
+	"tuyou/internal/model/entity"
+
 	requestActivity "tuyou/internal/model/dto/request/web/activity"
 	responseActivity "tuyou/internal/model/dto/response/web/activity"
 )
@@ -21,4 +23,7 @@ type ActivityService interface {
 
 	// GetActivityList 获取活动列表（支持按分类筛选和分页）
 	GetActivityList(memberID uint, req *requestActivity.ListActivityRequest) ([]responseActivity.ActivityListItem, int64, error)
+
+	// BuildActivityItems 组装活动列表项（GetActivityList 与 search 模块共用的唯一实现）
+	BuildActivityItems(memberID uint, activities []entity.Activity) ([]responseActivity.ActivityListItem, error)
 }

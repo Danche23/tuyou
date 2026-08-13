@@ -34,8 +34,9 @@ type FeedItem struct {
 
 // FeedResponse Feed 流响应（分页）
 type FeedResponse struct {
-	List  []FeedItem `json:"list"`  // 当前页数据
-	Total int64      `json:"total"` // 总条数
-	Page  int        `json:"page"`  // 当前页码
-	Size  int        `json:"size"`  // 每页条数
+	List      []FeedItem `json:"list"`       // 当前页数据
+	Total     int64      `json:"total"`      // 总条数
+	TotalPage int        `json:"total_page"` // 总页数
+	Page      int        `json:"page"`       // 当前页码
+	Size      int        `json:"size"`       // 每页条数
 }

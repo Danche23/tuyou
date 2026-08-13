@@ -74,6 +74,17 @@ func (r *activityRepository) ExistsJoin(activityID uint, memberID uint) (bool, e
 	return count > 0, nil
 }
 
+// ExistsFollow 检查当前用户是否已关注领队
+func (r *activityRepository) ExistsFollow(followerID uint, followeeID uint) (bool, error) {
+	var count int64
+	if err := r.db.Model(&entity.Follow{}).
+		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // UpdateActivityStatus 更新活动状态
 func (r *activityRepository) UpdateActivityStatus(activityID uint, status int) error {
 	return r.db.Model(&entity.Activity{}).Where("id = ?", activityID).

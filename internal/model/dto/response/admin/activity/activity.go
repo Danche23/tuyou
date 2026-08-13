@@ -16,7 +16,7 @@ type ActivityListItem struct {
 	Difficulty     string  `json:"difficulty"`       // 难度中文名
 	IsSlide        string  `json:"is_slide"`         // 是否轮播：是/否
 	ActivityStatus string  `json:"activity_status"`  // 活动状态：报名中/进行中/已结束
-	IsDel          string  `json:"is_del"`           // 逻辑删除标记：正常/下架
+	Status         string  `json:"status"`           // 状态：正常/下架
 	DeleteTime     string  `json:"delete_time"`      // 删除时间，未删除时为空字符串
 }
 

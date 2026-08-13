@@ -38,6 +38,7 @@ type GuideDetailResponse struct {
 	Type         string      `json:"type"`
 	Author       *AuthorInfo `json:"author"`
 	IsFollowed   bool        `json:"isFollowed"`
+	IsOwner      bool        `json:"isOwner"`
 	Title        string      `json:"title"`
 	CoverImg     string      `json:"coverImg"`
 	Images       []string    `json:"images"`

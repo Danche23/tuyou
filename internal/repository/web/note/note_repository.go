@@ -9,6 +9,7 @@ import (
 	"tuyou/internal/repository"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -162,24 +163,28 @@ func (r *noteRepository) ExistsCollect(noteID uint, memberID uint) (bool, error)
 	return count > 0, nil
 }
 
-// CreateCollect 创建收藏记录
+// CreateCollect 创建收藏记录；仅实际插入成功才同步 collect_count +1（并发重复收藏不重复计数）
 func (r *noteRepository) CreateCollect(tx *gorm.DB, noteID uint, memberID uint) error {
-	return tx.Create(&entity.NoteCollect{NoteID: noteID, MemberID: memberID}).Error
-}
-
-// DeleteCollect 硬删除收藏记录
-func (r *noteRepository) DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error {
-	return tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteCollect{}).Error
-}
-
-// IncrCollectCount 笔记收藏数 +1
-func (r *noteRepository) IncrCollectCount(tx *gorm.DB, noteID uint) error {
+	res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity.NoteCollect{NoteID: noteID, MemberID: memberID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 已收藏过，不重复计数
+	}
 	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count + 1")).Error
 }
 
-// DecrCollectCount 笔记收藏数 -1
-func (r *noteRepository) DecrCollectCount(tx *gorm.DB, noteID uint) error {
+// DeleteCollect 硬删除收藏记录；仅实际删除成功才同步 collect_count -1（避免并发重复取消把计数减超）
+func (r *noteRepository) DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error {
+	res := tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteCollect{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 本来就没收藏，不减计数
+	}
 	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error
 }
@@ -220,24 +225,28 @@ func (r *noteRepository) ExistsFollow(followerID uint, followeeID uint) (bool, e
 	return count > 0, nil
 }
 
-// CreateLike 创建点赞记录
+// CreateLike 创建点赞记录；仅实际插入成功才同步 like_count +1（并发重复点赞不重复计数）
 func (r *noteRepository) CreateLike(tx *gorm.DB, noteID uint, memberID uint) error {
-	return tx.Create(&entity.NoteLike{NoteID: noteID, MemberID: memberID}).Error
-}
-
-// DeleteLike 删除点赞记录（硬删除，不需要软删除）
-func (r *noteRepository) DeleteLike(tx *gorm.DB, noteID uint, memberID uint) error {
-	return tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteLike{}).Error
-}
-
-// IncrLikeCount 笔记点赞数 +1
-func (r *noteRepository) IncrLikeCount(tx *gorm.DB, noteID uint) error {
+	res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity.NoteLike{NoteID: noteID, MemberID: memberID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 已点赞过，不重复计数
+	}
 	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
 		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
 }
 
-// DecrLikeCount 笔记点赞数 -1
-func (r *noteRepository) DecrLikeCount(tx *gorm.DB, noteID uint) error {
+// DeleteLike 删除点赞记录（硬删除，不需要软删除）；仅实际删除成功才同步 like_count -1（避免并发重复取消把计数减超）
+func (r *noteRepository) DeleteLike(tx *gorm.DB, noteID uint, memberID uint) error {
+	res := tx.Unscoped().Where("note_id = ? AND member_id = ?", noteID, memberID).Delete(&entity.NoteLike{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 本来就没点赞，不减计数
+	}
 	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
 		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
 }

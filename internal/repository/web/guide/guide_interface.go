@@ -55,12 +55,6 @@ type GuideRepository interface {
 	// DeleteLike 删除点赞记录（硬删除）
 	DeleteLike(tx *gorm.DB, strategyID uint, memberID uint) error
 
-	// IncrLikeCount 攻略点赞数 +1
-	IncrLikeCount(tx *gorm.DB, strategyID uint) error
-
-	// DecrLikeCount 攻略点赞数 -1
-	DecrLikeCount(tx *gorm.DB, strategyID uint) error
-
 	// GetCachedLikeStatus 读取点赞状态缓存（found=false 表示缓存未命中）
 	GetCachedLikeStatus(ctx context.Context, strategyID, memberID uint) (isLiked bool, found bool, err error)
 
@@ -81,12 +75,6 @@ type GuideRepository interface {
 
 	// DeleteCollect 删除收藏记录（硬删除）
 	DeleteCollect(tx *gorm.DB, strategyID uint, memberID uint) error
-
-	// IncrCollectCount 攻略收藏数 +1
-	IncrCollectCount(tx *gorm.DB, strategyID uint) error
-
-	// DecrCollectCount 攻略收藏数 -1
-	DecrCollectCount(tx *gorm.DB, strategyID uint) error
 
 	// GetCachedCollectStatus 读取收藏状态缓存（found=false 表示缓存未命中）
 	GetCachedCollectStatus(ctx context.Context, strategyID, memberID uint) (isFavorited bool, found bool, err error)

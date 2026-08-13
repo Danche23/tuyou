@@ -57,6 +57,7 @@ type MemberInfo struct {
 type ActivityDetailResponse struct {
 	ID              string       `json:"id"`
 	Leader          *LeaderInfo  `json:"leader"`
+	IsOwner         bool         `json:"isOwner"`
 	Title           string       `json:"title"`
 	CoverImg        string       `json:"coverImg"`
 	Category        string       `json:"category"`
@@ -71,6 +72,7 @@ type ActivityDetailResponse struct {
 	Price           float64      `json:"price"`
 	Difficulty      string       `json:"difficulty"`
 	ActivityStatus  string       `json:"activityStatus"`
+	IsFollowed      bool         `json:"isFollowed"`
 	Joined          bool         `json:"joined"`
 	Members         []MemberInfo `json:"members"`
 }
