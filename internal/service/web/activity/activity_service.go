@@ -337,7 +337,18 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
 
-	// ========== 4. 批量获取领队信息 ==========
+	// ========== 4. 组装响应：复用 BuildActivityItems（唯一实现，search 模块共用） ==========
+	list, err := s.BuildActivityItems(memberID, activities)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return list, total, nil
+}
+
+// BuildActivityItems 组装活动列表项（唯一实现，GetActivityList 与 search 模块共用）
+func (s *activityService) BuildActivityItems(memberID uint, activities []entity.Activity) ([]responseActivity.ActivityListItem, error) {
+	// ========== 1. 批量获取领队信息 ==========
 	leaderIDSet := make(map[uint]bool)
 	uniqueLeaderIDs := make([]uint, 0)
 	for _, a := range activities {
@@ -348,24 +359,24 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 	}
 	members, err := s.activityRepo.GetMembersByIDs(uniqueLeaderIDs)
 	if err != nil {
-		return nil, 0, errors.New(errors.CodeInternalError, "查询领队信息失败")
+		return nil, errors.New(errors.CodeInternalError, "查询领队信息失败")
 	}
 	memberMap := make(map[uint]*entity.Member, len(members))
 	for i := range members {
 		memberMap[members[i].ID] = &members[i]
 	}
 
-	// ========== 5. 批量查询当前用户的报名状态 ==========
+	// ========== 2. 批量查询当前用户的报名状态 ==========
 	activityIDs := make([]uint, len(activities))
 	for i, a := range activities {
 		activityIDs[i] = a.ID
 	}
 	joinedMap, err := s.activityRepo.FindJoinedActivityIDs(activityIDs, memberID)
 	if err != nil {
-		return nil, 0, errors.New(errors.CodeInternalError, "查询报名状态失败")
+		return nil, errors.New(errors.CodeInternalError, "查询报名状态失败")
 	}
 
-	// ========== 6. 组装响应 ==========
+	// ========== 3. 组装响应 ==========
 	list := make([]responseActivity.ActivityListItem, 0, len(activities))
 	for _, a := range activities {
 		// 领队信息
@@ -400,7 +411,7 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 		})
 	}
 
-	return list, total, nil
+	return list, nil
 }
 
 var categoryStrToInt = map[string]int{
