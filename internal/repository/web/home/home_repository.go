@@ -1,6 +1,9 @@
 package home
 
 import (
+	"strconv"
+	"strings"
+
 	"gorm.io/gorm"
 	"tuyou/internal/model/entity"
 )
@@ -175,26 +178,84 @@ func (r *homeRepository) CountFeedStrategies(category int) (int64, error) {
 	return count, err
 }
 
+// FindHotTagIDs 查询热门标签ID（is_hot=1 且启用未删）
+func (r *homeRepository) FindHotTagIDs() ([]uint, error) {
+	var ids []uint
+	if err := r.db.Model(&entity.Tag{}).
+		Where("is_hot = ? AND status = ?", 1, 1).
+		Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// FindHotNoteIDs 查询带热门标签的笔记ID集合（去重）
+func (r *homeRepository) FindHotNoteIDs(hotTagIDs []uint) ([]uint, error) {
+	if len(hotTagIDs) == 0 {
+		return nil, nil
+	}
+	var ids []uint
+	if err := r.db.Model(&entity.NoteTag{}).
+		Where("tag_id IN ?", hotTagIDs).
+		Distinct("note_id").
+		Pluck("note_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// FindHotStrategyIDs 查询带热门标签的攻略ID集合（去重）
+func (r *homeRepository) FindHotStrategyIDs(hotTagIDs []uint) ([]uint, error) {
+	if len(hotTagIDs) == 0 {
+		return nil, nil
+	}
+	var ids []uint
+	if err := r.db.Model(&entity.StrategyTag{}).
+		Where("tag_id IN ?", hotTagIDs).
+		Distinct("strategy_id").
+		Pluck("strategy_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // FindFeedNotes 按排序窗口取笔记（limit = offset+size，软删除由 GORM 自动过滤）
-func (r *homeRepository) FindFeedNotes(category int, order string, limit int) ([]entity.Note, error) {
+// hotIDs 非空时，ORDER BY 前拼接热门置顶 CASE，保证热门内容整体排在前面。
+func (r *homeRepository) FindFeedNotes(category int, order string, limit int, hotIDs []uint) ([]entity.Note, error) {
 	var list []entity.Note
 	q := r.db.Where("status = ?", 1)
 	if category > 0 {
 		q = q.Where("category = ?", category)
+	}
+	if len(hotIDs) > 0 {
+		order = "CASE WHEN id IN (" + joinUintIDs(hotIDs) + ") THEN 0 ELSE 1 END, " + order
 	}
 	err := q.Order(order).Limit(limit).Find(&list).Error
 	return list, err
 }
 
 // FindFeedStrategies 按排序窗口取攻略（limit = offset+size，软删除由 GORM 自动过滤）
-func (r *homeRepository) FindFeedStrategies(category int, order string, limit int) ([]entity.Strategy, error) {
+// hotIDs 非空时，ORDER BY 前拼接热门置顶 CASE，保证热门内容整体排在前面。
+func (r *homeRepository) FindFeedStrategies(category int, order string, limit int, hotIDs []uint) ([]entity.Strategy, error) {
 	var list []entity.Strategy
 	q := r.db.Where("status = ?", 1)
 	if category > 0 {
 		q = q.Where("category = ?", category)
 	}
+	if len(hotIDs) > 0 {
+		order = "CASE WHEN id IN (" + joinUintIDs(hotIDs) + ") THEN 0 ELSE 1 END, " + order
+	}
 	err := q.Order(order).Limit(limit).Find(&list).Error
 	return list, err
+}
+
+// joinUintIDs 把 uint 切片拼成逗号分隔的字符串，用于安全内联进 ORDER BY CASE（ID 来自数据库，安全）
+func joinUintIDs(ids []uint) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatUint(uint64(id), 10)
+	}
+	return strings.Join(parts, ",")
 }
 
 // FindMembersByIDs 批量查询会员信息
