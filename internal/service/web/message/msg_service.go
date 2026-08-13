@@ -5,6 +5,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
+	"tuyou/internal/stream"
 
 	"gorm.io/gorm"
 	requestMsg "tuyou/internal/model/dto/request/web/message"
@@ -23,11 +25,12 @@ const (
 type msgService struct {
 	msgRepo repoMsg.MessageRepository
 	db      *gorm.DB
+	hub     *stream.SSEHub
 }
 
 // NewMessageService 创建消息服务实例
-func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB) MessageService {
-	return &msgService{msgRepo: msgRepo, db: db}
+func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub) MessageService {
+	return &msgService{msgRepo: msgRepo, db: db, hub: hub}
 }
 
 // GetInteractions 获取互动消息列表
@@ -72,6 +75,23 @@ func (s *msgService) MarkRead(memberID, msgID uint) error {
 func (s *msgService) MarkAllRead(memberID uint) error {
 	if err := s.msgRepo.MarkAllRead(memberID); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "标记全部已读失败", err)
+	}
+	return nil
+}
+
+// Delete 删除单条消息（软删除：is_user_del=1，列表/未读数自动排除）
+func (s *msgService) Delete(memberID, msgID uint) error {
+	err := s.msgRepo.DeleteUserMessage(memberID, msgID)
+	if err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New(errors.CodeNotFound, "消息不存在")
+		}
+		return errors.NewWithErr(errors.CodeInternalError, "删除消息失败", err)
+	}
+
+	// 删除可能影响未读数（删了未读消息），推送最新未读数让角标实时更新
+	if uc, err := s.UnreadCount(memberID); err == nil {
+		s.hub.Publish(memberID, "unread", uc)
 	}
 	return nil
 }
@@ -126,11 +146,56 @@ func (s *msgService) Reply(memberID, msgID uint, content string) error {
 		ReplyToID:  &commentID,
 		Status:     1,
 	}
+	// 查询回复者昵称，渲染消息正文
+	nickname, _ := s.msgRepo.FindMemberNickname(memberID)
+	msgContent := "回复了你的内容 " + content
+	if nickname != "" {
+		msgContent = "「" + nickname + "」" + msgContent
+	}
+
+	// 事务：插入回复评论 + 给原评论作者生成一条互动消息（msg_info + msg_user_record）
+	info := &entity.MsgInfo{
+		MsgType:        msgTypeInteraction, // 1=互动消息
+		ReceiveObjType: 1,                  // 1=指定会员
+		SenderID:       memberID,           // 发送者=回复者
+		TemplateID:     10,                 // 回复通知模板
+		MsgContent:     msgContent,
+		SendTime:       time.Now(),
+		CommentID:      commentID, // 关联原评论，接收者可再回复
+	}
+	record := &entity.MsgUserRecord{
+		ReceiveMemberID: c.MemberID, // 接收者=原评论作者
+		IsRead:          0,
+		IsUserDel:       0,
+	}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		return s.msgRepo.CreateComment(tx, reply)
+		if err := s.msgRepo.CreateComment(tx, reply); err != nil {
+			return err
+		}
+		if err := s.msgRepo.CreateMessage(tx, info); err != nil {
+			return err
+		}
+		record.MsgID = info.ID // Create 后 gorm 回填主键
+		return s.msgRepo.CreateUserRecord(tx, record)
 	}); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "回复失败", err)
 	}
+
+	//SSE推送
+	//回复成功 -> 给原评论作者推一条实时通知
+	// 非阻塞：对方离线/缓冲满直接丢弃，下次上线靠 /stream 连接时的未读数兜底。
+	s.hub.Publish(c.MemberID, "comment-reply", map[string]any{
+		"replyId":   reply.ID,
+		"replyToId": commentID,
+		"content":   content,
+		"senderId":  memberID,
+	})
+
+	// 推送最新未读数，前端角标实时更新
+	if uc, err := s.UnreadCount(c.MemberID); err == nil {
+		s.hub.Publish(c.MemberID, "unread", uc)
+	}
+
 	return nil
 }
 

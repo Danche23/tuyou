@@ -116,3 +116,41 @@ func (r *msgRepository) FindCommentByID(commentID uint) (*entity.Comment, error)
 func (r *msgRepository) CreateComment(tx *gorm.DB, c *entity.Comment) error {
 	return tx.Create(c).Error
 }
+
+// FindMemberNickname 查询会员昵称（消息正文渲染用）
+func (r *msgRepository) FindMemberNickname(memberID uint) (string, error) {
+	var row struct {
+		Nickname string `gorm:"column:nickname"`
+	}
+	if err := r.db.Table("member").Select("nickname").Where("id = ?", memberID).Scan(&row).Error; err != nil {
+		return "", err
+	}
+	return row.Nickname, nil
+}
+
+// CreateMessage 在事务中插入消息主表
+func (r *msgRepository) CreateMessage(tx *gorm.DB, info *entity.MsgInfo) error {
+	return tx.Create(info).Error
+}
+
+// CreateUserRecord 在事务中插入用户接收记录
+func (r *msgRepository) CreateUserRecord(tx *gorm.DB, record *entity.MsgUserRecord) error {
+	return tx.Create(record).Error
+}
+
+// DeleteUserMessage 软删除消息（is_user_del=1）
+// 先查存在性再更新：该会员无此消息记录时返回 gorm.ErrRecordNotFound。
+func (r *msgRepository) DeleteUserMessage(memberID, msgID uint) error {
+	var cnt int64
+	if err := r.db.Model(&entity.MsgUserRecord{}).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0", msgID, memberID).
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return r.db.Model(&entity.MsgUserRecord{}).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0", msgID, memberID).
+		UpdateColumn("is_user_del", 1).Error
+}

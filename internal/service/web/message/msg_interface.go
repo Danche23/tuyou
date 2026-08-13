@@ -19,4 +19,6 @@ type MessageService interface {
 	Reply(memberID, msgID uint, content string) error
 	// UnreadCount 未读消息数（含 total/interactions/system）
 	UnreadCount(memberID uint) (*responseMsg.UnreadCount, error)
+	// Delete 删除单条消息（软删除）
+	Delete(memberID, msgID uint) error
 }

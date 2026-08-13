@@ -9,6 +9,7 @@ import (
 	responseNote "tuyou/internal/model/dto/response/web/note"
 	"tuyou/internal/model/entity"
 	repoNote "tuyou/internal/repository/web/note"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
 
@@ -18,11 +19,12 @@ import (
 type noteService struct {
 	noteRepo repoNote.NoteRepository
 	db       *gorm.DB
+	notifier *serviceMsg.Notifier
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db}
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, notifier *serviceMsg.Notifier) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, notifier: notifier}
 }
 
 // CreateNote 发布笔记
@@ -220,6 +222,12 @@ func (s *noteService) ToggleLikeNote(noteID uint, memberID uint) (*responseNote.
 	}
 
 	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 点赞成功 → 给内容作者发实时通知（取消赞不通知；自己赞自己不通知）
+	if !liked {
+		s.notifier.NotifyLike(note.MemberID, memberID, note.Title)
+	}
+
+	// 同步缓存
 	s.noteRepo.SetCachedLikeStatus(ctx, noteID, memberID, !liked)
 	if fresh, err := s.noteRepo.FindByID(noteID); err == nil {
 		note = fresh
@@ -256,6 +264,11 @@ func (s *noteService) ToggleCollectNote(noteID uint, memberID uint) (*responseNo
 	}
 
 	// 同步缓存：状态写本次结果；数量用事务后重查的真实值，避免并发下「旧值±1」写脏缓存
+	// 收藏成功 → 给内容作者发实时通知（取消收藏不通知）
+	if !favorite {
+		s.notifier.NotifyCollect(note.MemberID, memberID, note.Title)
+	}
+
 	s.noteRepo.SetCachedCollectStatus(ctx, noteID, memberID, !favorite)
 	if fresh, err := s.noteRepo.FindByID(noteID); err == nil {
 		note = fresh
