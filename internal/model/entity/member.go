@@ -2,6 +2,15 @@ package entity
 
 import "time"
 
+// 会员资料默认值：注册时写入 member 表。
+// 这样所有读 member 表的模块（笔记/攻略/评论/个人主页）都能取到非空头像与背景图，
+// 避免只在某一模块做常量兜底导致其他模块（新用户发布笔记/攻略）取到空头像。
+const (
+	DefaultAvatar = "https://tuyou1.oss-cn-beijing.aliyuncs.com/images/2026/08/10/%E9%BB%98%E8%AE%A4%E5%A4%B4%E5%83%8F.png"                 // 默认头像：小图
+	DefaultBio    = "这个人很懒，什么都没留下"                                                                                             // 默认简介
+	DefaultBgImg  = "https://tuyou1.oss-cn-beijing.aliyuncs.com/images/2026/08/10/%E9%BB%98%E8%AE%A4%E8%83%8C%E6%99%AF%E5%9B%BE.jpg" // 默认背景图：大图
+)
+
 // Member 会员主表（普通会员、领队共用基础信息）
 type Member struct {
 	BaseEntity

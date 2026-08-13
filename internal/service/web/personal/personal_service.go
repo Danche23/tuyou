@@ -19,12 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// 个人主页兜底默认值（数据库里没填时返回给前端）
-const (
-	defaultAvatar = "https://tuyou1.oss-cn-beijing.aliyuncs.com/images/2026/08/10/%E9%BB%98%E8%AE%A4%E5%A4%B4%E5%83%8F.png" // 头像：小图
-	defaultBio    = "这个人很懒，什么都没留下"
-	defaultBgImg  = "https://tuyou1.oss-cn-beijing.aliyuncs.com/images/2026/08/10/%E9%BB%98%E8%AE%A4%E8%83%8C%E6%99%AF%E5%9B%BE.jpg" // 背景图：大图
-)
+// 个人主页兜底默认值（数据库里没填时返回给前端；默认值本体现在在 entity.Member，注册时已写入库）
 
 type personalService struct {
 	db           *gorm.DB
@@ -58,9 +53,9 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 	return &responsePersonal.Profile{
 		ID:           strconv.FormatUint(uint64(member.ID), 10),
 		Nickname:     strOr(member.Nickname, "用户"+strconv.FormatUint(uint64(member.ID), 10)),
-		Avatar:       strOr(member.Avatar, defaultAvatar),
-		Bio:          strOr(member.Bio, defaultBio),
-		BgImg:        strOr(member.BgImg, defaultBgImg),
+		Avatar:       strOr(member.Avatar, entity.DefaultAvatar),
+		Bio:          strOr(member.Bio, entity.DefaultBio),
+		BgImg:        strOr(member.BgImg, entity.DefaultBgImg),
 		PublishCount: member.PublishCount,
 		FollowCount:  member.FollowCount,
 		FansCount:    member.FansCount,
@@ -69,10 +64,10 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 
 func (s *personalService) UpdateProfile(memberID uint, req *requestPersonal.UpdateProfileRequest) (*responsePersonal.Profile, error) {
 	updates := map[string]interface{}{
-		"avatar":   req.Avatar,
+		"avatar":   strOr(req.Avatar, entity.DefaultAvatar), // 空值回写默认，避免把库里的默认头像清空
 		"nickname": req.Nickname,
-		"bio":      req.Bio,
-		"bg_img":   req.BgImg,
+		"bio":      strOr(req.Bio, entity.DefaultBio),
+		"bg_img":   strOr(req.BgImg, entity.DefaultBgImg),
 	}
 
 	if err := s.repo.UpdateProfile(memberID, updates); err != nil {
@@ -287,7 +282,7 @@ func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([
 	if len(activities) == 0 {
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, memberID, false)
+	list, err := s.buildActivityCards(activities, false)
 	if err != nil {
 		return nil, total, err
 	}
@@ -303,7 +298,7 @@ func (s *personalService) GetJoinActivities(memberID uint, page, size int) ([]re
 	if len(activities) == 0 {
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, memberID, true)
+	list, err := s.buildActivityCards(activities, true)
 	if err != nil {
 		return nil, total, err
 	}
@@ -452,7 +447,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 
 // buildActivityCards 把活动实体组装成列表项（批量查领队 + 报名状态）
 // joined：true 表示该列表中的活动全部视为已报名（如"我参加的活动"），false 表示全部未报名（如"我发布的活动"）
-func (s *personalService) buildActivityCards(activities []entity.Activity, memberID uint, joined bool) ([]responseActivity.ActivityListItem, error) {
+func (s *personalService) buildActivityCards(activities []entity.Activity, joined bool) ([]responseActivity.ActivityListItem, error) {
 	// 批量获取领队信息
 	leaderIDSet := make(map[uint]bool)
 	uniqueLeaderIDs := make([]uint, 0)
