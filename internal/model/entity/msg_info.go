@@ -2,6 +2,13 @@ package entity
 
 import "time"
 
+// 接收对象类型（receive_obj_type 取值约定）
+const (
+	ReceiveObjTypeAll    = 0 // 全体系统用户
+	ReceiveObjTypeMember = 1 // 指定会员
+	ReceiveObjTypeAdmin  = 2 // 指定管理员（后台个人消息，receive_member_id 存管理员id）
+)
+
 // MsgInfo 消息主表（系统推送消息）
 type MsgInfo struct {
 	BaseEntity
