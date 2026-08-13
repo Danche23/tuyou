@@ -4,6 +4,7 @@ import (
 	activityAdmin "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	"tuyou/internal/api/v1/admin/center"
+	commentAdmin "tuyou/internal/api/v1/admin/comment"
 	guideAdmin "tuyou/internal/api/v1/admin/guide"
 	"tuyou/internal/api/v1/admin/member"
 	noteAdmin "tuyou/internal/api/v1/admin/note"
@@ -35,6 +36,7 @@ type Router struct {
 	authHandler       *handlerAuth.AuthHandler
 	adminHandler      *handlerAdmin.AdminHandler
 	centerCtrl        *center.Controller
+	commentAdminCtrl  *commentAdmin.Controller
 	noteCtrl          *note.Controller
 	personalCtrl      *personal.Controller
 	commentCtrl       *commentCtrl.Controller
@@ -72,6 +74,7 @@ func NewRouter(
 	adminRoleCtrl *adminRoleCtrl.Controller,
 	guideCtrl *guide.Controller,
 	centerCtrl *center.Controller,
+	commentAdminCtrl *commentAdmin.Controller,
 	activityCtrl *activity.Controller,
 	noteAdminCtrl *noteAdmin.Controller,
 	guideAdminCtrl *guideAdmin.Controller,
@@ -99,6 +102,7 @@ func NewRouter(
 		guideCtrl:         guideCtrl,
 		activityCtrl:      activityCtrl,
 		centerCtrl:        centerCtrl,
+		commentAdminCtrl:  commentAdminCtrl,
 		noteAdminCtrl:     noteAdminCtrl,
 		guideAdminCtrl:    guideAdminCtrl,
 		activityAdminCtrl: activityAdminCtrl,
@@ -145,7 +149,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 		//web个人模块路由
 		r.personalCtrl.RegisterRoutes(apiGroup)
 
-		// web评论路由
+		// web评论路由（前台，/api/v1/comments，用户视角，MemberAuth 登录）
 		r.commentCtrl.RegisterRoutes(apiGroup)
 
 		// 后台会员管理路由
@@ -171,6 +175,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台个人中心路由
 		r.centerCtrl.RegisterRoutes(apiGroup)
+
+		// 后台评论管理路由（/api/v1/admin/comments，运营视角，Auth 管理员登录）
+		r.commentAdminCtrl.RegisterRoutes(apiGroup)
 
 		// 后台笔记管理路由
 		r.noteAdminCtrl.RegisterRoutes(apiGroup)
