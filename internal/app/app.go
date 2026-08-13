@@ -288,7 +288,7 @@ func (a *App) initDependencies() {
 	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
-	searchSvc := serviceSearch.NewSearchService(searchRepo)
+	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
 	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
