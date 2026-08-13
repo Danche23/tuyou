@@ -194,7 +194,7 @@ func collectStrategyIDs(strategies []entity.Strategy) []uint {
 
 // GetFeed 获取Feed流（笔记/攻略跨表合并，瀑布流分页）
 //
-// 排序：推荐=点赞数倒序→热度倒序→发布时间倒序；最新=发布时间倒序；最热=热度倒序→点赞数倒序。
+// 排序：推荐=热门标签内容置顶→发布时间倒序（无热门标签时退化为纯发布时间倒序）；最新=发布时间倒序；最热=热度倒序→点赞数倒序。
 // 分页：笔记/攻略各按同一排序子句取 offset+size 条，内存归并排序后截取当前页，保证跨表分页正确。
 // 点赞状态/点赞数：Redis 缓存优先 → 未命中用 DB/主表字段兜底 → 回填缓存（与详情页读写一致）。
 func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*responseHome.FeedResponse, error) {
@@ -222,6 +222,33 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 		category = 0
 	}
 
+	// ========== 推荐模式：热门标签内容置顶 ==========
+	// 热门标签 is_hot=1 的标签 → 带这些标签的笔记/攻略 ID 集合；
+	// 无热门标签时集合为空，排序退化为纯发布时间倒序（等于「最新」）。
+	var hotNoteIDs, hotStrategyIDs []uint
+	hotNoteSet := make(map[uint]bool)
+	hotStrategySet := make(map[uint]bool)
+	if sortMode == "推荐" {
+		hotTagIDs, err := s.homeRepo.FindHotTagIDs()
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门标签失败", err)
+		}
+		hotNoteIDs, err = s.homeRepo.FindHotNoteIDs(hotTagIDs)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门笔记失败", err)
+		}
+		hotStrategyIDs, err = s.homeRepo.FindHotStrategyIDs(hotTagIDs)
+		if err != nil {
+			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热门攻略失败", err)
+		}
+		for _, id := range hotNoteIDs {
+			hotNoteSet[id] = true
+		}
+		for _, id := range hotStrategyIDs {
+			hotStrategySet[id] = true
+		}
+	}
+
 	// ========== 跨表统计总数 ==========
 	totalNotes, err := s.homeRepo.CountFeedNotes(category)
 	if err != nil {
@@ -240,11 +267,11 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 	offset := (page - 1) * size
 	limit := offset + size
 
-	notes, err := s.homeRepo.FindFeedNotes(category, order, limit)
+	notes, err := s.homeRepo.FindFeedNotes(category, order, limit, hotNoteIDs)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询笔记失败", err)
 	}
-	strategies, err := s.homeRepo.FindFeedStrategies(category, order, limit)
+	strategies, err := s.homeRepo.FindFeedStrategies(category, order, limit, hotStrategyIDs)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询攻略失败", err)
 	}
@@ -256,6 +283,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			isNote: true, id: n.ID, memberID: n.MemberID, title: n.Title,
 			videoURL: n.VideoURL, category: n.Category,
 			likeCount: n.LikeCount, heat: int64(n.Heat), publish: n.PublishTime,
+			isHot: hotNoteSet[n.ID],
 		})
 	}
 	for _, st := range strategies {
@@ -263,6 +291,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			isNote: false, id: st.ID, memberID: st.MemberID, title: st.Title,
 			videoURL: st.VideoURL, category: st.Category,
 			likeCount: st.LikeCount, heat: int64(st.Heat), publish: st.PublishTime,
+			isHot: hotStrategySet[st.ID],
 		})
 	}
 	sort.Slice(merged, func(i, j int) bool {
@@ -279,12 +308,9 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 			if a.likeCount != b.likeCount {
 				return a.likeCount > b.likeCount
 			}
-		default: // 推荐
-			if a.likeCount != b.likeCount {
-				return a.likeCount > b.likeCount
-			}
-			if a.heat != b.heat {
-				return a.heat > b.heat
+		default: // 推荐：热门置顶 → 发布时间倒序 → id 倒序
+			if a.isHot != b.isHot {
+				return a.isHot
 			}
 			if !a.publish.Equal(b.publish) {
 				return a.publish.After(b.publish)
@@ -522,8 +548,9 @@ var activityCategory = map[int]string{
 }
 
 // feedOrderMap 排序模式 → SQL 排序子句（含 id 兜底，保证跨表分页窗口稳定）
+// 推荐：热门置顶 CASE 由仓储在 hotIDs 非空时动态拼接，此处为基础时间序；无热门时即等于「最新」。
 var feedOrderMap = map[string]string{
-	"推荐": "like_count DESC, heat DESC, publish_time DESC, id DESC",
+	"推荐": "publish_time DESC, id DESC",
 	"最新": "publish_time DESC, id DESC",
 	"最热": "heat DESC, like_count DESC, id DESC",
 }
@@ -531,6 +558,7 @@ var feedOrderMap = map[string]string{
 // feedEntry 跨表归并排序用的中间结构
 type feedEntry struct {
 	isNote    bool
+	isHot     bool // 推荐模式：是否带热门标签（is_hot=1），热门整体置顶
 	id        uint
 	memberID  uint
 	title     string
