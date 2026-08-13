@@ -87,13 +87,14 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg        *config.Config
-	mysqlDB    *gorm.DB
-	redis      *redis.Client
-	router     *api.Router
-	server     *http.Server
-	consumer   *stream.Consumer
-	heatTicker *time.Ticker
+	cfg               *config.Config
+	mysqlDB           *gorm.DB
+	redis             *redis.Client
+	router            *api.Router
+	server            *http.Server
+	consumer          *stream.Consumer
+	heatTicker        *time.Ticker
+	commentHeatTicker *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -274,7 +275,7 @@ func (a *App) initDependencies() {
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
-	personalCtrl := personal.NewController(personalSvc)
+	personalCtrl := personal.NewController(personalSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
 	commentC := commentCtrl.NewController(commentSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
@@ -302,6 +303,8 @@ func (a *App) initDependencies() {
 	a.consumer.Start()
 	// ========== 启动热度重算定时任务 ==========
 	a.heatTicker = task.StartHeatJob(a.mysqlDB)
+	// ========== 启动评论热度/评论数校准定时任务 ==========
+	a.commentHeatTicker = task.StartCommentHeatJob(a.mysqlDB)
 }
 
 // initRouter 初始化路由
@@ -368,6 +371,11 @@ func (a *App) gracefulShutdown() {
 	// 停止热度重算定时任务
 	if a.heatTicker != nil {
 		a.heatTicker.Stop()
+	}
+
+	// 停止评论热度/评论数校准定时任务
+	if a.commentHeatTicker != nil {
+		a.commentHeatTicker.Stop()
 	}
 
 	// 关闭路由连接

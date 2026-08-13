@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"tuyou/internal/middleware"
 	requestPersonal "tuyou/internal/model/dto/request/web/personal"
+	"tuyou/internal/repository"
 	servicePersonal "tuyou/internal/service/web/personal"
 	"tuyou/pkg/response"
 
@@ -14,11 +15,12 @@ import (
 // Controller 个人中心控制器
 type Controller struct {
 	personalSvc servicePersonal.PersonalService
+	redisRepo   repository.RedisRepository // MemberAuth 中间件需要
 }
 
 // NewController 创建控制器实例
-func NewController(personalSvc servicePersonal.PersonalService) *Controller {
-	return &Controller{personalSvc: personalSvc}
+func NewController(personalSvc servicePersonal.PersonalService, redisRepo repository.RedisRepository) *Controller {
+	return &Controller{personalSvc: personalSvc, redisRepo: redisRepo}
 }
 
 func (c *Controller) GetProfile(ctx *gin.Context) {
