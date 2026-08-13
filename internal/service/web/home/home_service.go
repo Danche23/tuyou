@@ -2,6 +2,7 @@ package home
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -260,7 +261,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 	}
 	total := totalNotes + totalStrategies
 	if total == 0 {
-		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: 0, Page: page, Size: size}, nil
+		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: 0, TotalPage: int(math.Ceil(float64(0) / float64(size))), Page: page, Size: size}, nil
 	}
 
 	// ========== 窗口拉取（每表取 offset+size 条，足够覆盖全局第 offset 条） ==========
@@ -321,7 +322,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 
 	// ========== 截取当前页 ==========
 	if offset >= len(merged) {
-		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: total, Page: page, Size: size}, nil
+		return &responseHome.FeedResponse{List: []responseHome.FeedItem{}, Total: total, TotalPage: int(math.Ceil(float64(total) / float64(size))), Page: page, Size: size}, nil
 	}
 	end := offset + size
 	if end > len(merged) {
@@ -424,7 +425,7 @@ func (s *homeService) GetFeed(memberID uint, req *requestHome.FeedRequest) (*res
 		items = append(items, item)
 	}
 
-	return &responseHome.FeedResponse{List: items, Total: total, Page: page, Size: size}, nil
+	return &responseHome.FeedResponse{List: items, Total: total, TotalPage: int(math.Ceil(float64(total) / float64(size))), Page: page, Size: size}, nil
 }
 
 // resolveNoteLikes 笔记点赞状态：Redis 缓存优先，未命中批量查 DB 并回填缓存
