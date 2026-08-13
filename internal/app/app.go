@@ -25,6 +25,7 @@ import (
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
+	commentCtrl "tuyou/internal/api/v1/web/comment"
 	"tuyou/internal/api/v1/web/guide"
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	webMemberCtrl "tuyou/internal/api/v1/web/member"
@@ -46,6 +47,7 @@ import (
 	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
 	"tuyou/internal/repository/web/auth"
+	repoComment "tuyou/internal/repository/web/comment"
 	repoGuide "tuyou/internal/repository/web/guide"
 	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
@@ -65,6 +67,7 @@ import (
 	serviceUpload "tuyou/internal/service/upload"
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceAuth "tuyou/internal/service/web/auth"
+	serviceComment "tuyou/internal/service/web/comment"
 	serviceGuide "tuyou/internal/service/web/guide"
 	serviceHome "tuyou/internal/service/web/home"
 	serviceNote "tuyou/internal/service/web/note"
@@ -84,13 +87,14 @@ import (
 
 // App 应用结构体
 type App struct {
-	cfg        *config.Config
-	mysqlDB    *gorm.DB
-	redis      *redis.Client
-	router     *api.Router
-	server     *http.Server
-	consumer   *stream.Consumer
-	heatTicker *time.Ticker
+	cfg               *config.Config
+	mysqlDB           *gorm.DB
+	redis             *redis.Client
+	router            *api.Router
+	server            *http.Server
+	consumer          *stream.Consumer
+	heatTicker        *time.Ticker
+	commentHeatTicker *time.Ticker
 }
 
 // NewApp 创建应用实例
@@ -241,6 +245,7 @@ func (a *App) initDependencies() {
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
+	commentRepo := repoComment.NewCommentRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
@@ -261,6 +266,7 @@ func (a *App) initDependencies() {
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB)
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo)
+	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	uploadSvc := serviceUpload.NewUploadService(store)
@@ -269,8 +275,9 @@ func (a *App) initDependencies() {
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
-	personalCtrl := personal.NewController(personalSvc)
+	personalCtrl := personal.NewController(personalSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
+	commentC := commentCtrl.NewController(commentSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
 	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
@@ -289,13 +296,15 @@ func (a *App) initDependencies() {
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagC, webMemberC, homeC, uploadC, workbenchC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
 	a.consumer.Start()
 	// ========== 启动热度重算定时任务 ==========
 	a.heatTicker = task.StartHeatJob(a.mysqlDB)
+	// ========== 启动评论热度/评论数校准定时任务 ==========
+	a.commentHeatTicker = task.StartCommentHeatJob(a.mysqlDB)
 }
 
 // initRouter 初始化路由
@@ -362,6 +371,11 @@ func (a *App) gracefulShutdown() {
 	// 停止热度重算定时任务
 	if a.heatTicker != nil {
 		a.heatTicker.Stop()
+	}
+
+	// 停止评论热度/评论数校准定时任务
+	if a.commentHeatTicker != nil {
+		a.commentHeatTicker.Stop()
 	}
 
 	// 关闭路由连接

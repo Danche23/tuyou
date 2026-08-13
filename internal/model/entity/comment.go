@@ -7,8 +7,10 @@ type Comment struct {
 	TargetID   uint   `gorm:"column:target_id;not null;index:idx_target;comment:关联笔记/攻略ID" json:"targetId"`
 	MemberID   uint   `gorm:"column:member_id;not null;index;comment:评论者member表ID" json:"memberId"`
 	Content    string `gorm:"type:text;not null;comment:评论内容" json:"content"`
-	ReplyToID  *uint  `gorm:"column:reply_to_id;index;comment:回复目标评论ID，NULL=一级评论" json:"replyToId"`
-	LikeCount  int64  `gorm:"type:bigint;default:0;column:like_count;comment:点赞总数" json:"likeCount"`
+	ReplyToID        *uint  `gorm:"column:reply_to_id;index;comment:回复目标评论ID，NULL=一级评论" json:"replyToId"`
+	ReplyToMemberID  *uint  `gorm:"column:reply_to_member_id;index;comment:被回复的用户member表ID，NULL=一级评论无被回复用户" json:"replyToMemberId"`
+	LikeCount        int64  `gorm:"type:bigint;default:0;column:like_count;comment:点赞总数" json:"likeCount"`
+	Heat             int64  `gorm:"type:bigint;default:0;column:heat;comment:热度值(互动分×时间因子+新鲜度加分)，写操作时异步更新" json:"heat"`
 	Status     int    `gorm:"type:tinyint;default:1;index;comment:评论状态：0=下架/删除，1=正常" json:"status"`
 }
 

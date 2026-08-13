@@ -9,10 +9,10 @@ import (
 // RegisterRoutes 注册个人中心路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	personal := r.Group("/personal")
-	personal.Use(middleware.Auth())
+	personal.Use(middleware.MemberAuth(c.redisRepo))
 	{
-		personal.GET("", c.GetProfile)          // 个人主页信息 GET /api/v1/personal
-		personal.PUT("", c.UpdateProfile)       // 编辑个人信息 PUT /api/v1/personal
+		personal.GET("", c.GetProfile)    // 个人主页信息 GET /api/v1/personal
+		personal.PUT("", c.UpdateProfile) // 编辑个人信息 PUT /api/v1/personal
 		personal.GET("/follow", c.GetFollowedMembers)
 		personal.GET("/fans", c.GetFansMembers)
 		personal.POST("/follow/:followeeId", c.ToggleFollow)

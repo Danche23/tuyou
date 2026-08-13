@@ -15,6 +15,7 @@ import (
 	uploadCtrl "tuyou/internal/api/v1/upload"
 	"tuyou/internal/api/v1/web/activity"
 	handlerAuth "tuyou/internal/api/v1/web/auth"
+	commentCtrl "tuyou/internal/api/v1/web/comment"
 	"tuyou/internal/api/v1/web/guide"
 	homeCtrl "tuyou/internal/api/v1/web/home"
 	memberCtrl "tuyou/internal/api/v1/web/member"
@@ -33,6 +34,7 @@ type Router struct {
 	centerCtrl        *center.Controller
 	noteCtrl          *note.Controller
 	personalCtrl      *personal.Controller
+	commentCtrl       *commentCtrl.Controller
 	memberCtrl        *member.Controller
 	adminPerCtrl      *adminPermCtrl.Controller
 	adminMenuCtrl     *adminMenuCtrl.Controller
@@ -54,6 +56,7 @@ type Router struct {
 func NewRouter(
 	noteCtrl *note.Controller,
 	personalCtrl *personal.Controller,
+	commentCtrl *commentCtrl.Controller,
 	authHandler *handlerAuth.AuthHandler,
 	adminHandler *handlerAdmin.AdminHandler,
 	memberCtrl *member.Controller,
@@ -76,6 +79,7 @@ func NewRouter(
 	return &Router{
 		noteCtrl:          noteCtrl,
 		personalCtrl:      personalCtrl,
+		commentCtrl:       commentCtrl,
 		authHandler:       authHandler,
 		adminHandler:      adminHandler,
 		memberCtrl:        memberCtrl,
@@ -125,7 +129,12 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台认证路由
 		r.adminHandler.RegisterRoutes(apiGroup)
+
+		//web个人模块路由
 		r.personalCtrl.RegisterRoutes(apiGroup)
+
+		// web评论路由
+		r.commentCtrl.RegisterRoutes(apiGroup)
 
 		// 后台会员管理路由
 		r.memberCtrl.RegisterRoutes(apiGroup)

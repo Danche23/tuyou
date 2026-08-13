@@ -69,6 +69,9 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 		Nickname:      req.Nickname,
 		Phone:         req.Phone,
 		Password:      string(hushedPassword),
+		Avatar:        entity.DefaultAvatar, // 默认头像写入库，保证笔记/攻略/评论等读 member 表的模块都有头像
+		Bio:           entity.DefaultBio,
+		BgImg:         entity.DefaultBgImg,
 		Status:        1,
 		LastLoginTime: &now,
 	}
@@ -164,7 +167,7 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 	}
 
 	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours*time.Hour)
 
 	return &response.LoginResponse{
 		Token: token,
@@ -210,7 +213,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 	}
 
 	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours*time.Hour)
 
 	return &response.LoginResponse{
 		Token: token,
