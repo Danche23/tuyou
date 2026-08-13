@@ -19,7 +19,7 @@ func (r *msgRepository) FindMessages(memberID uint, msgType, page, size int) ([]
 	var total int64
 	err := r.db.Table("msg_user_record").
 		Joins("JOIN msg_info ON msg_info.id = msg_user_record.msg_id AND msg_info.is_del = 0").
-		Where("msg_user_record.receive_member_id = ? AND msg_info.msg_type = ? AND msg_info.receive_obj_type = ? AND msg_user_record.is_user_del = 0", memberID, msgType, entity.ReceiveObjTypeMember).
+		Where("msg_user_record.receive_member_id = ? AND msg_info.msg_type = ? AND msg_info.receive_obj_type IN (?, ?) AND msg_user_record.is_user_del = 0", memberID, msgType, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Count(&total).Error
 	if err != nil {
 		return nil, 0, err
@@ -30,7 +30,7 @@ func (r *msgRepository) FindMessages(memberID uint, msgType, page, size int) ([]
 		Select("msg_info.id, msg_info.msg_type, msg_info.msg_content, msg_info.send_time, msg_info.sender_id, msg_user_record.is_read, mb.nickname, mb.avatar").
 		Joins("JOIN msg_info ON msg_info.id = msg_user_record.msg_id AND msg_info.is_del = 0").
 		Joins("LEFT JOIN member mb ON mb.id = msg_info.sender_id AND msg_info.sender_id > 0").
-		Where("msg_user_record.receive_member_id = ? AND msg_info.msg_type = ? AND msg_info.receive_obj_type = ? AND msg_user_record.is_user_del = 0", memberID, msgType, entity.ReceiveObjTypeMember).
+		Where("msg_user_record.receive_member_id = ? AND msg_info.msg_type = ? AND msg_info.receive_obj_type IN (?, ?) AND msg_user_record.is_user_del = 0", memberID, msgType, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Order("msg_info.send_time DESC, msg_info.id DESC").
 		Offset((page - 1) * size).Limit(size).
 		Scan(&rows).Error
@@ -42,7 +42,7 @@ func (r *msgRepository) FindMessages(memberID uint, msgType, page, size int) ([]
 func (r *msgRepository) MarkRead(memberID, msgID uint) error {
 	var cnt int64
 	if err := r.db.Model(&entity.MsgUserRecord{}).
-		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type = ?)", msgID, memberID, entity.ReceiveObjTypeMember).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type IN (?, ?))", msgID, memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Count(&cnt).Error; err != nil {
 		return err
 	}
@@ -50,14 +50,14 @@ func (r *msgRepository) MarkRead(memberID, msgID uint) error {
 		return gorm.ErrRecordNotFound
 	}
 	return r.db.Model(&entity.MsgUserRecord{}).
-		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type = ?)", msgID, memberID, entity.ReceiveObjTypeMember).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type IN (?, ?))", msgID, memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		UpdateColumn("is_read", 1).Error
 }
 
 // MarkAllRead 标记全部消息已读
 func (r *msgRepository) MarkAllRead(memberID uint) error {
 	return r.db.Model(&entity.MsgUserRecord{}).
-		Where("receive_member_id = ? AND is_read = 0 AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type = ?)", memberID, entity.ReceiveObjTypeMember).
+		Where("receive_member_id = ? AND is_read = 0 AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type IN (?, ?))", memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		UpdateColumn("is_read", 1).Error
 }
 
@@ -70,7 +70,7 @@ func (r *msgRepository) UnreadCount(memberID uint) (interactions, system int64, 
 	err = r.db.Table("msg_user_record").
 		Select("msg_info.msg_type AS msg_type, COUNT(*) AS num").
 		Joins("JOIN msg_info ON msg_info.id = msg_user_record.msg_id AND msg_info.is_del = 0").
-		Where("msg_user_record.receive_member_id = ? AND msg_info.receive_obj_type = ? AND msg_user_record.is_read = 0 AND msg_user_record.is_user_del = 0", memberID, entity.ReceiveObjTypeMember).
+		Where("msg_user_record.receive_member_id = ? AND msg_info.receive_obj_type IN (?, ?) AND msg_user_record.is_read = 0 AND msg_user_record.is_user_del = 0", memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Group("msg_info.msg_type").
 		Scan(&rows).Error
 	if err != nil {
@@ -95,7 +95,7 @@ func (r *msgRepository) FindCommentIDByMsg(msgID, memberID uint) (uint, error) {
 	err := r.db.Table("msg_user_record").
 		Select("msg_info.comment_id").
 		Joins("JOIN msg_info ON msg_info.id = msg_user_record.msg_id AND msg_info.is_del = 0").
-		Where("msg_user_record.msg_id = ? AND msg_user_record.receive_member_id = ? AND msg_info.receive_obj_type = ? AND msg_user_record.is_user_del = 0", msgID, memberID, entity.ReceiveObjTypeMember).
+		Where("msg_user_record.msg_id = ? AND msg_user_record.receive_member_id = ? AND msg_info.receive_obj_type IN (?, ?) AND msg_user_record.is_user_del = 0", msgID, memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Scan(&row).Error
 	if err != nil {
 		return 0, err
@@ -143,7 +143,7 @@ func (r *msgRepository) CreateUserRecord(tx *gorm.DB, record *entity.MsgUserReco
 func (r *msgRepository) DeleteUserMessage(memberID, msgID uint) error {
 	var cnt int64
 	if err := r.db.Model(&entity.MsgUserRecord{}).
-		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type = ?)", msgID, memberID, entity.ReceiveObjTypeMember).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type IN (?, ?))", msgID, memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		Count(&cnt).Error; err != nil {
 		return err
 	}
@@ -151,6 +151,6 @@ func (r *msgRepository) DeleteUserMessage(memberID, msgID uint) error {
 		return gorm.ErrRecordNotFound
 	}
 	return r.db.Model(&entity.MsgUserRecord{}).
-		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type = ?)", msgID, memberID, entity.ReceiveObjTypeMember).
+		Where("msg_id = ? AND receive_member_id = ? AND is_user_del = 0 AND msg_id IN (SELECT id FROM msg_info WHERE is_del = 0 AND receive_obj_type IN (?, ?))", msgID, memberID, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
 		UpdateColumn("is_user_del", 1).Error
 }

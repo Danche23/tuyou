@@ -7,6 +7,7 @@ import (
 	commentAdmin "tuyou/internal/api/v1/admin/comment"
 	guideAdmin "tuyou/internal/api/v1/admin/guide"
 	"tuyou/internal/api/v1/admin/member"
+	adminMsgCtrl "tuyou/internal/api/v1/admin/message"
 	noteAdmin "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
@@ -58,6 +59,7 @@ type Router struct {
 	messageCtrl       *messageCtrl.Controller
 	uploadCtrl        *uploadCtrl.Controller
 	workbenchCtrl     *workbenchCtrl.Controller
+	adminMsgCtrl      *adminMsgCtrl.Controller
 }
 
 // NewRouter 创建路由
@@ -87,6 +89,7 @@ func NewRouter(
 	messageCtrl *messageCtrl.Controller,
 	uploadCtrl *uploadCtrl.Controller,
 	workbenchCtrl *workbenchCtrl.Controller,
+	adminMsgCtrl *adminMsgCtrl.Controller,
 ) *Router {
 	return &Router{
 		noteCtrl:          noteCtrl,
@@ -114,6 +117,7 @@ func NewRouter(
 		messageCtrl:       messageCtrl,
 		uploadCtrl:        uploadCtrl,
 		workbenchCtrl:     workbenchCtrl,
+		adminMsgCtrl:      adminMsgCtrl,
 	}
 }
 
@@ -211,6 +215,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台工作台路由
 		r.workbenchCtrl.RegisterRoutes(apiGroup)
+
+		// 后台消息管理路由
+		r.adminMsgCtrl.RegisterRoutes(apiGroup)
 	}
 }
 
