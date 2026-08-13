@@ -72,6 +72,7 @@ type ActivityDetailResponse struct {
 	Price           float64      `json:"price"`
 	Difficulty      string       `json:"difficulty"`
 	ActivityStatus  string       `json:"activityStatus"`
+	IsFollowed      bool         `json:"isFollowed"`
 	Joined          bool         `json:"joined"`
 	Members         []MemberInfo `json:"members"`
 }
