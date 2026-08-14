@@ -31,13 +31,22 @@ import (
 	"gorm.io/gorm"
 )
 
-type commentService struct {
-	db   *gorm.DB
-	repo repoComment.CommentRepository
+// CommentNotifier 评论消息通知接口：由消息模块的 Notifier 实现（Go 结构类型，无需显式声明实现）。
+// 接口定义在评论包而不是直接依赖 message 包，避免 comment↔message 循环依赖。
+type CommentNotifier interface {
+	NotifyComment(ownerID, commenterID uint, title string, commentID uint)             // 一级评论：通知内容作者（模板3）
+	NotifyCommentReply(commentOwnerID, replyerID uint, content string, commentID uint) // 二级评论：通知被回复的评论作者（模板10）
+	NotifyCommentLike(commentOwnerID, likerID uint)                                    // 点赞评论：通知评论作者（模板13）
 }
 
-func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository) CommentService {
-	return &commentService{db: db, repo: repo}
+type commentService struct {
+	db       *gorm.DB
+	repo     repoComment.CommentRepository
+	notifier CommentNotifier
+}
+
+func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, notifier CommentNotifier) CommentService {
+	return &commentService{db: db, repo: repo, notifier: notifier}
 }
 
 // timeFormat 时间格式化样式（与项目其他模块一致）
@@ -116,6 +125,7 @@ func buildReplyItems(replies []entity.Comment, members map[uint]*entity.Member, 
 func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseComment.LikeToggleResponse, error) {
 	var isLiked bool
 	var likeCount int64
+	var commentOwnerID uint
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 先锁评论行：挡掉 commentID=0 的非法请求，并串行化并发点赞——
 		// 不锁行时"删点赞记录 + 插点赞记录"在并发下会撞唯一索引 idx_comment_member 导致 500。
@@ -123,6 +133,7 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 		if err != nil {
 			return errors.NewWithErr(errors.CodeNotFound, "评论不存在", err)
 		}
+		commentOwnerID = comment.MemberID
 
 		// 先试取消：删到了 → 之前已点赞，本次取消，like_count -1
 		deleted, err := s.repo.DeleteCommentLike(tx, commentID, memberID)
@@ -161,6 +172,10 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 	if err != nil {
 		return nil, err
 	}
+	// 点赞成功才通知评论作者（取消点赞不通知；点赞自己的评论由 notifier 内部跳过）
+	if isLiked {
+		s.notifier.NotifyCommentLike(commentOwnerID, memberID)
+	}
 	return &responseComment.LikeToggleResponse{IsLiked: isLiked, LikeCount: likeCount}, nil
 }
 
@@ -175,8 +190,9 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if req.Content == "" {
 		return nil, errors.New(errors.CodeInvalidParam, "评论内容不能为空")
 	}
-	// 校验目标存在（笔记/攻略），并取作品作者 memberID
-	if _, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID); err != nil {
+	// 校验目标存在（笔记/攻略），并取作品作者 memberID 与标题（标题用于一级评论通知正文）
+	targetAuthorID, title, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
+	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "目标不存在", err)
 	}
 
@@ -219,7 +235,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	}
 	// 事务：写评论 + 目标 comment_count +1 + 重算新评论热度；
 	// 若是回复，父一级评论的 reply_count 变了，同事务重算父评论热度，避免热评榜/回复预览滞后到小时任务
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.repo.CreateComment(tx, comment); err != nil {
 			return err
 		}
@@ -238,6 +254,15 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	})
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "发表评论失败", err)
+	}
+
+	// 生成评论通知消息（best-effort，失败不影响主流程；评论自己内容/回复自己不通知）。
+	// 一级评论 → 通知内容作者（模板3）；二级评论 → 通知被回复的评论作者（模板10）。
+	// commentID 写进消息，接收者可从消息中心继续回复这条评论。
+	if replyToID == nil {
+		s.notifier.NotifyComment(targetAuthorID, memberID, title, comment.ID)
+	} else if replyToMemberID != nil {
+		s.notifier.NotifyCommentReply(*replyToMemberID, memberID, req.Content, comment.ID)
 	}
 
 	// 组装响应（作者=自己，canDelete=true）。
@@ -277,7 +302,7 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
 	}
 	// 校验目标存在，拿作品作者ID（用于 canDelete）
-	targetAuthorID, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
+	targetAuthorID, _, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "目标不存在", err)
 	}
@@ -400,7 +425,7 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 		return errors.NewWithErr(errors.CodeNotFound, "评论不存在", err)
 	}
 	// 作品作者（校验目标仍存在）
-	targetAuthorID, err := s.repo.FindTargetAuthor(comment.TargetType, comment.TargetID)
+	targetAuthorID, _, err := s.repo.FindTargetAuthor(comment.TargetType, comment.TargetID)
 	if err != nil {
 		return errors.NewWithErr(errors.CodeNotFound, "目标不存在", err)
 	}
@@ -451,7 +476,7 @@ func (s *commentService) ListReplies(commentID uint, memberID uint, page, size i
 		return nil, errors.New(errors.CodeInvalidParam, "只能查询一级评论的回复")
 	}
 	// 作品作者（用于 canDelete）
-	targetAuthorID, err := s.repo.FindTargetAuthor(parent.TargetType, parent.TargetID)
+	targetAuthorID, _, err := s.repo.FindTargetAuthor(parent.TargetType, parent.TargetID)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "目标不存在", err)
 	}

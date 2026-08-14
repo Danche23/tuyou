@@ -33,8 +33,6 @@ type MessageRepository interface {
 	FindCommentIDByMsg(msgID, memberID uint) (uint, error)
 	// FindCommentByID 查询评论
 	FindCommentByID(commentID uint) (*entity.Comment, error)
-	// CreateComment 在事务中插入回复评论
-	CreateComment(tx *gorm.DB, c *entity.Comment) error
 	// FindMemberNickname 查询会员昵称（消息正文渲染用）
 	FindMemberNickname(memberID uint) (string, error)
 	// CreateMessage 在事务中插入消息主表

@@ -5,14 +5,14 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 	"tuyou/internal/stream"
 
 	"gorm.io/gorm"
+	requestComment "tuyou/internal/model/dto/request/web/comment"
 	requestMsg "tuyou/internal/model/dto/request/web/message"
 	responseMsg "tuyou/internal/model/dto/response/web/message"
-	"tuyou/internal/model/entity"
 	repoMsg "tuyou/internal/repository/web/message"
+	serviceComment "tuyou/internal/service/web/comment"
 	"tuyou/pkg/errors"
 )
 
@@ -23,14 +23,15 @@ const (
 )
 
 type msgService struct {
-	msgRepo repoMsg.MessageRepository
-	db      *gorm.DB
-	hub     *stream.SSEHub
+	msgRepo    repoMsg.MessageRepository
+	db         *gorm.DB
+	hub        *stream.SSEHub
+	commentSvc serviceComment.CommentService // 回复评论时复用评论模块的发表评论逻辑
 }
 
 // NewMessageService 创建消息服务实例
-func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub) MessageService {
-	return &msgService{msgRepo: msgRepo, db: db, hub: hub}
+func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub, commentSvc serviceComment.CommentService) MessageService {
+	return &msgService{msgRepo: msgRepo, db: db, hub: hub, commentSvc: commentSvc}
 }
 
 // GetInteractions 获取互动消息列表
@@ -109,7 +110,8 @@ func (s *msgService) UnreadCount(memberID uint) (*responseMsg.UnreadCount, error
 	}, nil
 }
 
-// Reply 回复互动消息关联的评论：校验消息归属 → 取评论 → 以回复身份在评论表插一条 reply
+// Reply 回复互动消息关联的评论：校验消息归属 → 取评论 → 调评论模块 CreateComment 以回复身份插一条二级评论。
+// 评论创建、comment_count/热度维护、给被回复人生成消息（模板10）与推送未读数，全部由评论模块统一处理，这里不再重复造轮子。
 func (s *msgService) Reply(memberID, msgID uint, content string) error {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -138,72 +140,27 @@ func (s *msgService) Reply(memberID, msgID uint, content string) error {
 		return errors.New(errors.CodeBadRequest, "评论已删除，无法回复")
 	}
 
-	reply := &entity.Comment{
-		TargetType: c.TargetType,
-		TargetID:   c.TargetID,
-		MemberID:   memberID,
-		Content:    content,
-		ReplyToID:  &commentID,
-		Status:     1,
-	}
-	// 查询回复者昵称，渲染消息正文
-	nickname, _ := s.msgRepo.FindMemberNickname(memberID)
-	msgContent := "回复了你的内容 " + content
-	if nickname != "" {
-		msgContent = "「" + nickname + "」" + msgContent
-	}
-	// 优先走模板10渲染（变量 nickname/comment），模板查不到回退上面的拼装
-	var tpl entity.MsgTemplate
-	if err := s.db.Table("msg_template").Where("id = ?", 10).First(&tpl).Error; err == nil {
-		msgContent = renderContent(tpl.ContentTemplate, map[string]string{
-			"nickname": nickname,
-			"comment":  content,
-		})
+	// 以回复身份走评论模块发表二级评论：被回复人 = 原评论作者。
+	resp, err := s.commentSvc.CreateComment(memberID, &requestComment.CreateCommentRequest{
+		TargetType:      c.TargetType,
+		TargetID:        c.TargetID,
+		Content:         content,
+		ReplyToID:       &commentID,
+		ReplyToMemberID: &c.MemberID,
+	})
+	if err != nil {
+		return err
 	}
 
-	// 事务：插入回复评论 + 给原评论作者生成一条互动消息（msg_info + msg_user_record）
-	info := &entity.MsgInfo{
-		MsgType:        msgTypeInteraction, // 1=互动消息
-		ReceiveObjType: 1,                  // 1=指定会员
-		SenderID:       memberID,           // 发送者=回复者
-		TemplateID:     10,                 // 回复通知模板
-		MsgContent:     msgContent,
-		SendTime:       time.Now(),
-		CommentID:      commentID, // 关联原评论，接收者可再回复
-	}
-	record := &entity.MsgUserRecord{
-		ReceiveMemberID: c.MemberID, // 接收者=原评论作者
-		IsRead:          0,
-		IsUserDel:       0,
-	}
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.msgRepo.CreateComment(tx, reply); err != nil {
-			return err
-		}
-		if err := s.msgRepo.CreateMessage(tx, info); err != nil {
-			return err
-		}
-		record.MsgID = info.ID // Create 后 gorm 回填主键
-		return s.msgRepo.CreateUserRecord(tx, record)
-	}); err != nil {
-		return errors.NewWithErr(errors.CodeInternalError, "回复失败", err)
-	}
-
-	//SSE推送
-	//回复成功 -> 给原评论作者推一条实时通知
+	// SSE 推送给原评论作者：带上新回复ID，前端可即时刷新对应评论的回复列表。
 	// 非阻塞：对方离线/缓冲满直接丢弃，下次上线靠 /stream 连接时的未读数兜底。
+	replyID, _ := strconv.ParseUint(resp.ID, 10, 64)
 	s.hub.Publish(c.MemberID, "comment-reply", map[string]any{
-		"replyId":   reply.ID,
+		"replyId":   replyID,
 		"replyToId": commentID,
 		"content":   content,
 		"senderId":  memberID,
 	})
-
-	// 推送最新未读数，前端角标实时更新
-	if uc, err := s.UnreadCount(c.MemberID); err == nil {
-		s.hub.Publish(c.MemberID, "unread", uc)
-	}
-
 	return nil
 }
 
