@@ -20,6 +20,8 @@ import (
 	"gorm.io/gorm"
 
 	"tuyou/internal/model/entity"
+
+	repoComment "tuyou/internal/repository/web/comment" // 复用前台导出的热度公式常量 RecomputeHeatExpr（单一来源，避免公式两处漂移）
 )
 
 type commentRepository struct {
@@ -184,6 +186,7 @@ func targetModel(targetType int) interface{} {
 // deleteCommentInTx 事务内硬删一条评论：
 // 物理删自身 +（若一级）其下所有二级（含已软删的）+ 这些评论的点赞记录，
 // 并按"仍正常"的行数扣减目标 comment_count（已软删行软删时已扣过，不再重复扣）。
+// 若删除的是二级评论：其归属一级评论的回复数变了，还要立即重算它的热度，避免等小时任务兜底。
 // 若自身已不存在（批量场景下已被父评论连带删除）则直接跳过，避免重复扣减。
 func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
 	// 0. 先确认自身还存在
@@ -227,9 +230,21 @@ func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
 		return err
 	}
 	// 5. 目标 note/strategy comment_count -n（GREATEST 防负）
-	return tx.Model(targetModel(comment.TargetType)).
+	if err := tx.Model(targetModel(comment.TargetType)).
 		Where("id = ?", comment.TargetID).
-		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", n)).Error
+		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", n)).Error; err != nil {
+		return err
+	}
+
+	// 6. 若删除的是二级评论：其归属一级评论的回复数变了，立即重算它的热度。
+	// 复用前台 RecomputeHeatExpr（同一公式）；父级若已软删（delete_time 非空），
+	// 默认作用域自动不命中，热度也不该展示，等同跳过。
+	if comment.ReplyToID != nil {
+		return tx.Model(&entity.Comment{}).
+			Where("id = ?", *comment.ReplyToID).
+			UpdateColumn("heat", gorm.Expr(repoComment.RecomputeHeatExpr)).Error
+	}
+	return nil
 }
 
 // Delete 事务内硬删单条评论
