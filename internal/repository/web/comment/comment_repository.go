@@ -85,20 +85,21 @@ func (r *commentRepository) CreateComment(tx *gorm.DB, comment *entity.Comment) 
 	return tx.Create(comment).Error
 }
 
-// FindTargetAuthor 校验目标（笔记/攻略）存在，返回作品作者 memberID；不存在（含软删）→ 返回错误
-func (r *commentRepository) FindTargetAuthor(targetType int, targetID uint) (uint, error) {
+// FindTargetAuthor 校验目标（笔记/攻略）存在，返回 (作品作者 memberID, 标题 title)；
+// 不存在（含软删）→ 返回错误。标题用于评论通知正文渲染（模板3）。
+func (r *commentRepository) FindTargetAuthor(targetType int, targetID uint) (uint, string, error) {
 	if targetType == 1 {
 		var note entity.Note
-		if err := r.db.Select("member_id").First(&note, targetID).Error; err != nil {
-			return 0, err
+		if err := r.db.Select("member_id, title").First(&note, targetID).Error; err != nil {
+			return 0, "", err
 		}
-		return note.MemberID, nil
+		return note.MemberID, note.Title, nil
 	}
 	var st entity.Strategy
-	if err := r.db.Select("member_id").First(&st, targetID).Error; err != nil {
-		return 0, err
+	if err := r.db.Select("member_id, title").First(&st, targetID).Error; err != nil {
+		return 0, "", err
 	}
-	return st.MemberID, nil
+	return st.MemberID, st.Title, nil
 }
 
 // FindTopComments 一级评论热度最高前 limit 条（热评，不占分页计数）
