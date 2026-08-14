@@ -29,7 +29,7 @@ type CommentRepository interface {
 	DecrLikeCount(tx *gorm.DB, commentID uint) error                       // 点赞数 -1
 
 	CreateComment(tx *gorm.DB, comment *entity.Comment) error                                                      // 发表评论
-	FindTargetAuthor(targetType int, targetID uint) (uint, string, error)                                          // 校验目标（笔记/攻略）存在，返回 (作品作者 memberID, 标题 title)
+	FindTargetAuthor(targetType int, targetID uint) (uint, error)                                                  // 校验目标（笔记/攻略）存在，返回作品作者 memberID
 	FindTopComments(targetType int, targetID uint, limit int) ([]entity.Comment, error)                            // 一级评论热度最高前 limit 条（热评）
 	FindCommentPage(targetType int, targetID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error) // 一级评论分页（发布时间倒序，排除热评）
 	CountCommentPage(targetType int, targetID uint, excludeIDs []uint) (int64, error)                              // 一级评论（排除热评）总数

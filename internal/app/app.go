@@ -298,12 +298,12 @@ func (a *App) initDependencies() {
 	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
 	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型）；
 	// commentAdminSvc（admin）= 管理（筛选、看状态、硬删清理）。
-	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, notifier)
+	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo)
 	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
-	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)

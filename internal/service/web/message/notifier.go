@@ -74,21 +74,11 @@ func (n *Notifier) NotifyActivityDeleted(memberIDs []uint, leaderID uint, title 
 	}
 }
 
-// NotifyComment 评论通知（给内容作者，模板3）。
-// commentID 关联新评论，接收者可从消息中心回复该评论。
-func (n *Notifier) NotifyComment(ownerID, commenterID uint, title string, commentID uint) {
-	n.sendTo(ownerID, commenterID, 3, "comment", commentID, map[string]string{
+// NotifyComment 评论通知（给内容作者，模板3）
+func (n *Notifier) NotifyComment(ownerID, commenterID uint, title string) {
+	n.send(ownerID, commenterID, 3, "comment", map[string]string{
 		"nickname": n.nickname(commenterID),
 		"title":    title,
-	})
-}
-
-// NotifyCommentReply 回复评论通知（给被回复的评论作者，模板10）。
-// commentID 关联新回复评论，接收者可从消息中心继续回复。
-func (n *Notifier) NotifyCommentReply(commentOwnerID, replyerID uint, content string, commentID uint) {
-	n.sendTo(commentOwnerID, replyerID, 10, "comment-reply", commentID, map[string]string{
-		"nickname": n.nickname(replyerID),
-		"comment":  content,
 	})
 }
 
@@ -135,14 +125,8 @@ func (n *Notifier) NotifyGuideOffline(ownerID uint, title string) {
 }
 
 // send 通用：查模板渲染正文 → 写 msg_info + msg_user_record（同一事务）→ 推送事件 + 最新未读数。
-// 不带关联评论，CommentID 固定为 0；评论类消息请用 sendTo。
-func (n *Notifier) send(targetMemberID, senderID uint, templateID uint, event string, vars map[string]string) {
-	n.sendTo(targetMemberID, senderID, templateID, event, 0, vars)
-}
-
-// sendTo 通用：同 send，额外带 commentID（评论消息关联新评论，供消息中心回复评论）。
 // msg_type 从模板表读取；目标为 0 或触达自己时直接跳过。
-func (n *Notifier) sendTo(targetMemberID, senderID uint, templateID uint, event string, commentID uint, vars map[string]string) {
+func (n *Notifier) send(targetMemberID, senderID uint, templateID uint, event string, vars map[string]string) {
 	if targetMemberID == 0 || targetMemberID == senderID {
 		return // 无人可通知 / 自己触达自己不通知
 	}
@@ -160,7 +144,7 @@ func (n *Notifier) sendTo(targetMemberID, senderID uint, templateID uint, event 
 		TemplateID:     templateID,
 		MsgContent:     content,
 		SendTime:       time.Now(),
-		CommentID:      commentID,
+		CommentID:      0,
 	}
 	record := &entity.MsgUserRecord{
 		ReceiveMemberID: targetMemberID,
