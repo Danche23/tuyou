@@ -240,7 +240,7 @@ func (a *App) initDependencies() {
 	sseHub := stream.NewSSEHub()
 	adminSSEHub := stream.NewSSEHub()
 
-	// ========== 创建存储（OSS）==========
+	// ========== 创建存储（oss / local）==========
 	store, err := storage.New(a.cfg.Storage)
 	if err != nil {
 		logger.Fatal("存储初始化失败", zap.Error(err))
@@ -364,6 +364,11 @@ func (a *App) initServer() {
 
 	// 注册路由
 	a.router.Setup(engine)
+
+	// 本地存储驱动：挂载静态文件服务，对外访问 /static/{objectKey}
+	if a.cfg.Storage.Driver == "local" {
+		engine.Static("/static", a.cfg.Storage.Local.BaseDir)
+	}
 
 	// 创建 HTTP 服务器
 	a.server = &http.Server{

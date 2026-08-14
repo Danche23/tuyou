@@ -35,8 +35,8 @@ type ActivityRepository interface {
 	// UpdateActivityStatus 更新活动状态
 	UpdateActivityStatus(activityID uint, status int) error
 
-	// CreateJoin 创建报名记录
-	CreateJoin(tx *gorm.DB, activityID uint, memberID uint) error
+	// CreateJoin 创建报名记录（INSERT IGNORE 兜底：重复报名返回 false 且不报错）
+	CreateJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error)
 
 	// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）
 	DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) error
@@ -46,6 +46,9 @@ type ActivityRepository interface {
 
 	// DecrCurrentPeople 报名人数 -1
 	DecrCurrentPeople(tx *gorm.DB, activityID uint) error
+
+	// GetCurrentPeople 查询活动当前报名人数（返回 DB 真实值）
+	GetCurrentPeople(db *gorm.DB, activityID uint) (int, error)
 
 	// SoftDelete 逻辑删除活动（is_del=1）
 	SoftDelete(tx *gorm.DB, activityID uint) error
