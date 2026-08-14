@@ -99,8 +99,16 @@ type SMSConfig struct {
 
 // StorageConfig 文件存储配置
 type StorageConfig struct {
-	Driver string           `mapstructure:"driver"` // 存储驱动：oss（local 预留）
-	OSS    OSSStorageConfig `mapstructure:"oss"`
+	Driver string             `mapstructure:"driver"` // 存储驱动：oss | local
+	OSS    OSSStorageConfig   `mapstructure:"oss"`
+	Local  LocalStorageConfig `mapstructure:"local"`
+}
+
+// LocalStorageConfig 本地磁盘存储配置
+type LocalStorageConfig struct {
+	BaseDir    string `mapstructure:"base_dir"`    // 文件落盘根目录（如 ./pkg/uploads）
+	BaseURL    string `mapstructure:"base_url"`    // 对外访问前缀（如 http://127.0.0.1:9300），文件 URL = {base_url}/static/{objectKey}
+	FFmpegPath string `mapstructure:"ffmpeg_path"` // ffmpeg 二进制路径，空则按 PATH 查找
 }
 
 // OSSStorageConfig 阿里云 OSS 配置

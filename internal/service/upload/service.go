@@ -16,6 +16,7 @@ import (
 	dtoUpload "tuyou/internal/model/dto/response/upload"
 	"tuyou/internal/storage"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/logger"
 
 	"github.com/gabriel-vasile/mimetype"
 	"golang.org/x/image/draw"
@@ -27,9 +28,6 @@ const (
 	maxVideoBytes = 300 * 1024 * 1024 // 单个视频最大 300MB
 	maxEdge       = 1920              // 图片最长边（px），超过则等比压缩
 	jpegQuality   = 85
-
-	// videoSnapshotParam OSS 视频截帧参数：t=0 取封面帧，输出 jpg（访问 URL 时即时生成）
-	videoSnapshotParam = "x-oss-process=video/snapshot,t_0,f_jpg"
 )
 
 // allowedImages 允许的图片类型（按文件头检测）→ 扩展名
@@ -107,14 +105,14 @@ func (s *uploadService) UploadImages(ctx context.Context, files []*multipart.Fil
 	return &dtoUpload.UploadImagesResponse{Urls: urls}, nil
 }
 
-// UploadVideo 上传单个视频（≤100MB），返回视频 URL 和封面 URL。
-// 封面不单独存文件：由 OSS 视频截帧在访问封面 URL 时即时生成（videoURL + 截帧参数）。
+// UploadVideo 上传单个视频（≤300MB），返回视频 URL 和封面 URL。
+// 封面由存储后端生成：OSS 懒加载截帧（访问时即时生成）；local 上传时用 ffmpeg 真截第一帧存封面文件。
 func (s *uploadService) UploadVideo(ctx context.Context, file *multipart.FileHeader) (*dtoUpload.UploadVideoResponse, error) {
 	if file == nil {
 		return nil, errors.New(errors.CodeInvalidParam, "请选择要上传的视频")
 	}
 	if file.Size > maxVideoBytes {
-		return nil, errors.New(errors.CodeInvalidParam, "单个视频不能超过 100MB")
+		return nil, errors.New(errors.CodeInvalidParam, "单个视频不能超过 300MB")
 	}
 
 	src, err := file.Open()
@@ -145,7 +143,12 @@ func (s *uploadService) UploadVideo(ctx context.Context, file *multipart.FileHea
 		return nil, errors.NewWithErr(errors.CodeInternalError, "视频上传失败", err)
 	}
 
-	coverURL := videoURL + "?" + videoSnapshotParam
+	// 封面：OSS 返回懒加载截帧 URL；local 现场用 ffmpeg 截帧。截帧失败不阻断上传，封面置空由前端隐藏
+	coverURL, cErr := s.storage.VideoCover(ctx, objectKey)
+	if cErr != nil {
+		logger.Errorf("视频封面生成失败 objectKey=%s err=%v", objectKey, cErr)
+		coverURL = ""
+	}
 	return &dtoUpload.UploadVideoResponse{VideoURL: videoURL, CoverURL: coverURL}, nil
 }
 
