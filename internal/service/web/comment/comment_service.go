@@ -18,6 +18,7 @@ package comment
 // 本项目事务的用法：s.db.Transaction(func(tx) error { ... }) 里所有带 tx 的仓储方法
 // 都在同一个数据库事务里，任一步出错整体回滚。
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -27,17 +28,19 @@ import (
 	repoComment "tuyou/internal/repository/web/comment"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/response"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
 
 type commentService struct {
-	db   *gorm.DB
-	repo repoComment.CommentRepository
+	db        *gorm.DB
+	repo      repoComment.CommentRepository
+	sensitive *sensitive.SensitiveMatcher
 }
 
-func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository) CommentService {
-	return &commentService{db: db, repo: repo}
+func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher) CommentService {
+	return &commentService{db: db, repo: repo, sensitive: sensitive}
 }
 
 // timeFormat 时间格式化样式（与项目其他模块一致）
@@ -175,6 +178,10 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if req.Content == "" {
 		return nil, errors.New(errors.CodeInvalidParam, "评论内容不能为空")
 	}
+	// 敏感词校验：命中即拒绝发布（不暴露具体词，防绕开）
+	if _, hit := s.sensitive.Validate(req.Content); hit {
+		return nil, errors.New(errors.CodeInvalidParam, "内容包含违规词汇")
+	}
 	// 校验目标存在（笔记/攻略），并取作品作者 memberID
 	if _, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID); err != nil {
 		return nil, errors.NewWithErr(errors.CodeNotFound, "目标不存在", err)
@@ -272,7 +279,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 }
 
 // ListComments 评论列表：前2条热评（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
-func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*response.PageResponse, error) {
+func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) {
 	if req.TargetType != 1 && req.TargetType != 2 {
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
 	}
@@ -312,7 +319,22 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, err
 	}
-	return response.NewPageResponse(items, total, req.Page, req.Size), nil
+
+	// 全量评论数（一级+二级）：实时统计、天然自愈，不依赖 ±1 维护的计数，
+	// 前端"共N条评论"直接用它，避免显示成"当前加载的一级条数"
+	totalComments, err := s.repo.CountAllComments(req.TargetType, req.TargetID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论总数失败", err)
+	}
+
+	return &responseComment.CommentListResponse{
+		List:          items,
+		Total:         total,
+		TotalComments: totalComments,
+		Page:          req.Page,
+		Size:          req.Size,
+		TotalPage:     int(math.Ceil(float64(total) / float64(req.Size))),
+	}, nil
 }
 
 // buildCommentItems 组装一级评论列表项（用户信息、点赞态、二级热评摘要、回复数、删除权限）

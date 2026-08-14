@@ -33,6 +33,7 @@ type CommentRepository interface {
 	FindTopComments(targetType int, targetID uint, limit int) ([]entity.Comment, error)                            // 一级评论热度最高前 limit 条（热评）
 	FindCommentPage(targetType int, targetID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error) // 一级评论分页（发布时间倒序，排除热评）
 	CountCommentPage(targetType int, targetID uint, excludeIDs []uint) (int64, error)                              // 一级评论（排除热评）总数
+	CountAllComments(targetType int, targetID uint) (int64, error)                                                 // 目标下全量评论数（一级+二级，未删）
 	CountRepliesByParentIDs(parentIDs []uint) (map[uint]int64, error)                                              // 批量统计每个一级评论下二级评论总数
 	FindTopReplies(parentID uint, limit int) ([]entity.Comment, error)                                             // 某一级评论下热度最高前 limit 条二级评论
 	FindReplyPage(parentID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error)                   // 二级评论分页（发布时间倒序，排除热评）
