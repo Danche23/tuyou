@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	response "tuyou/internal/model/dto/response/admin/auth"
@@ -19,6 +18,8 @@ import (
 	repoCenter "tuyou/internal/repository/admin/center"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"tuyou/internal/service/admin/auth/b64c"
 	"tuyou/internal/stream"
@@ -92,7 +93,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest, user
 
 	//写入登录态白名单（多端登录：每个 token 独立 key；Redis 不可用时忽略，不影响登录）
 	//值为登录时间戳（毫秒），供按账号维度限制同时在线设备数使用
-	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), time.Now().UnixMilli(), config.Get().JWT.ExpireHours*time.Hour)
+	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), time.Now().UnixMilli(), config.Get().JWT.ExpireHours)
 	//限制每账号同时在线设备数：先插入再清理，超限时踢掉最旧的 token
 	//s.evictOldestSessions(ctx, admin.ID)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	"time"
 	request "tuyou/internal/model/dto/request/web/auth"
@@ -17,6 +16,8 @@ import (
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // authService 认证服务实现
@@ -167,7 +168,7 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 	}
 
 	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours*time.Hour)
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
 
 	return &response.LoginResponse{
 		Token: token,
@@ -213,7 +214,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 	}
 
 	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours*time.Hour)
+	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
 
 	return &response.LoginResponse{
 		Token: token,
