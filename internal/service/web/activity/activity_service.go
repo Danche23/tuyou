@@ -217,6 +217,10 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 
 	if joined {
 		// ========== 取消报名 ==========
+		// 仅"报名中"（状态1）允许取消；进行中/已结束均不可取消（后端兜底，与前端按钮一致）
+		if realStatusInt != 1 {
+			return nil, errors.New(errors.CodeInvalidParam, "活动已开始，无法取消报名")
+		}
 		err = s.db.Transaction(func(tx *gorm.DB) error {
 			if err := s.activityRepo.DeleteJoin(tx, activityID, memberID); err != nil {
 				return err
@@ -228,9 +232,15 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 			return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
 		}
 
+		// 事务提交后重查真实报名人数（并发下不用旧值±1，保证响应实时准确）
+		currentPeople, qErr := s.activityRepo.GetCurrentPeople(s.db, activityID)
+		if qErr != nil {
+			logger.Errorf("查询报名人数失败 activityID=%d err=%v", activityID, qErr)
+			currentPeople = activity.CurrentPeople - 1 // 兜底用旧值
+		}
 		return &responseActivity.SignupToggleResponse{
 			IsJoined:      false,
-			CurrentPeople: activity.CurrentPeople - 1,
+			CurrentPeople: currentPeople,
 		}, nil
 	}
 
@@ -239,16 +249,28 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return nil, errors.New(errors.CodeInvalidParam, "不在报名时间内")
 	}
 	var bizErr error
+	alreadyJoined := false
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// 先插报名记录，用唯一索引兜底检测重复点击（并发双击时第二次返回 false）
+		created, cErr := s.activityRepo.CreateJoin(tx, activityID, memberID)
+		if cErr != nil {
+			return cErr
+		}
+		if !created {
+			// 重复报名：人数不动、不报错，直接视为已报名
+			alreadyJoined = true
+			return nil
+		}
+		// 新报名才加人数（WHERE current_people < max_people 原子防超卖）
 		affected, incrErr := s.activityRepo.IncrCurrentPeople(tx, activityID, activity.MaxPeople)
 		if incrErr != nil {
 			return incrErr
 		}
 		if affected == 0 {
 			bizErr = errors.New(errors.CodeInvalidParam, "活动人数已满")
-			return bizErr
+			return bizErr // 回滚，连刚插入的报名记录也撤销
 		}
-		return s.activityRepo.CreateJoin(tx, activityID, memberID)
+		return nil
 	})
 	if bizErr != nil {
 		return nil, bizErr
@@ -258,6 +280,24 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
 	}
 
+	// 事务提交后重查真实报名人数（并发下不用旧值±1，保证响应实时准确）
+	currentPeople, qErr := s.activityRepo.GetCurrentPeople(s.db, activityID)
+	if qErr != nil {
+		logger.Errorf("查询报名人数失败 activityID=%d err=%v", activityID, qErr)
+		if alreadyJoined {
+			currentPeople = activity.CurrentPeople // 兜底用旧值
+		} else {
+			currentPeople = activity.CurrentPeople + 1 // 兜底用旧值
+		}
+	}
+	if alreadyJoined {
+		// 重复点击：返回已报名状态，不发通知、人数不重复加
+		return &responseActivity.SignupToggleResponse{
+			IsJoined:      true,
+			CurrentPeople: currentPeople,
+		}, nil
+	}
+
 	// 报名成功 → 给活动领队发实时通知（取消报名不通知）
 	s.notifier.NotifySignup(activity.LeaderMemberID, memberID, activity.Title)
 	// 给报名者本人发"报名成功"系统通知
@@ -265,7 +305,7 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 
 	return &responseActivity.SignupToggleResponse{
 		IsJoined:      true,
-		CurrentPeople: activity.CurrentPeople + 1,
+		CurrentPeople: currentPeople,
 	}, nil
 }
 

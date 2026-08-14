@@ -1,9 +1,12 @@
 package activity
 
 import (
+	"time"
+
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type activityRepository struct {
@@ -91,9 +94,12 @@ func (r *activityRepository) UpdateActivityStatus(activityID uint, status int) e
 		UpdateColumn("activity_status", status).Error
 }
 
-// CreateJoin 创建报名记录
-func (r *activityRepository) CreateJoin(tx *gorm.DB, activityID uint, memberID uint) error {
-	return tx.Create(&entity.ActivityJoin{ActivityID: activityID, MemberID: memberID}).Error
+// CreateJoin 创建报名记录（INSERT IGNORE：重复报名不报错，返回是否新插入）
+// 并发双击时唯一索引兜底：第二次插入被忽略，返回 false，事务外层不再加人数、不发通知
+func (r *activityRepository) CreateJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error) {
+	result := tx.Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&entity.ActivityJoin{ActivityID: activityID, MemberID: memberID})
+	return result.RowsAffected > 0, result.Error
 }
 
 // DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）
@@ -116,10 +122,22 @@ func (r *activityRepository) DecrCurrentPeople(tx *gorm.DB, activityID uint) err
 		UpdateColumn("current_people", gorm.Expr("current_people - 1")).Error
 }
 
-// SoftDelete 逻辑删除活动（is_del=1）
+// GetCurrentPeople 查询活动当前报名人数（返回 DB 真实值，供报名/取消后响应使用）
+func (r *activityRepository) GetCurrentPeople(db *gorm.DB, activityID uint) (int, error) {
+	var activity entity.Activity
+	if err := db.Select("current_people").First(&activity, activityID).Error; err != nil {
+		return 0, err
+	}
+	return activity.CurrentPeople, nil
+}
+
+// SoftDelete 逻辑删除活动（is_del=1 + delete_time，与笔记/攻略软删语义对齐）
 func (r *activityRepository) SoftDelete(tx *gorm.DB, activityID uint) error {
-	return tx.Model(&entity.Activity{}).Where("id = ?", activityID).
-		UpdateColumn("is_del", 1).Error
+	return tx.Unscoped().Model(&entity.Activity{}).Where("id = ?", activityID).
+		Updates(map[string]interface{}{
+			"is_del":       1,
+			"delete_time": time.Now(),
+		}).Error
 }
 
 // FindList 查询活动列表（分页，按分类筛选，过滤已删除，按开始时间倒序）
