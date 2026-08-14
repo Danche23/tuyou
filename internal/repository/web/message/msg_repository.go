@@ -112,11 +112,6 @@ func (r *msgRepository) FindCommentByID(commentID uint) (*entity.Comment, error)
 	return &c, nil
 }
 
-// CreateComment 在事务中插入回复评论
-func (r *msgRepository) CreateComment(tx *gorm.DB, c *entity.Comment) error {
-	return tx.Create(c).Error
-}
-
 // FindMemberNickname 查询会员昵称（消息正文渲染用）
 func (r *msgRepository) FindMemberNickname(memberID uint) (string, error) {
 	var row struct {
