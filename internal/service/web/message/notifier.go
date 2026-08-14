@@ -1,6 +1,7 @@
 package message
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -11,8 +12,8 @@ import (
 	"tuyou/internal/stream"
 )
 
-// Notifier 互动消息通知器：给指定会员生成一条互动消息并推送实时通知。
-// 供点赞/关注/评论/报名等服务调用；best-effort，失败不影响主流程。
+// Notifier 消息通知器：给指定会员生成一条消息（查 msg_template 渲染正文）并推送实时通知。
+// 供点赞/关注/评论/报名/后台删除等服务调用；best-effort，失败不影响主流程。
 type Notifier struct {
 	msgRepo repoMsg.MessageRepository
 	db      *gorm.DB
@@ -24,82 +25,123 @@ func NewNotifier(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSE
 	return &Notifier{msgRepo: msgRepo, db: db, hub: hub}
 }
 
-// NotifyLike 点赞通知：「nickname」赞了你的内容《title》
+// NotifyLike 点赞通知（模板1）
 func (n *Notifier) NotifyLike(contentOwnerID, senderID uint, title string) {
-	n.send(contentOwnerID, senderID, msgTypeInteraction, 1, "like",
-		"「"+n.nickname(senderID)+"」赞了你的内容《"+title+"》")
+	n.send(contentOwnerID, senderID, 1, "like", map[string]string{
+		"nickname": n.nickname(senderID),
+		"title":    title,
+	})
 }
 
-// NotifyFollow 关注通知：「nickname」关注了你
+// NotifyFollow 关注通知（模板2）
 func (n *Notifier) NotifyFollow(followeeID, followerID uint) {
-	n.send(followeeID, followerID, msgTypeInteraction, 2, "follow",
-		"「"+n.nickname(followerID)+"」关注了你")
+	n.send(followeeID, followerID, 2, "follow", map[string]string{
+		"nickname": n.nickname(followerID),
+	})
 }
 
-// NotifyCollect 收藏通知（给内容作者）：「nickname」收藏了你的内容《title》
-// 模板 msg_type=1，互动消息
+// NotifyCollect 收藏通知（模板12）
 func (n *Notifier) NotifyCollect(ownerID, collectorID uint, title string) {
-	n.send(ownerID, collectorID, msgTypeInteraction, 12, "collect",
-		"「"+n.nickname(collectorID)+"」收藏了你的内容《"+title+"》")
+	n.send(ownerID, collectorID, 12, "collect", map[string]string{
+		"nickname": n.nickname(collectorID),
+		"title":    title,
+	})
 }
 
-// NotifySignup 报名通知（给活动领队）：「nickname」报名了你的活动《title》
-// 模板 msg_type=2，系统通知
+// NotifySignup 报名通知（给活动领队，模板6）
 func (n *Notifier) NotifySignup(leaderID, memberID uint, title string) {
-	n.send(leaderID, memberID, msgTypeSystem, 6, "signup",
-		"「"+n.nickname(memberID)+"」报名了你的活动《"+title+"》")
+	n.send(leaderID, memberID, 6, "signup", map[string]string{
+		"nickname": n.nickname(memberID),
+		"title":    title,
+	})
 }
 
-// NotifySignupSuccess 报名成功通知（给报名者本人）：你已成功报名活动《title》
-// 模板 msg_type=2，系统通知，发送者=系统(0)
+// NotifySignupSuccess 报名成功通知（给报名者本人，模板8）
 func (n *Notifier) NotifySignupSuccess(memberID uint, title string) {
-	n.send(memberID, 0, msgTypeSystem, 8, "signup-success",
-		"你已成功报名活动《"+title+"》")
+	n.send(memberID, 0, 8, "signup-success", map[string]string{
+		"title": title,
+	})
 }
 
-// NotifyActivityDeleted 活动删除通知（给所有已报名成员）：「nickname」删除了活动《title》
-// 模板 msg_type=2，系统通知，发送者=活动领队。逐个成员发送，best-effort。
+// NotifyActivityDeleted 活动删除通知（给所有已报名成员，模板11）
 func (n *Notifier) NotifyActivityDeleted(memberIDs []uint, leaderID uint, title string) {
 	nickname := n.nickname(leaderID)
 	for _, memberID := range memberIDs {
-		n.send(memberID, leaderID, msgTypeSystem, 11, "activity-deleted",
-			"「"+nickname+"」删除了活动《"+title+"》")
+		n.send(memberID, leaderID, 11, "activity-deleted", map[string]string{
+			"nickname": nickname,
+			"title":    title,
+		})
 	}
 }
 
-// NotifyComment 评论通知（一级评论，给内容作者）：「nickname」评论了你的内容《title》
-// 模板 msg_type=1，互动消息，正文不含评论内容（模板3）。
-// 注：暂未关联 comment_id；将来若要让作者能「回复」这条评论，调用处需让 send 带上新评论id。
+// NotifyComment 评论通知（给内容作者，模板3）
 func (n *Notifier) NotifyComment(ownerID, commenterID uint, title string) {
-	n.send(ownerID, commenterID, msgTypeInteraction, 3, "comment",
-		"「"+n.nickname(commenterID)+"」评论了你的内容《"+title+"》")
+	n.send(ownerID, commenterID, 3, "comment", map[string]string{
+		"nickname": n.nickname(commenterID),
+		"title":    title,
+	})
 }
 
-// NotifyCommentLike 点赞评论通知（给评论作者）：「nickname」赞了你的评论
-// 模板 msg_type=1，互动消息。注：web 层评论点赞功能尚未实现，待接线。
+// NotifyCommentLike 点赞评论通知（给评论作者，模板13）
 func (n *Notifier) NotifyCommentLike(commentOwnerID, likerID uint) {
-	n.send(commentOwnerID, likerID, msgTypeInteraction, 13, "comment-like",
-		"「"+n.nickname(likerID)+"」赞了你的评论")
+	n.send(commentOwnerID, likerID, 13, "comment-like", map[string]string{
+		"nickname": n.nickname(likerID),
+	})
 }
 
-// NotifyActivityStart 活动快开始提醒（给已报名者本人，content 为最终正文）
-// 模板 msg_type=2，系统通知，发送者=系统(0)。content 由定时任务生成并用于幂等查重。
-func (n *Notifier) NotifyActivityStart(memberID uint, content string) {
-	n.send(memberID, 0, msgTypeSystem, 9, "activity-start", content)
+// NotifyActivityStart 活动快开始提醒（给已报名者本人，模板9）
+func (n *Notifier) NotifyActivityStart(memberID uint, title string) {
+	n.send(memberID, 0, 9, "activity-start", map[string]string{
+		"title": title,
+	})
 }
 
-// send 通用：写 msg_info + msg_user_record（同一事务）→ 推送事件 + 最新未读数。
-// msgType 按模板的 msg_type 传（1=互动，2=系统）；目标为 0 或触达自己时直接跳过。
-func (n *Notifier) send(targetMemberID, senderID uint, msgType, templateID int, event, content string) {
+// NotifyNoteDeleted 笔记删除通知（给作者，模板14）
+func (n *Notifier) NotifyNoteDeleted(ownerID uint, title string) {
+	n.send(ownerID, 0, 14, "content-deleted", map[string]string{
+		"title": title,
+	})
+}
+
+// NotifyGuideDeleted 攻略删除通知（给作者，模板15）
+func (n *Notifier) NotifyGuideDeleted(ownerID uint, title string) {
+	n.send(ownerID, 0, 15, "content-deleted", map[string]string{
+		"title": title,
+	})
+}
+
+// NotifyNoteOffline 笔记下架通知（给作者，模板16）
+func (n *Notifier) NotifyNoteOffline(ownerID uint, title string) {
+	n.send(ownerID, 0, 16, "content-offline", map[string]string{
+		"title": title,
+	})
+}
+
+// NotifyGuideOffline 攻略下架通知（给作者，模板17）
+func (n *Notifier) NotifyGuideOffline(ownerID uint, title string) {
+	n.send(ownerID, 0, 17, "content-offline", map[string]string{
+		"title": title,
+	})
+}
+
+// send 通用：查模板渲染正文 → 写 msg_info + msg_user_record（同一事务）→ 推送事件 + 最新未读数。
+// msg_type 从模板表读取；目标为 0 或触达自己时直接跳过。
+func (n *Notifier) send(targetMemberID, senderID uint, templateID uint, event string, vars map[string]string) {
 	if targetMemberID == 0 || targetMemberID == senderID {
 		return // 无人可通知 / 自己触达自己不通知
 	}
 
+	tpl, err := n.findTemplate(templateID)
+	if err != nil {
+		return // 模板不存在，best-effort 跳过
+	}
+	content := renderContent(tpl.ContentTemplate, vars)
+
 	info := &entity.MsgInfo{
-		MsgType:        msgType,
+		MsgType:        tpl.MsgType,
 		ReceiveObjType: 1,
 		SenderID:       senderID,
-		TemplateID:     uint(templateID),
+		TemplateID:     templateID,
 		MsgContent:     content,
 		SendTime:       time.Now(),
 		CommentID:      0,
@@ -126,6 +168,32 @@ func (n *Notifier) send(targetMemberID, senderID uint, msgType, templateID int, 
 	})
 	// 推送最新未读数，角标实时更新
 	n.pushUnread(targetMemberID)
+}
+
+// findTemplate 查消息模板
+func (n *Notifier) findTemplate(templateID uint) (*entity.MsgTemplate, error) {
+	var tpl entity.MsgTemplate
+	if err := n.db.Table("msg_template").Where("id = ?", templateID).First(&tpl).Error; err != nil {
+		return nil, err
+	}
+	return &tpl, nil
+}
+
+// Render 查模板并渲染出最终正文（供定时任务幂等查重等需提前拿到正文的场景使用）
+func (n *Notifier) Render(templateID uint, vars map[string]string) string {
+	tpl, err := n.findTemplate(templateID)
+	if err != nil {
+		return ""
+	}
+	return renderContent(tpl.ContentTemplate, vars)
+}
+
+// renderContent 用变量替换模板占位符 {var}
+func renderContent(tpl string, vars map[string]string) string {
+	for k, v := range vars {
+		tpl = strings.ReplaceAll(tpl, "{"+k+"}", v)
+	}
+	return tpl
 }
 
 // nickname 查发送者昵称，查不到兜底"用户"

@@ -14,6 +14,7 @@ import (
 	response "tuyou/internal/model/dto/response/admin/activity"
 	"tuyou/internal/model/entity"
 	repo "tuyou/internal/repository/admin/activity"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 )
 
@@ -21,12 +22,13 @@ type activityService struct {
 	activityRepo repo.ActivityRepository
 	webRepo      webActivityWriter
 	db           *gorm.DB
+	notifier     *serviceMsg.Notifier
 }
 
 // NewActivityService 创建后台活动服务实例
 // webRepo 复用前台活动仓库的通用写操作（创建活动、发布计数），避免同表操作重复实现
-func NewActivityService(activityRepo repo.ActivityRepository, webRepo webActivityWriter, db *gorm.DB) ActivityService {
-	return &activityService{activityRepo: activityRepo, webRepo: webRepo, db: db}
+func NewActivityService(activityRepo repo.ActivityRepository, webRepo webActivityWriter, db *gorm.DB, notifier *serviceMsg.Notifier) ActivityService {
+	return &activityService{activityRepo: activityRepo, webRepo: webRepo, db: db, notifier: notifier}
 }
 
 // ListActivities 分页查询活动列表
@@ -282,6 +284,12 @@ func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) e
 		return errors.New(errors.CodeNotFound, "活动不存在")
 	}
 
+	// 删除前查报名者（删除会连带删报名记录，必须先查）
+	memberIDs, err := s.activityRepo.FindJoinMemberIDs(ctx, activityID)
+	if err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "查询报名者失败", err)
+	}
+
 	decrPublish := activity.IsDel == 0 // 仍上架（is_del=0）的活动才减发布数
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.activityRepo.Delete(tx, activityID); err != nil {
@@ -294,6 +302,9 @@ func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) e
 	}); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除活动失败", err)
 	}
+
+	// 通知所有已报名成员（模板11）
+	s.notifier.NotifyActivityDeleted(memberIDs, activity.LeaderMemberID, activity.Title)
 	return nil
 }
 
@@ -313,6 +324,17 @@ func (s *activityService) BatchDeleteActivities(ctx context.Context, req *reques
 		return nil
 	}
 
+	// 删除前逐个查报名者（删除会连带删报名记录，必须先查）
+	joinMemberMap := make(map[uint][]uint, len(activities))
+	for i := range activities {
+		a := &activities[i]
+		memberIDs, err := s.activityRepo.FindJoinMemberIDs(ctx, a.ID)
+		if err != nil {
+			return errors.NewWithErr(errors.CodeInternalError, "查询报名者失败", err)
+		}
+		joinMemberMap[a.ID] = memberIDs
+	}
+
 	// 单事务逐条硬删；仍上架（is_del=0）的活动领队发布数 -1（与单个 DeleteActivity 语义一致）
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		for i := range activities {
@@ -330,6 +352,12 @@ func (s *activityService) BatchDeleteActivities(ctx context.Context, req *reques
 	})
 	if err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "批量删除活动失败", err)
+	}
+
+	// 通知所有已报名成员（模板11）
+	for i := range activities {
+		a := &activities[i]
+		s.notifier.NotifyActivityDeleted(joinMemberMap[a.ID], a.LeaderMemberID, a.Title)
 	}
 	return nil
 }

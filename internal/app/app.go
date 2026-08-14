@@ -18,8 +18,10 @@ import (
 	activityAdminCtrl "tuyou/internal/api/v1/admin/activity"
 	handlerAdmin "tuyou/internal/api/v1/admin/auth"
 	centerCtrl "tuyou/internal/api/v1/admin/center"
+	commentAdminCtrl "tuyou/internal/api/v1/admin/comment"
 	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
+	adminMsgCtrl "tuyou/internal/api/v1/admin/message"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
@@ -44,8 +46,10 @@ import (
 	repoAdminActivity "tuyou/internal/repository/admin/activity"
 	repoAdmin "tuyou/internal/repository/admin/auth"
 	repoAdminCenter "tuyou/internal/repository/admin/center"
+	repoAdminComment "tuyou/internal/repository/admin/comment"
 	repoAdminGuide "tuyou/internal/repository/admin/guide"
 	repoAdminMember "tuyou/internal/repository/admin/member"
+	repoAdminMsg "tuyou/internal/repository/admin/message"
 	repoAdminNote "tuyou/internal/repository/admin/note"
 	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
@@ -66,8 +70,10 @@ import (
 	serviceAdminActivity "tuyou/internal/service/admin/activity"
 	serviceAdmin "tuyou/internal/service/admin/auth"
 	serviceAdminCenter "tuyou/internal/service/admin/center"
+	serviceAdminComment "tuyou/internal/service/admin/comment"
 	serviceAdminGuide "tuyou/internal/service/admin/guide"
 	serviceAdminMember "tuyou/internal/service/admin/member"
+	serviceAdminMsg "tuyou/internal/service/admin/message"
 	serviceAdminNote "tuyou/internal/service/admin/note"
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
@@ -258,12 +264,16 @@ func (a *App) initDependencies() {
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
 	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
 	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
+	// 评论仓储 ×2：同一张 comment 表，前台/后台各一个仓储实现。
+	// commentRepo（web）：默认作用域，自动隐藏软删记录；commentAdminRepo（admin）：Unscoped 连软删一起查。
 	commentRepo := repoComment.NewCommentRepository(a.mysqlDB)
+	commentAdminRepo := repoAdminComment.NewCommentRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
 	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
 	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
+	adminMsgMgrRepo := repoAdminMsg.NewMessageRepository(a.mysqlDB)
 
 	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
 	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
@@ -278,27 +288,35 @@ func (a *App) initDependencies() {
 	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
 	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
 	roleSvc := serviceAdminRole.NewRoleService(roleRepo)
-	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
-	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
-	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
+	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB, notifier)
+	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB, notifier)
+	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB, notifier)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
+	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
+	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型）；
+	// commentAdminSvc（admin）= 管理（筛选、看状态、硬删清理）。
 	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo)
+	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
 	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
+	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
 	personalCtrl := personal.NewController(personalSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
+	// 评论控制器 ×2：redisRepo 传入中间件（MemberAuth/Auth）做登录态白名单校验。
+	// commentC（web）挂 /api/v1/comments；commentAdminC（admin）挂 /api/v1/admin/comments。
 	commentC := commentCtrl.NewController(commentSvc, redisRepo)
+	commentAdminC := commentAdminCtrl.NewController(commentAdminSvc, redisRepo)
 	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
 	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo, adminSSEHub)
 	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
@@ -318,9 +336,10 @@ func (a *App) initDependencies() {
 	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
 	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
+	adminMsgC := adminMsgCtrl.NewController(adminMsgSvc, redisRepo)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

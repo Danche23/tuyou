@@ -216,12 +216,9 @@ func (s *menuService) InsertMenu(ctx context.Context, req *request.InsertMenuReq
 		Icon:       req.Icon,
 		HideInMenu: boolToInt(req.HideInMenu),
 	}
-	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	// 类型规则：目录(1)组件路径为空
 	if menuType == 1 {
 		menu.Component = "" // 目录不展示组件路径
-	}
-	if parentID != 0 {
-		menu.Icon = "" // 子菜单不展示图标
 	}
 	if err := s.menuRepo.Insert(ctx, menu); err != nil {
 		return nil, err
@@ -249,17 +246,18 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 	}
 
 	updates := map[string]interface{}{}
-	newParentID := menu.ParentID // 更新后的父级，用于判断是否为子菜单
 	if req.MenuName != nil {
 		updates["menu_name"] = *req.MenuName
 	}
+	// 父级菜单：前端清空父级时传 null（或空串），均视为移回一级菜单（parent_id=0），其余按父菜单名解析
 	if req.ParentName != nil {
 		parentID, err := s.resolveParentID(ctx, *req.ParentName)
 		if err != nil {
 			return err
 		}
-		newParentID = parentID
 		updates["parent_id"] = parentID
+	} else {
+		updates["parent_id"] = 0
 	}
 	if req.MenuType != nil {
 		updates["menu_type"] = menuTypeToInt(*req.MenuType)
@@ -287,16 +285,13 @@ func (s *menuService) UpdateMenu(ctx context.Context, id uint, req *request.Upda
 		return appErrors.ErrMissingParam
 	}
 
-	// 类型规则：目录(1)组件路径为空；子菜单(有父级)图标为空，一级菜单保留图标
+	// 类型规则：目录(1)组件路径为空
 	menuType := menu.MenuType
 	if req.MenuType != nil {
 		menuType = menuTypeToInt(*req.MenuType)
 	}
 	if menuType == 1 {
 		updates["component"] = ""
-	}
-	if newParentID != 0 {
-		updates["icon"] = ""
 	}
 
 	return s.menuRepo.Update(ctx, id, updates)

@@ -25,7 +25,7 @@ func (r *adminMsgRepository) Create(ctx context.Context, adminID uint, content s
 		MsgType:        adminMsgType,               // 2 系统通知
 		ReceiveObjType: entity.ReceiveObjTypeAdmin, // 2 指定管理员
 		SenderID:       0,                          // 0=系统
-		TemplateID:     0,
+		TemplateID:     5,                          // 系统通知模板
 		MsgContent:     content,
 		SendTime:       time.Now(),
 	}

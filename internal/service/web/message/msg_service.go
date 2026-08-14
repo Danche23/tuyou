@@ -152,6 +152,14 @@ func (s *msgService) Reply(memberID, msgID uint, content string) error {
 	if nickname != "" {
 		msgContent = "「" + nickname + "」" + msgContent
 	}
+	// 优先走模板10渲染（变量 nickname/comment），模板查不到回退上面的拼装
+	var tpl entity.MsgTemplate
+	if err := s.db.Table("msg_template").Where("id = ?", 10).First(&tpl).Error; err == nil {
+		msgContent = renderContent(tpl.ContentTemplate, map[string]string{
+			"nickname": nickname,
+			"comment":  content,
+		})
+	}
 
 	// 事务：插入回复评论 + 给原评论作者生成一条互动消息（msg_info + msg_user_record）
 	info := &entity.MsgInfo{
