@@ -111,8 +111,9 @@ func (r *menuRepository) Update(ctx context.Context, id uint, updates map[string
 	if result.Error != nil {
 		return result.Error
 	}
+	// 服务层已先校验菜单存在；RowsAffected==0 表示提交的字段没有任何变化
 	if result.RowsAffected == 0 {
-		return appErrors.ErrNotFound
+		return appErrors.New(appErrors.CodeBadRequest, "菜单无变化")
 	}
 	return nil
 }
