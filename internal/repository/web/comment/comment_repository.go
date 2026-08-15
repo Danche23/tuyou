@@ -182,6 +182,21 @@ func (r *commentRepository) FindTopReplies(parentID uint, limit int) ([]entity.C
 	return comments, nil
 }
 
+// FindRepliesByParentIDs 批量查询多个一级评论下的全部二级评论（整体按热度倒序），
+// 取代逐条 FindTopReplies 的 N+1（C4）
+func (r *commentRepository) FindRepliesByParentIDs(parentIDs []uint) ([]entity.Comment, error) {
+	if len(parentIDs) == 0 {
+		return []entity.Comment{}, nil
+	}
+	var replies []entity.Comment
+	if err := r.db.Where("reply_to_id IN ?", parentIDs).
+		Order("heat DESC, id ASC").
+		Find(&replies).Error; err != nil {
+		return nil, err
+	}
+	return replies, nil
+}
+
 // FindReplyPage 二级评论分页（发布时间倒序，排除热评）
 func (r *commentRepository) FindReplyPage(parentID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error) {
 	var comments []entity.Comment

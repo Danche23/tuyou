@@ -363,19 +363,28 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询回复数失败", err)
 	}
 
-	// 每个一级评论取热度最高前2条二级评论：仅当热度最高的二级评论点赞数 >10 才展示
-	replyMap := make(map[uint][]entity.Comment, len(commentIDs))
-	allReplies := make([]entity.Comment, 0, len(commentIDs)*2)
-	for _, c := range comments {
-		if replyCounts[c.ID] == 0 {
+	// C4：热回复批量查询——一次取回本页全部一级评论下的二级，按父分组取热度前2，取代逐条 FindTopReplies 的 N+1
+	repliesByParent, err := s.repo.FindRepliesByParentIDs(commentIDs)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询热评失败", err)
+	}
+	tmp := make(map[uint][]entity.Comment, len(commentIDs))
+	for _, r := range repliesByParent {
+		if r.ReplyToID == nil {
 			continue
 		}
-		topReplies, err := s.repo.FindTopReplies(c.ID, 2)
-		if err != nil {
-			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热评失败", err)
+		pid := *r.ReplyToID
+		grouped := tmp[pid]
+		if len(grouped) < 2 {
+			tmp[pid] = append(grouped, r) // 整体已按 heat DESC 排，每父前2即热度最高前2
 		}
+	}
+	// 展示门限：仅当该父热度最高的二级评论点赞数 >10 才展示摘要
+	replyMap := make(map[uint][]entity.Comment, len(commentIDs))
+	allReplies := make([]entity.Comment, 0, len(commentIDs)*2)
+	for parentID, topReplies := range tmp {
 		if len(topReplies) > 0 && topReplies[0].LikeCount > 10 {
-			replyMap[c.ID] = topReplies
+			replyMap[parentID] = topReplies
 			allReplies = append(allReplies, topReplies...)
 		}
 	}
