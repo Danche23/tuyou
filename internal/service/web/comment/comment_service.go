@@ -18,6 +18,7 @@ package comment
 // 本项目事务的用法：s.db.Transaction(func(tx) error { ... }) 里所有带 tx 的仓储方法
 // 都在同一个数据库事务里，任一步出错整体回滚。
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 	repoComment "tuyou/internal/repository/web/comment"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/response"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -40,13 +42,14 @@ type CommentNotifier interface {
 }
 
 type commentService struct {
-	db       *gorm.DB
-	repo     repoComment.CommentRepository
-	notifier CommentNotifier
+	db        *gorm.DB
+	repo      repoComment.CommentRepository
+	sensitive *sensitive.SensitiveMatcher
+	notifier  CommentNotifier
 }
 
-func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, notifier CommentNotifier) CommentService {
-	return &commentService{db: db, repo: repo, notifier: notifier}
+func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher, notifier CommentNotifier) CommentService {
+	return &commentService{db: db, repo: repo, sensitive: sensitive, notifier: notifier}
 }
 
 // timeFormat 时间格式化样式（与项目其他模块一致）
@@ -160,12 +163,12 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 			return err
 		}
 
-		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）
+		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）；-1 用 max 防负
 		likeCount = comment.LikeCount
 		if isLiked {
 			likeCount++
 		} else {
-			likeCount--
+			likeCount = max(comment.LikeCount-1, 0)
 		}
 		return nil
 	})
@@ -190,6 +193,10 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if req.Content == "" {
 		return nil, errors.New(errors.CodeInvalidParam, "评论内容不能为空")
 	}
+	// 敏感词校验：命中即拒绝发布（不暴露具体词，防绕开）
+	if _, hit := s.sensitive.Validate(req.Content); hit {
+		return nil, errors.New(errors.CodeInvalidParam, "内容包含违规词汇")
+	}
 	// 校验目标存在（笔记/攻略），并取作品作者 memberID 与标题（标题用于一级评论通知正文）
 	targetAuthorID, title, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
 	if err != nil {
@@ -212,14 +219,9 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 			rootID = *replied.ReplyToID
 		}
 		replyToID = &rootID
-		// 被回复的用户：缺省取被回复评论的作者
-		//（回复一级→一级作者；回复二级→该二级作者，与"回复二级必传"缺省行为一致）
-		if req.ReplyToMemberID == nil {
-			mid := replied.MemberID
-			replyToMemberID = &mid
-		} else {
-			replyToMemberID = req.ReplyToMemberID
-		}
+		// C5：忽略客户端传的被回复用户，一律取被回复评论的作者（防伪造被回复人）
+		mid := replied.MemberID
+		replyToMemberID = &mid
 	}
 
 	comment := &entity.Comment{
@@ -236,6 +238,13 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	// 事务：写评论 + 目标 comment_count +1 + 重算新评论热度；
 	// 若是回复，父一级评论的 reply_count 变了，同事务重算父评论热度，避免热评榜/回复预览滞后到小时任务
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// C3：锁序统一"先锁根一级评论行"，与 DeleteComment 一致，消除死锁。
+		// 回复场景锁父一级行，也让"新回复"与"删父"串行化（C1 计数准确）。
+		if replyToID != nil {
+			if _, err := s.repo.LockCommentByID(tx, *replyToID); err != nil {
+				return errors.NewWithErr(errors.CodeNotFound, "被回复的评论不存在", err)
+			}
+		}
 		if err := s.repo.CreateComment(tx, comment); err != nil {
 			return err
 		}
@@ -297,7 +306,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 }
 
 // ListComments 评论列表：前2条热评（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
-func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*response.PageResponse, error) {
+func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) {
 	if req.TargetType != 1 && req.TargetType != 2 {
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
 	}
@@ -337,7 +346,22 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, err
 	}
-	return response.NewPageResponse(items, total, req.Page, req.Size), nil
+
+	// 全量评论数（一级+二级）：实时统计、天然自愈，不依赖 ±1 维护的计数，
+	// 前端"共N条评论"直接用它，避免显示成"当前加载的一级条数"
+	totalComments, err := s.repo.CountAllComments(req.TargetType, req.TargetID)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论总数失败", err)
+	}
+
+	return &responseComment.CommentListResponse{
+		List:          items,
+		Total:         total,
+		TotalComments: totalComments,
+		Page:          req.Page,
+		Size:          req.Size,
+		TotalPage:     int(math.Ceil(float64(total) / float64(req.Size))),
+	}, nil
 }
 
 // buildCommentItems 组装一级评论列表项（用户信息、点赞态、二级热评摘要、回复数、删除权限）
@@ -364,19 +388,28 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询回复数失败", err)
 	}
 
-	// 每个一级评论取热度最高前2条二级评论：仅当热度最高的二级评论点赞数 >10 才展示
-	replyMap := make(map[uint][]entity.Comment, len(commentIDs))
-	allReplies := make([]entity.Comment, 0, len(commentIDs)*2)
-	for _, c := range comments {
-		if replyCounts[c.ID] == 0 {
+	// C4：热回复批量查询——一次取回本页全部一级评论下的二级，按父分组取热度前2，取代逐条 FindTopReplies 的 N+1
+	repliesByParent, err := s.repo.FindRepliesByParentIDs(commentIDs)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询热评失败", err)
+	}
+	tmp := make(map[uint][]entity.Comment, len(commentIDs))
+	for _, r := range repliesByParent {
+		if r.ReplyToID == nil {
 			continue
 		}
-		topReplies, err := s.repo.FindTopReplies(c.ID, 2)
-		if err != nil {
-			return nil, errors.NewWithErr(errors.CodeInternalError, "查询热评失败", err)
+		pid := *r.ReplyToID
+		grouped := tmp[pid]
+		if len(grouped) < 2 {
+			tmp[pid] = append(grouped, r) // 整体已按 heat DESC 排，每父前2即热度最高前2
 		}
+	}
+	// 展示门限：仅当该父热度最高的二级评论点赞数 >10 才展示摘要
+	replyMap := make(map[uint][]entity.Comment, len(commentIDs))
+	allReplies := make([]entity.Comment, 0, len(commentIDs)*2)
+	for parentID, topReplies := range tmp {
 		if len(topReplies) > 0 && topReplies[0].LikeCount > 10 {
-			replyMap[c.ID] = topReplies
+			replyMap[parentID] = topReplies
 			allReplies = append(allReplies, topReplies...)
 		}
 	}
@@ -435,6 +468,16 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// C1+C3：事务第一句锁"根一级评论行"（一级=自身，二级=其 ReplyToID）。
+		// 串行化并发插入的二级评论：先提交的回复 COUNT 可见；后到的回复等锁，
+		// 待删除提交后 LockCommentByID（默认作用域）查不到已软删行 → 404。
+		rootID := commentID
+		if comment.ReplyToID != nil {
+			rootID = *comment.ReplyToID
+		}
+		if _, err := s.repo.LockCommentByID(tx, rootID); err != nil {
+			return errors.NewWithErr(errors.CodeNotFound, "评论不存在", err)
+		}
 		if comment.ReplyToID == nil {
 			// 删除一级评论：先数其下未删二级数（用于 comment_count 级联扣减），再连带软删
 			replyCount, err := s.repo.CountRepliesByParentID(tx, commentID)

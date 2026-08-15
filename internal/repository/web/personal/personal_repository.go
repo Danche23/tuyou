@@ -4,6 +4,7 @@ import (
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type personalRepository struct {
@@ -32,7 +33,7 @@ func (r *personalRepository) UpdateProfile(memberID uint, updates map[string]int
 func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int) ([]entity.Member, int64, error) {
 	var total int64
 	if err := r.db.Table("member").
-		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -41,7 +42,7 @@ func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int
 	var rows []entity.Member
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
-		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
@@ -56,7 +57,7 @@ func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int
 func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]entity.Member, int64, error) {
 	var total int64
 	if err := r.db.Table("member").
-		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -65,7 +66,7 @@ func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]e
 	var rows []entity.Member
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
-		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
@@ -81,7 +82,7 @@ func (r *personalRepository) FindFollowedIDs(followerID uint) (map[uint]bool, er
 	var ids []uint
 	if err := r.db.Table("follow").
 		Select("followee_id").
-		Where("follower_id = ? AND delete_time IS NULL", followerID).
+		Where("follower_id = ? AND delete_time IS NULL AND status = 1", followerID).
 		Pluck("followee_id", &ids).Error; err != nil {
 		return nil, err
 	}
@@ -93,51 +94,48 @@ func (r *personalRepository) FindFollowedIDs(followerID uint) (map[uint]bool, er
 	return followed, nil
 }
 
-// CreateFollow 关注：写入 follow 记录（调用方需先 DeleteFollow，保证不重复）
-func (r *personalRepository) CreateFollow(tx *gorm.DB, followerID, followeeID uint) error {
-	return tx.Create(&entity.Follow{
+// ToggleFollow 原子翻转关注状态：行不存在 → 插入 status=1（关注）；行已存在 → status = 1-status（翻转）。
+// 唯一索引 idx_follower_followee 作并发串行器：两个并发请求由 InnoDB 强制排队，
+// 后到者走 ON DUPLICATE KEY UPDATE 翻转，杜绝"删0行误走关注分支"和撞索引 500。
+// 返回 (翻转后是否已关注, 计数增量 delta)：已关注 → +1，已取关 → -1。
+func (r *personalRepository) ToggleFollow(tx *gorm.DB, followerID, followeeID uint) (bool, int, error) {
+	res := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "follower_id"}, {Name: "followee_id"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"status": gorm.Expr("1 - status"),
+		}),
+	}).Create(&entity.Follow{
 		FollowerID: followerID,
 		FolloweeID: followeeID,
-	}).Error
-}
-
-// DeleteFollow 取关：硬删除，返回是否真的删掉了（true=之前处于已关注状态）
-func (r *personalRepository) DeleteFollow(tx *gorm.DB, followerID, followeeID uint) (bool, error) {
-	res := tx.Unscoped().
-		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
-		Delete(&entity.Follow{})
+		Status:     1,
+	})
 	if res.Error != nil {
-		return false, res.Error
+		return false, 0, res.Error
 	}
-	return res.RowsAffected > 0, nil
+
+	// 翻转结果需回读（MySQL 无 RETURNING）：同一事务内行必已存在
+	var f entity.Follow
+	if err := tx.Where("follower_id = ? AND followee_id = ?", followerID, followeeID).First(&f).Error; err != nil {
+		return false, 0, err
+	}
+	if f.Status == 1 {
+		return true, 1, nil
+	}
+	return false, -1, nil
 }
 
-// IncrFollowCount 我的关注数 +1
-func (r *personalRepository) IncrFollowCount(tx *gorm.DB, memberID uint) error {
+// AdjustFollowCount 我的关注数 +delta（GREATEST 防负，P2）
+func (r *personalRepository) AdjustFollowCount(tx *gorm.DB, memberID uint, delta int) error {
 	return tx.Model(&entity.Member{}).
 		Where("id = ?", memberID).
-		UpdateColumn("follow_count", gorm.Expr("follow_count + 1")).Error
+		UpdateColumn("follow_count", gorm.Expr("GREATEST(follow_count + ?, 0)", delta)).Error
 }
 
-// DecrFollowCount 我的关注数 -1
-func (r *personalRepository) DecrFollowCount(tx *gorm.DB, memberID uint) error {
+// AdjustFansCount 对方粉丝数 +delta（GREATEST 防负，P2）
+func (r *personalRepository) AdjustFansCount(tx *gorm.DB, memberID uint, delta int) error {
 	return tx.Model(&entity.Member{}).
 		Where("id = ?", memberID).
-		UpdateColumn("follow_count", gorm.Expr("follow_count - 1")).Error
-}
-
-// IncrFansCount 对方粉丝数 +1
-func (r *personalRepository) IncrFansCount(tx *gorm.DB, memberID uint) error {
-	return tx.Model(&entity.Member{}).
-		Where("id = ?", memberID).
-		UpdateColumn("fans_count", gorm.Expr("fans_count + 1")).Error
-}
-
-// DecrFansCount 对方粉丝数 -1
-func (r *personalRepository) DecrFansCount(tx *gorm.DB, memberID uint) error {
-	return tx.Model(&entity.Member{}).
-		Where("id = ?", memberID).
-		UpdateColumn("fans_count", gorm.Expr("fans_count - 1")).Error
+		UpdateColumn("fans_count", gorm.Expr("GREATEST(fans_count + ?, 0)", delta)).Error
 }
 
 func (r *personalRepository) FindNoteLists(memberID uint, page, size int) ([]entity.Note, int64, error) {

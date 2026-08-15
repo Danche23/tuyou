@@ -21,7 +21,7 @@ import (
 type CommentService interface {
 	ToggleLike(commentID uint, memberID uint) (*responseComment.LikeToggleResponse, error)                       // 点赞/取消点赞
 	CreateComment(memberID uint, req *requestComment.CreateCommentRequest) (*responseComment.CommentItem, error) // 发表评论
-	ListComments(memberID uint, req *requestComment.ListCommentRequest) (*response.PageResponse, error)          // 评论列表
+	ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) // 评论列表（含全量评论数 totalComments）
 	DeleteComment(commentID uint, memberID uint) error                                                           // 删除评论
 	ListReplies(commentID uint, memberID uint, page, size int) (*response.PageResponse, error)                   // 二级评论列表
 }

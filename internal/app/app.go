@@ -97,6 +97,7 @@ import (
 	"tuyou/pkg/config"
 	"tuyou/pkg/database"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 )
 
 // App 应用结构体
@@ -217,6 +218,8 @@ func (a *App) initDatabase() error {
 		&entity.Comment{},
 		&entity.CommentLike{},
 		&entity.Follow{},
+		// 敏感词模块（1张）
+		&entity.SensitiveWord{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
@@ -295,10 +298,16 @@ func (a *App) initDependencies() {
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
 	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
+	// 敏感词匹配器：启动时从 sensitive_word 表加载启用词构建 trie（加载失败不带病上线）
+	sensitiveMatcher, err := sensitive.NewFromDB(a.mysqlDB)
+	if err != nil {
+		logger.Fatal("敏感词库加载失败", zap.Error(err))
+	}
+
 	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
-	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型）；
+	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型、敏感词校验）；
 	// commentAdminSvc（admin）= 管理（筛选、看状态、硬删清理）。
-	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, notifier)
+	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher, notifier)
 	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)

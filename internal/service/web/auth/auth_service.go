@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	"time"
 	request "tuyou/internal/model/dto/request/web/auth"
@@ -17,6 +16,8 @@ import (
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // authService 认证服务实现

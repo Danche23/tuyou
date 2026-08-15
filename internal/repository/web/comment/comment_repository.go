@@ -138,6 +138,18 @@ func (r *commentRepository) CountCommentPage(targetType int, targetID uint, excl
 	return total, nil
 }
 
+// CountAllComments 统计目标下全量评论数（一级+二级，delete_time IS NULL 由 GORM 自动追加）
+// 用于评论列表响应里的 totalComments：实时统计、天然自愈，不依赖 ±1 维护的计数
+func (r *commentRepository) CountAllComments(targetType int, targetID uint) (int64, error) {
+	var total int64
+	if err := r.db.Model(&entity.Comment{}).
+		Where("target_type = ? AND target_id = ?", targetType, targetID).
+		Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 // CountRepliesByParentIDs 批量统计每个一级评论下的二级评论总数
 func (r *commentRepository) CountRepliesByParentIDs(parentIDs []uint) (map[uint]int64, error) {
 	result := make(map[uint]int64, len(parentIDs))
@@ -169,6 +181,21 @@ func (r *commentRepository) FindTopReplies(parentID uint, limit int) ([]entity.C
 		return nil, err
 	}
 	return comments, nil
+}
+
+// FindRepliesByParentIDs 批量查询多个一级评论下的全部二级评论（整体按热度倒序），
+// 取代逐条 FindTopReplies 的 N+1（C4）
+func (r *commentRepository) FindRepliesByParentIDs(parentIDs []uint) ([]entity.Comment, error) {
+	if len(parentIDs) == 0 {
+		return []entity.Comment{}, nil
+	}
+	var replies []entity.Comment
+	if err := r.db.Where("reply_to_id IN ?", parentIDs).
+		Order("heat DESC, id ASC").
+		Find(&replies).Error; err != nil {
+		return nil, err
+	}
+	return replies, nil
 }
 
 // FindReplyPage 二级评论分页（发布时间倒序，排除热评）

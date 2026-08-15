@@ -81,7 +81,7 @@ func (r *activityRepository) ExistsJoin(activityID uint, memberID uint) (bool, e
 func (r *activityRepository) ExistsFollow(followerID uint, followeeID uint) (bool, error) {
 	var count int64
 	if err := r.db.Model(&entity.Follow{}).
-		Where("follower_id = ? AND followee_id = ?", followerID, followeeID).
+		Where("follower_id = ? AND followee_id = ? AND status = 1", followerID, followeeID).
 		Count(&count).Error; err != nil {
 		return false, err
 	}

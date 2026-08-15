@@ -19,7 +19,7 @@ type UpdateMemberReq struct {
 
 // BatchDeleteReq 批量删除请求
 type BatchDeleteReq struct {
-	IDs []string `json:"ids" binding:"required,min=1"`
+	IDs []string `json:"ids" binding:"required,min=1,max=500"` // 会员 ID 列表，最多500个
 }
 
 // BatchUpdateStatusReq 批量修改状态请求

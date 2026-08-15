@@ -49,7 +49,7 @@ func (c *Controller) UpdateProfile(ctx *gin.Context) {
 
 	var req requestPersonal.UpdateProfileRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
@@ -72,7 +72,7 @@ func (c *Controller) GetFollowedMembers(ctx *gin.Context) {
 
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (c *Controller) GetFansMembers(ctx *gin.Context) {
 
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 
@@ -136,7 +136,7 @@ func (c *Controller) GetMyNotes(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetMyNotes(memberID, req.Page, req.Size)
@@ -156,7 +156,7 @@ func (c *Controller) GetLikedStrategys(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetLikedStrategys(memberID, req.Page, req.Size)
@@ -177,7 +177,7 @@ func (c *Controller) GetFavoriteNotes(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetFavoriteNotes(memberID, req.Page, req.Size)
@@ -198,7 +198,7 @@ func (c *Controller) GetFavoriteStrategys(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetFavoriteStrategys(memberID, req.Page, req.Size)
@@ -219,7 +219,7 @@ func (c *Controller) GetLikedNotes(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetLikedNotes(memberID, req.Page, req.Size)
@@ -240,7 +240,7 @@ func (c *Controller) GetMyStrategys(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	cards, total, err := c.personalSvc.GetMyStrategys(memberID, req.Page, req.Size)
@@ -261,7 +261,7 @@ func (c *Controller) GetPublishActivities(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	list, total, err := c.personalSvc.GetPublishActivities(memberID, req.Page, req.Size)
@@ -282,7 +282,7 @@ func (c *Controller) GetJoinActivities(ctx *gin.Context) {
 	}
 	var req response.PageRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(ctx, "参数校验失败:"+err.Error())
+		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
 	list, total, err := c.personalSvc.GetJoinActivities(memberID, req.Page, req.Size)

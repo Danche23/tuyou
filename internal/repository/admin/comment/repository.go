@@ -18,8 +18,11 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"tuyou/internal/model/entity"
+
+	repoComment "tuyou/internal/repository/web/comment" // 复用前台导出的热度公式常量 RecomputeHeatExpr（单一来源，避免公式两处漂移）
 )
 
 type commentRepository struct {
@@ -184,15 +187,33 @@ func targetModel(targetType int) interface{} {
 // deleteCommentInTx 事务内硬删一条评论：
 // 物理删自身 +（若一级）其下所有二级（含已软删的）+ 这些评论的点赞记录，
 // 并按"仍正常"的行数扣减目标 comment_count（已软删行软删时已扣过，不再重复扣）。
+// 若删除的是二级评论：其归属一级评论的回复数变了，还要立即重算它的热度，避免等小时任务兜底。
 // 若自身已不存在（批量场景下已被父评论连带删除）则直接跳过，避免重复扣减。
 func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
-	// 0. 先确认自身还存在
-	var exists int64
-	if err := tx.Model(&entity.Comment{}).Unscoped().Where("id = ?", comment.ID).Count(&exists).Error; err != nil {
-		return err
+	// 0. 先锁根一级评论行（若为二级评论，统一"先锁根"锁序 root → child → comment_like，
+	//    与前台 Create/DeleteComment 一致，消除 admin 删二级 child→root 的 AB-BA 死锁面）；
+	//    再锁本行（comment → comment_like，与前台 ToggleLike 一致，并发点赞排队在删除之后）。
+	//    根行/本行已物理删除（批量场景下已被父评论连带删除）→ 跳过，保持原语义。
+	if comment.ReplyToID != nil {
+		var root entity.Comment
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Unscoped().
+			First(&root, *comment.ReplyToID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
 	}
-	if exists == 0 {
+	var locked entity.Comment
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Unscoped().
+		First(&locked, comment.ID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 
 	// 1. 删除行数（用于 comment_count 扣减）：只统计"当前仍正常"的行。
@@ -227,9 +248,21 @@ func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
 		return err
 	}
 	// 5. 目标 note/strategy comment_count -n（GREATEST 防负）
-	return tx.Model(targetModel(comment.TargetType)).
+	if err := tx.Model(targetModel(comment.TargetType)).
 		Where("id = ?", comment.TargetID).
-		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", n)).Error
+		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", n)).Error; err != nil {
+		return err
+	}
+
+	// 6. 若删除的是二级评论：其归属一级评论的回复数变了，立即重算它的热度。
+	// 复用前台 RecomputeHeatExpr（同一公式）；父级若已软删（delete_time 非空），
+	// 默认作用域自动不命中，热度也不该展示，等同跳过。
+	if comment.ReplyToID != nil {
+		return tx.Model(&entity.Comment{}).
+			Where("id = ?", *comment.ReplyToID).
+			UpdateColumn("heat", gorm.Expr(repoComment.RecomputeHeatExpr)).Error
+	}
+	return nil
 }
 
 // Delete 事务内硬删单条评论

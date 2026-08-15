@@ -52,3 +52,15 @@ type CommentReplyItem struct {
 	CreatedAt       string       `json:"createdAt"`       // 创建时间 yyyy-MM-dd HH:mm:ss
 	CanDelete       bool         `json:"canDelete"`       // 当前用户能否删除（评论者本人或作品作者=true）
 }
+
+// CommentListResponse 评论列表响应（比通用分页结构多一个 totalComments）
+//   - total         一级评论分页总数（不含置顶热评）——前端翻页用
+//   - totalComments 全量评论数（一级+二级，实时统计）——前端"共N条评论"用，不随展开/收起变化
+type CommentListResponse struct {
+	List          []*CommentItem `json:"list"`          // 一级评论列表（热评置顶 + 分页）
+	Total         int64          `json:"total"`         // 一级评论分页总数（不含置顶热评）
+	TotalComments int64          `json:"totalComments"` // 全量评论数（一级+二级）
+	Page          int            `json:"page"`          // 当前页码
+	Size          int            `json:"size"`          // 每页大小
+	TotalPage     int            `json:"total_page"`    // 总页数
+}

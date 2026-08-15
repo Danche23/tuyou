@@ -16,7 +16,7 @@ import (
 //
 //	兜底实时 ±1 可能漏掉的路径（如后台硬删笔记、手动改库等）。
 //
-// ② 评论热度全量重算：按设计文档 4.4 公式刷新 comment 表 heat 列。
+// ② 评论热度重算：只重算还热的评论（heat ≥ 1，老热评时间衰减）；凉透的不再重算（C6）。
 // 返回 ticker，app 优雅关闭时调用 Stop。
 func StartCommentHeatJob(db *gorm.DB) *time.Ticker {
 	recomputeCommentHeat(db)
@@ -47,8 +47,10 @@ func recomputeCommentHeat(db *gorm.DB) {
 		return
 	}
 
-	// ② 评论热度全量重算
-	if err := db.Exec("UPDATE comment SET heat = " + repoComment.RecomputeHeatExpr + " WHERE delete_time IS NULL").Error; err != nil {
+	// ② 评论热度重算：只重算"还热的"评论（heat ≥ 1）——
+	// 写路径（点赞/发评论/删评论/后台删）已实时重算，本任务唯一职责是老热评的时间衰减；
+	// 凉透的（heat < 1）不影响热评榜/置顶，不再重算（方案 C，C6）。
+	if err := db.Exec("UPDATE comment SET heat = " + repoComment.RecomputeHeatExpr + " WHERE delete_time IS NULL AND heat >= 1").Error; err != nil {
 		logger.Error("评论热度重算失败", zap.Error(err))
 		return
 	}

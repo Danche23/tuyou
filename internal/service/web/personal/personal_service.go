@@ -2,6 +2,7 @@ package personal
 
 import (
 	"context"
+	stdErrors "errors"
 	"strconv"
 	"time"
 	requestPersonal "tuyou/internal/model/dto/request/web/personal"
@@ -43,6 +44,21 @@ func strOr(v, def string) string {
 	return v
 }
 
+// findMemberActive 查会员并校验可用（P8）：不存在 → 用户不存在；已禁用 → 账号不可用。
+func (s *personalService) findMemberActive(memberID uint) (*entity.Member, error) {
+	member, err := s.repo.FindByID(memberID)
+	if err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	if member.Status != 1 {
+		return nil, errors.New(errors.CodeForbidden, "账号已被禁用")
+	}
+	return member, nil
+}
+
 // GetProfile 获取个人主页信息
 func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, error) {
 	member, err := s.repo.FindByID(memberID)
@@ -63,17 +79,32 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 }
 
 func (s *personalService) UpdateProfile(memberID uint, req *requestPersonal.UpdateProfileRequest) (*responsePersonal.Profile, error) {
-	updates := map[string]interface{}{
-		"avatar":   strOr(req.Avatar, entity.DefaultAvatar), // 空值回写默认，避免把库里的默认头像清空
-		"nickname": req.Nickname,
-		"bio":      strOr(req.Bio, entity.DefaultBio),
-		"bg_img":   strOr(req.BgImg, entity.DefaultBgImg),
+	// P8：账号被禁用后不允许写操作
+	if _, err := s.findMemberActive(memberID); err != nil {
+		return nil, err
+	}
+
+	// P6：只写本次传了的字段，避免 strOr 默认值覆盖存量
+	updates := map[string]interface{}{}
+	if req.Avatar != "" {
+		updates["avatar"] = req.Avatar
+	}
+	if req.Nickname != "" {
+		updates["nickname"] = req.Nickname
+	}
+	if req.Bio != "" {
+		updates["bio"] = req.Bio
+	}
+	if req.BgImg != "" {
+		updates["bg_img"] = req.BgImg
+	}
+	if len(updates) == 0 {
+		return nil, errors.New(errors.CodeInvalidParam, "没有要更新的内容")
 	}
 
 	if err := s.repo.UpdateProfile(memberID, updates); err != nil {
 		return nil, err
 	}
-
 	return s.GetProfile(memberID)
 }
 
@@ -123,46 +154,42 @@ func (s *personalService) GetFansMembers(memberID uint, page, size int) ([]respo
 	return result, total, nil
 }
 
-// ToggleFollow 关注/取关（翻转）。关注/取关与双方计数放在同一个事务里，保证数据一致
+// ToggleFollow 关注/取关（翻转）：原子 upsert 位翻转 + 双方计数同事务调整。
+// 并发安全：唯一索引 idx_follower_followee 作串行器，两个并发请求由 InnoDB 排队，
+// 后到者走 ON DUPLICATE KEY UPDATE 翻转，不会出现"删0行误走关注分支"或撞索引 500（方案 C）。
 func (s *personalService) ToggleFollow(followerID uint, followeeID uint) (*responsePersonal.FollowToggleResponse, error) {
 	if followerID == followeeID {
 		return nil, errors.New(errors.CodeInvalidParam, "不能关注自己")
 	}
 
-	// 校验被关注用户存在（查不到会返回 ErrUserNotFound，顺带挡掉 followeeId=0 的非法请求）
+	// P8：当前账号被禁用后不允许写操作（登录态不自动失效，这里兜底）
+	if _, err := s.findMemberActive(followerID); err != nil {
+		return nil, err
+	}
+
+	// P3：被关注用户必须存在（裸 gorm 错误会兜成 500，这里显式转"用户不存在"）
 	if _, err := s.repo.FindByID(followeeID); err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.ErrUserNotFound
+		}
 		return nil, err
 	}
 
 	var isFollowed bool
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 先试取关：删到了 → 说明之前已关注，本次是取关，双方计数 -1
-		deleted, err := s.repo.DeleteFollow(tx, followerID, followeeID)
+		// 原子翻转：不存在→插 status=1；存在→status=1-status。返回(新状态, 计数增量)
+		newStatus, delta, err := s.repo.ToggleFollow(tx, followerID, followeeID)
 		if err != nil {
 			return err
 		}
-		if deleted {
-			if err := s.repo.DecrFollowCount(tx, followerID); err != nil {
-				return err
-			}
-			if err := s.repo.DecrFansCount(tx, followeeID); err != nil {
-				return err
-			}
-			isFollowed = false
-			return nil
-		}
-
-		// 没删到 → 说明之前未关注，本次是关注，双方计数 +1
-		if err := s.repo.CreateFollow(tx, followerID, followeeID); err != nil {
+		isFollowed = newStatus
+		// 双方计数各加 delta（GREATEST 防负）
+		if err := s.repo.AdjustFollowCount(tx, followerID, delta); err != nil {
 			return err
 		}
-		if err := s.repo.IncrFollowCount(tx, followerID); err != nil {
+		if err := s.repo.AdjustFansCount(tx, followeeID, delta); err != nil {
 			return err
 		}
-		if err := s.repo.IncrFansCount(tx, followeeID); err != nil {
-			return err
-		}
-		isFollowed = true
 		return nil
 	})
 	if err != nil {
