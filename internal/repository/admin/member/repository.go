@@ -110,15 +110,15 @@ func (r *memberRepository) Update(ctx context.Context, id uint, updates map[stri
 }
 
 // cleanupFollowForMember 在事务内清理单个会员的关注数据（P4）：
-// ① 该会员关注过的人 → 对方粉丝数 -1（GREATEST 防负）
-// ② 关注过该会员的人 → 对方关注数 -1
+// ① 该会员关注过的人（仅 status=1 已关注）→ 对方粉丝数 -1（GREATEST 防负）
+// ② 关注过该会员的人（仅 status=1 已关注）→ 对方关注数 -1
 // ③ 清理 follow 行
 // 会员不存在也安全：子查询自然不命中、DELETE 删 0 行。
 func cleanupFollowForMember(tx *gorm.DB, memberID uint) error {
-	if err := tx.Exec("UPDATE member SET fans_count = GREATEST(fans_count - 1, 0) WHERE id IN (SELECT followee_id FROM follow WHERE follower_id = ?)", memberID).Error; err != nil {
+	if err := tx.Exec("UPDATE member SET fans_count = GREATEST(fans_count - 1, 0) WHERE id IN (SELECT followee_id FROM follow WHERE follower_id = ? AND status = 1)", memberID).Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("UPDATE member SET follow_count = GREATEST(follow_count - 1, 0) WHERE id IN (SELECT follower_id FROM follow WHERE followee_id = ?)", memberID).Error; err != nil {
+	if err := tx.Exec("UPDATE member SET follow_count = GREATEST(follow_count - 1, 0) WHERE id IN (SELECT follower_id FROM follow WHERE followee_id = ? AND status = 1)", memberID).Error; err != nil {
 		return err
 	}
 	return tx.Exec("DELETE FROM follow WHERE follower_id = ? OR followee_id = ?", memberID, memberID).Error
