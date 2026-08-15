@@ -23,7 +23,10 @@ import (
 // RegisterRoutes 注册后台评论管理路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin := r.Group("/admin")
-	admin.Use(middleware.Auth(c.redisRepo))
+	admin.Use(
+		middleware.Auth(c.redisRepo),
+		middleware.PermissionAuth(c.db),
+	)
 	{
 		admin.GET("/comments", c.ListComments)
 		admin.GET("/comments/:id", c.GetCommentDetail)

@@ -1,6 +1,7 @@
 package member
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,11 +18,12 @@ import (
 type Controller struct {
 	memberSvc service.MemberService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(memberSvc service.MemberService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{memberSvc: memberSvc, redisRepo: redisRepo}
+func NewController(memberSvc service.MemberService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{memberSvc: memberSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListMembers 查询会员列表（/admin/members）

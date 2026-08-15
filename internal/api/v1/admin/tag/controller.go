@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"gorm.io/gorm"
 	"strconv"
 
 	request "tuyou/internal/model/dto/request/admin/tag"
@@ -15,11 +16,12 @@ import (
 type Controller struct {
 	tagSvc    service.TagService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(tagSvc service.TagService) *Controller {
-	return &Controller{tagSvc: tagSvc}
+func NewController(tagSvc service.TagService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{tagSvc: tagSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListTags 分页查询标签

@@ -7,7 +7,10 @@ import (
 
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin := r.Group("/admin")
-	admin.Use(middleware.Auth(c.redisRepo))
+	admin.Use(
+		middleware.Auth(c.redisRepo),
+		middleware.PermissionAuth(c.db),
+	)
 	{
 		admin.GET("/api-permissions/module", c.Modules)
 		admin.GET("/api-permissions", c.List)

@@ -1,6 +1,7 @@
 package note
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,11 +20,12 @@ import (
 type Controller struct {
 	noteSvc   service.NoteService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(noteSvc service.NoteService) *Controller {
-	return &Controller{noteSvc: noteSvc}
+func NewController(noteSvc service.NoteService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{noteSvc: noteSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListNotes 分页查询笔记

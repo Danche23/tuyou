@@ -2,6 +2,7 @@ package roles
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/permission/roles"
 	"tuyou/internal/repository"
@@ -13,10 +14,11 @@ import (
 type Controller struct {
 	roleSvc   service.RoleService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
-func NewController(roleSvc service.RoleService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{roleSvc: roleSvc, redisRepo: redisRepo}
+func NewController(roleSvc service.RoleService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{roleSvc: roleSvc, redisRepo: redisRepo, db: db}
 }
 
 // List 查询角色列表

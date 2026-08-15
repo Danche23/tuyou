@@ -2,6 +2,7 @@ package menus
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/permission/menus"
 	"tuyou/internal/repository"
@@ -13,10 +14,11 @@ import (
 type Controller struct {
 	menuSvc   service.MenuService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
-func NewController(menuSvc service.MenuService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{menuSvc: menuSvc, redisRepo: redisRepo}
+func NewController(menuSvc service.MenuService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{menuSvc: menuSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListAll 查询全部一级菜单（父菜单选择器用）

@@ -6,19 +6,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (h *AdminHandler) RegisterRoutes(group *gin.RouterGroup) {
+func (c *AdminController) RegisterRoutes(group *gin.RouterGroup) {
 	adminGroup := group.Group("/admin")
 	{
-		adminGroup.GET("/captcha", h.GetCaptcha)
-		adminGroup.POST("/login", h.Login)
-		adminGroup.POST("/logout", h.Logout)
+		adminGroup.GET("/captcha", c.GetCaptcha)
+		adminGroup.POST("/login", c.Login)
+		adminGroup.POST("/logout", c.Logout)
 	}
 
 	// 需要登录的接口（启用登录态白名单校验）
 	authGroup := adminGroup.Group("/auth")
-	authGroup.Use(middleware.Auth(h.redisRepo))
+	authGroup.Use(
+		middleware.Auth(c.redisRepo),
+		middleware.PermissionAuth(c.db),
+	)
 	{
-		authGroup.GET("/me", h.Me)
-		authGroup.PUT("/password", h.UpdatePassword)
+		authGroup.GET("/me", c.Me)
+		authGroup.PUT("/password", c.UpdatePassword)
 	}
 }
