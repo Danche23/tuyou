@@ -13,12 +13,9 @@ type PersonalRepository interface {
 	FindFollowedMembers(followerID uint, page, size int) ([]entity.Member, int64, error) // FindFollowedMembers 查询当前用户关注的所有用户信息
 	FindFansMembers(memberID uint, page, size int) ([]entity.Member, int64, error)       // FindFansMembers 查询当前用户的粉丝列表
 	FindFollowedIDs(followerID uint) (map[uint]bool, error)                              // FindFollowedIDs 查询当前用户关注的所有用户 ID 集合
-	CreateFollow(tx *gorm.DB, followerID uint, followeeID uint) error                    // 关注
-	DeleteFollow(tx *gorm.DB, followerID uint, followeeID uint) (bool, error)            // 取关
-	IncrFollowCount(tx *gorm.DB, memberID uint) error                                    // 我的关注数 +1
-	DecrFollowCount(tx *gorm.DB, memberID uint) error                                    // 我的关注数 -1
-	IncrFansCount(tx *gorm.DB, memberID uint) error                                      // 对方粉丝数 +1
-	DecrFansCount(tx *gorm.DB, memberID uint) error                                      // 对方粉丝数 -1
+	ToggleFollow(tx *gorm.DB, followerID uint, followeeID uint) (bool, int, error) // 原子翻转关注状态，返回(新状态, 计数增量)（方案C）
+	AdjustFollowCount(tx *gorm.DB, memberID uint, delta int) error                 // 我的关注数 +delta（GREATEST 防负）
+	AdjustFansCount(tx *gorm.DB, memberID uint, delta int) error                   // 对方粉丝数 +delta（GREATEST 防负）
 
 	// FindNoteLists 分页查询当前用户发布的笔记（仅上架）
 	FindNoteLists(memberID uint, page, size int) ([]entity.Note, int64, error)
