@@ -27,7 +27,7 @@ func (r *msgRepository) FindMessages(memberID uint, msgType, page, size int) ([]
 
 	var rows []MessageRow
 	err = r.db.Table("msg_user_record").
-		Select("msg_info.id, msg_info.msg_type, msg_info.msg_content, msg_info.send_time, msg_info.sender_id, msg_user_record.is_read, mb.nickname, mb.avatar").
+		Select("msg_info.id, msg_info.msg_type, msg_info.msg_content, msg_info.send_time, msg_info.sender_id, msg_info.comment_id, msg_user_record.is_read, mb.nickname, mb.avatar").
 		Joins("JOIN msg_info ON msg_info.id = msg_user_record.msg_id AND msg_info.is_del = 0").
 		Joins("LEFT JOIN member mb ON mb.id = msg_info.sender_id AND msg_info.sender_id > 0").
 		Where("msg_user_record.receive_member_id = ? AND msg_info.msg_type = ? AND msg_info.receive_obj_type IN (?, ?) AND msg_user_record.is_user_del = 0", memberID, msgType, entity.ReceiveObjTypeAll, entity.ReceiveObjTypeMember).
@@ -110,6 +110,33 @@ func (r *msgRepository) FindCommentByID(commentID uint) (*entity.Comment, error)
 		return nil, err
 	}
 	return &c, nil
+}
+
+// FindRepliesByParent 查直接回复某条评论的、当前用户自己的回复，时间正序。
+// parent_id 在 CreateComment 里记录"真正回复的那条评论"，消息中心回复列表据此精确绑定。
+func (r *msgRepository) FindRepliesByParent(parentID, memberID uint) ([]entity.Comment, error) {
+	var comments []entity.Comment
+	if err := r.db.Where("parent_id = ? AND member_id = ?", parentID, memberID).
+		Order("create_time ASC, id ASC").Find(&comments).Error; err != nil {
+		return nil, err
+	}
+	return comments, nil
+}
+
+// FindCommentLikes 批量查当前用户对哪些评论点过赞（线程展示 isLiked 用）
+func (r *msgRepository) FindCommentLikes(commentIDs []uint, memberID uint) (map[uint]bool, error) {
+	result := make(map[uint]bool, len(commentIDs))
+	if len(commentIDs) == 0 {
+		return result, nil
+	}
+	var likes []entity.CommentLike
+	if err := r.db.Where("comment_id IN ? AND member_id = ?", commentIDs, memberID).Find(&likes).Error; err != nil {
+		return nil, err
+	}
+	for _, l := range likes {
+		result[l.CommentID] = true
+	}
+	return result, nil
 }
 
 // FindMemberNickname 查询会员昵称（消息正文渲染用）
