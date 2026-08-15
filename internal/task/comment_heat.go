@@ -47,8 +47,10 @@ func recomputeCommentHeat(db *gorm.DB) {
 		return
 	}
 
-	// ② 评论热度全量重算
-	if err := db.Exec("UPDATE comment SET heat = " + repoComment.RecomputeHeatExpr + " WHERE delete_time IS NULL").Error; err != nil {
+	// ② 评论热度重算：只重算"还热的"评论（heat ≥ 1）——
+	// 写路径（点赞/发评论/删评论/后台删）已实时重算，本任务唯一职责是老热评的时间衰减；
+	// 凉透的（heat < 1）不影响热评榜/置顶，不再重算（方案 C，C6）。
+	if err := db.Exec("UPDATE comment SET heat = " + repoComment.RecomputeHeatExpr + " WHERE delete_time IS NULL AND heat >= 1").Error; err != nil {
 		logger.Error("评论热度重算失败", zap.Error(err))
 		return
 	}
