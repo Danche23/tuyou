@@ -204,7 +204,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	}
 
 	// 二级评论：对任何评论的回复都统一存二级，reply_to_id 指向归属的一级评论
-	var replyToID, replyToMemberID *uint
+	var replyToID, replyToMemberID, parentID *uint
 	if req.ReplyToID != nil {
 		replied, err := s.repo.FindByID(*req.ReplyToID)
 		if err != nil {
@@ -231,6 +231,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 		Content:         req.Content,
 		ReplyToID:       replyToID,
 		ReplyToMemberID: replyToMemberID,
+		ParentID:        parentID,
 		LikeCount:       0,
 		Heat:            0,
 		Status:          1,

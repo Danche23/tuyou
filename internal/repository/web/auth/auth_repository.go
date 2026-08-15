@@ -63,3 +63,8 @@ func (r *memberRepository) FindByID(ctx context.Context, id uint) (*entity.Membe
 func (r *memberRepository) UpdatePassword(ctx context.Context, id uint, password string) error {
 	return r.db.WithContext(ctx).Model(&entity.Member{}).Where("id = ?", id).Update("password", password).Error
 }
+
+// UpdatePhone 更新用户手机号
+func (r *memberRepository) UpdatePhone(ctx context.Context, id uint, phone string) error {
+	return r.db.WithContext(ctx).Model(&entity.Member{}).Where("id = ?", id).Update("phone", phone).Error
+}

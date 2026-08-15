@@ -98,8 +98,8 @@ func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest
 
 	//按场景做发送端业务检查
 	switch sms.Scene(req.Scene) {
-	case sms.SceneRegister:
-		//注册：手机号已注册则拒发
+	case sms.SceneRegister, sms.SceneChangePhone:
+		//注册/改绑手机号：手机号已注册则拒发
 		exist, err := s.memberRepo.FindByPhone(ctx, req.Phone)
 		if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
 			return nil, err
@@ -257,6 +257,36 @@ func (s *authService) ResetPassword(ctx context.Context, req *request.ResetPassw
 	}
 	return &response.MessageResponse{
 		Message: "密码重置成功",
+	}, nil
+}
+
+// ChangePhone 修改绑定手机号
+func (s *authService) ChangePhone(ctx context.Context, userID uint, req *request.ChangePhoneRequest) (*response.MessageResponse, error) {
+	//检验手机号格式
+	if err := sms.ValidatorPhone(req.NewPhone); err != nil {
+		return nil, err
+	}
+
+	//新手机号已注册则拒改（含与原号相同，原号查 phone 必然命中自己）
+	exist, err := s.memberRepo.FindByPhone(ctx, req.NewPhone)
+	if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
+		return nil, err
+	}
+	if exist != nil {
+		return nil, appErrors.ErrPhoneAlreadyReg
+	}
+
+	//校验验证码
+	if err := sms.Receive(req.NewPhone, req.Code, sms.SceneChangePhone); err != nil {
+		return nil, appErrors.ErrSmsCodeInvalid
+	}
+
+	//更新手机号
+	if err := s.memberRepo.UpdatePhone(ctx, userID, req.NewPhone); err != nil {
+		return nil, err
+	}
+	return &response.MessageResponse{
+		Message: "手机号修改成功",
 	}, nil
 }
 

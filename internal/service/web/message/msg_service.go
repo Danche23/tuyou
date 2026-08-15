@@ -52,7 +52,7 @@ func (s *msgService) getList(memberID uint, msgType int, req *requestMsg.Message
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询消息列表失败", err)
 	}
 	return &responseMsg.MessagePage{
-		List:      buildItems(rows),
+		List:      s.buildItems(rows, memberID),
 		Total:     total,
 		Page:      page,
 		Size:      size,
@@ -178,8 +178,9 @@ func normalizePage(page, size int) (int, int) {
 	return page, size
 }
 
-// buildItems 联查结果 → 响应项（系统消息 sender 为 null）
-func buildItems(rows []repoMsg.MessageRow) []responseMsg.MessageItem {
+// buildItems 联查结果 → 响应项（系统消息 sender 为 null）。
+// 评论类消息（comment_id>0）附带 comment：本条消息（"you"）+ 只含"我"发的回复（"me"）。
+func (s *msgService) buildItems(rows []repoMsg.MessageRow, memberID uint) []responseMsg.MessageItem {
 	items := make([]responseMsg.MessageItem, 0, len(rows))
 	for _, r := range rows {
 		item := responseMsg.MessageItem{
@@ -196,7 +197,54 @@ func buildItems(rows []repoMsg.MessageRow) []responseMsg.MessageItem {
 				Avatar:   r.Avatar,
 			}
 		}
+		if r.CommentID > 0 {
+			item.Comment = s.buildComment(r, memberID)
+		}
 		items = append(items, item)
 	}
 	return items
+}
+
+// buildComment 组装评论类消息的 comment：
+// 本条消息（sender="you"）+ 回复列表只含"我"发的回复（sender="me"，时间正序）。
+// 回复列表按 parent_id 绑定：直接回复本条评论的、当前用户自己的回复。
+// best-effort：任何查询失败返回 nil（该消息退化为不带 comment）。
+func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *responseMsg.CommentMessage {
+	c, err := s.msgRepo.FindCommentByID(r.CommentID)
+	if err != nil {
+		return nil
+	}
+	myReplies, err := s.msgRepo.FindRepliesByParent(c.ID, memberID)
+	if err != nil {
+		return nil
+	}
+
+	likeIDs := []uint{c.ID}
+	for _, tc := range myReplies {
+		likeIDs = append(likeIDs, tc.ID)
+	}
+	likes, err := s.msgRepo.FindCommentLikes(likeIDs, memberID)
+	if err != nil {
+		likes = map[uint]bool{}
+	}
+
+	msg := &responseMsg.CommentMessage{
+		CommentID: strconv.FormatUint(uint64(c.ID), 10),
+		Sender:    "you",
+		Content:   c.Content,
+		SendTime:  c.CreatedAt.Format("2006-01-02 15:04:05"),
+		LikeCount: c.LikeCount,
+		IsLiked:   likes[c.ID],
+	}
+	for _, tc := range myReplies {
+		msg.Replies = append(msg.Replies, &responseMsg.CommentMessage{
+			CommentID: strconv.FormatUint(uint64(tc.ID), 10),
+			Sender:    "me",
+			Content:   tc.Content,
+			SendTime:  tc.CreatedAt.Format("2006-01-02 15:04:05"),
+			LikeCount: tc.LikeCount,
+			IsLiked:   likes[tc.ID],
+		})
+	}
+	return msg
 }
