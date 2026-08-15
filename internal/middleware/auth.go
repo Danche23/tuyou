@@ -88,6 +88,20 @@ func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.FullPath()
 
+		// ① 该接口是否在 sys_permission 全局表登记（status=1 的启用权限）
+		var registered int64
+		if err := db.Table("sys_permission").
+			Where("status = 1 AND request_method = ? AND api_path = ?", method, path).
+			Count(&registered).Error; err != nil {
+			c.Next() // DB 异常 fail-open
+			return
+		}
+		if registered == 0 {
+			c.Next() // 未登记的接口默认放行
+			return
+		}
+
+		// ② 已登记 → 查当前管理员角色拥有的接口权限，判断是否允许该操作
 		var perms []struct {
 			RequestMethod string
 			APIPath       string
@@ -99,28 +113,19 @@ func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
 			Where("a.id = ? AND p.status = 1", adminID).
 			Scan(&perms).Error
 		if err != nil {
-			c.Next()
+			c.Next() // DB 异常 fail-open
 			return
 		}
 
-		pathExists := false
 		for _, p := range perms {
-			if p.APIPath != path {
-				continue
-			}
-			pathExists = true
-			if p.RequestMethod == method {
+			if p.RequestMethod == method && p.APIPath == path {
 				c.Next()
 				return
 			}
 		}
 
-		if pathExists {
-			response.Error(c, http.StatusForbidden, "无访问权限")
-			c.Abort()
-			return
-		}
-		c.Next()
+		response.Error(c, http.StatusForbidden, "无访问权限")
+		c.Abort()
 	}
 }
 
