@@ -152,12 +152,12 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 			return err
 		}
 
-		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）
+		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）；-1 用 max 防负
 		likeCount = comment.LikeCount
 		if isLiked {
 			likeCount++
 		} else {
-			likeCount--
+			likeCount = max(comment.LikeCount-1, 0)
 		}
 		return nil
 	})
@@ -203,14 +203,9 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 			rootID = *replied.ReplyToID
 		}
 		replyToID = &rootID
-		// 被回复的用户：缺省取被回复评论的作者
-		//（回复一级→一级作者；回复二级→该二级作者，与"回复二级必传"缺省行为一致）
-		if req.ReplyToMemberID == nil {
-			mid := replied.MemberID
-			replyToMemberID = &mid
-		} else {
-			replyToMemberID = req.ReplyToMemberID
-		}
+		// C5：忽略客户端传的被回复用户，一律取被回复评论的作者（防伪造被回复人）
+		mid := replied.MemberID
+		replyToMemberID = &mid
 	}
 
 	comment := &entity.Comment{
