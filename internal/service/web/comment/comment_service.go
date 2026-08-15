@@ -227,6 +227,13 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	// 事务：写评论 + 目标 comment_count +1 + 重算新评论热度；
 	// 若是回复，父一级评论的 reply_count 变了，同事务重算父评论热度，避免热评榜/回复预览滞后到小时任务
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// C3：锁序统一"先锁根一级评论行"，与 DeleteComment 一致，消除死锁。
+		// 回复场景锁父一级行，也让"新回复"与"删父"串行化（C1 计数准确）。
+		if replyToID != nil {
+			if _, err := s.repo.LockCommentByID(tx, *replyToID); err != nil {
+				return errors.NewWithErr(errors.CodeNotFound, "被回复的评论不存在", err)
+			}
+		}
 		if err := s.repo.CreateComment(tx, comment); err != nil {
 			return err
 		}
@@ -432,6 +439,16 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// C1+C3：事务第一句锁"根一级评论行"（一级=自身，二级=其 ReplyToID）。
+		// 串行化并发插入的二级评论：先提交的回复 COUNT 可见；后到的回复等锁，
+		// 待删除提交后 LockCommentByID（默认作用域）查不到已软删行 → 404。
+		rootID := commentID
+		if comment.ReplyToID != nil {
+			rootID = *comment.ReplyToID
+		}
+		if _, err := s.repo.LockCommentByID(tx, rootID); err != nil {
+			return errors.NewWithErr(errors.CodeNotFound, "评论不存在", err)
+		}
 		if comment.ReplyToID == nil {
 			// 删除一级评论：先数其下未删二级数（用于 comment_count 级联扣减），再连带软删
 			replyCount, err := s.repo.CountRepliesByParentID(tx, commentID)
