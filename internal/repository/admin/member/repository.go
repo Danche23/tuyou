@@ -109,21 +109,51 @@ func (r *memberRepository) Update(ctx context.Context, id uint, updates map[stri
 	return nil
 }
 
-// Delete 硬删除会员
-func (r *memberRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Exec("DELETE FROM member WHERE id = ?", id)
-	if result.Error != nil {
-		return result.Error
+// cleanupFollowForMember 在事务内清理单个会员的关注数据（P4）：
+// ① 该会员关注过的人 → 对方粉丝数 -1（GREATEST 防负）
+// ② 关注过该会员的人 → 对方关注数 -1
+// ③ 清理 follow 行
+// 会员不存在也安全：子查询自然不命中、DELETE 删 0 行。
+func cleanupFollowForMember(tx *gorm.DB, memberID uint) error {
+	if err := tx.Exec("UPDATE member SET fans_count = GREATEST(fans_count - 1, 0) WHERE id IN (SELECT followee_id FROM follow WHERE follower_id = ?)", memberID).Error; err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return appErrors.ErrUserNotFound
+	if err := tx.Exec("UPDATE member SET follow_count = GREATEST(follow_count - 1, 0) WHERE id IN (SELECT follower_id FROM follow WHERE followee_id = ?)", memberID).Error; err != nil {
+		return err
 	}
-	return nil
+	return tx.Exec("DELETE FROM follow WHERE follower_id = ? OR followee_id = ?", memberID, memberID).Error
 }
 
-// BatchDelete 批量硬删除
+// Delete 事务内硬删会员：先清理其关注数据（P4），再删会员行
+func (r *memberRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := cleanupFollowForMember(tx, id); err != nil {
+			return err
+		}
+		result := tx.Exec("DELETE FROM member WHERE id = ?", id)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return appErrors.ErrUserNotFound
+		}
+		return nil
+	})
+}
+
+// BatchDelete 事务内批量硬删：逐条清理关注数据 + 删行（原子，任一步失败整体回滚）
 func (r *memberRepository) BatchDelete(ctx context.Context, ids []uint) error {
-	return r.db.WithContext(ctx).Exec("DELETE FROM member WHERE id IN ?", ids).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			if err := cleanupFollowForMember(tx, id); err != nil {
+				return err
+			}
+			if err := tx.Exec("DELETE FROM member WHERE id = ?", id).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // BatchUpdateStatus 批量更新状态
