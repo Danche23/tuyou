@@ -31,5 +31,5 @@ type ListCommentReq struct {
 
 // BatchDeleteReq 批量删除评论请求
 type BatchDeleteReq struct {
-	IDs []string `json:"ids" binding:"required,min=1"` // 评论 ID 列表（纯数字）
+	IDs []string `json:"ids" binding:"required,min=1,max=500"` // 评论 ID 列表（纯数字），最多500个
 }

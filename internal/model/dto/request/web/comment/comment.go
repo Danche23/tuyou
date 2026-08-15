@@ -27,14 +27,14 @@ type CreateCommentRequest struct {
 
 // ListCommentRequest 评论列表查询参数
 type ListCommentRequest struct {
-	TargetType int  `form:"targetType" binding:"required"`         // 目标类型：1=笔记，2=攻略
-	TargetID   uint `form:"targetId" binding:"required"`           // 目标ID
-	Page       int  `form:"page" binding:"required,min=1"`         // 页码，从1开始
-	Size       int  `form:"size" binding:"required,min=1,max=100"` // 每页大小，最大100
+	TargetType int  `form:"targetType" binding:"required"`           // 目标类型：1=笔记，2=攻略
+	TargetID   uint `form:"targetId" binding:"required"`             // 目标ID
+	Page       int  `form:"page" binding:"required,min=1,max=10000"` // 页码，从1开始，最大10000
+	Size       int  `form:"size" binding:"required,min=1,max=100"`   // 每页大小，最大100
 }
 
 // ListRepliesRequest 二级评论列表查询参数
 type ListRepliesRequest struct {
-	Page int `form:"page" binding:"omitempty,min=1"`         // 页码，默认1
-	Size int `form:"size" binding:"omitempty,min=1,max=100"` // 每页大小，默认10，最大100
+	Page int `form:"page" binding:"omitempty,min=1,max=10000"` // 页码，默认1，最大10000
+	Size int `form:"size" binding:"omitempty,min=1,max=100"`   // 每页大小，默认10，最大100
 }
