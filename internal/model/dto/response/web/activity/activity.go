@@ -5,6 +5,7 @@ type LeaderInfo struct {
 	ID       string `json:"id"`
 	Nickname string `json:"nickname"`
 	Avatar   string `json:"avatar"`
+	Bio      string `json:"bio"`
 }
 
 // ActivityListItem 活动列表项

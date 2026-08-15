@@ -129,12 +129,12 @@ func (r *noteRepository) FindByID(noteID uint) (*entity.Note, error) {
 	return &note, nil
 }
 
-// FindTagsByNoteID 查询笔记的标签列表（JOIN note_tag + tag）
+// FindTagsByNoteID 查询笔记的标签列表（JOIN note_tag + tag，仅启用且未删除的标签）
 func (r *noteRepository) FindTagsByNoteID(noteID uint) ([]entity.Tag, error) {
 	var tags []entity.Tag
 	if err := r.db.Model(&entity.Tag{}).
 		Joins("JOIN note_tag ON note_tag.tag_id = tag.id").
-		Where("note_tag.note_id = ?", noteID).
+		Where("note_tag.note_id = ? AND tag.status = 1 AND tag.delete_time IS NULL", noteID).
 		Find(&tags).Error; err != nil {
 		return nil, err
 	}
@@ -189,10 +189,15 @@ func (r *noteRepository) DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) 
 		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error
 }
 
-// UpdateStatus 更新笔记上下架状态
-func (r *noteRepository) UpdateStatus(tx *gorm.DB, noteID uint, status int) error {
-	return tx.Model(&entity.Note{}).Where("id = ?", noteID).
-		UpdateColumn("status", status).Error
+// UpdateStatus 更新笔记上下架状态；返回是否真正发生了状态变更
+// （WHERE status <> ? 保证并发重复删除时第二个请求命中 0 行 → changed=false → 不重复扣减发布数）
+func (r *noteRepository) UpdateStatus(tx *gorm.DB, noteID uint, status int) (bool, error) {
+	res := tx.Model(&entity.Note{}).Where("id = ? AND status <> ?", noteID, status).
+		UpdateColumn("status", status)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // SoftDelete 软删除笔记：设置 delete_time 为当前时间

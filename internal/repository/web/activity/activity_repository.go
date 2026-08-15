@@ -102,10 +102,14 @@ func (r *activityRepository) CreateJoin(tx *gorm.DB, activityID uint, memberID u
 	return result.RowsAffected > 0, result.Error
 }
 
-// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）
-func (r *activityRepository) DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) error {
-	return tx.Unscoped().Where("activity_id = ? AND member_id = ?", activityID, memberID).
-		Delete(&entity.ActivityJoin{}).Error
+// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）；返回是否实际删除了记录
+func (r *activityRepository) DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error) {
+	res := tx.Unscoped().Where("activity_id = ? AND member_id = ?", activityID, memberID).
+		Delete(&entity.ActivityJoin{})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // IncrCurrentPeople 报名人数 +1，返回实际影响行数（0=满员）
@@ -135,7 +139,7 @@ func (r *activityRepository) GetCurrentPeople(db *gorm.DB, activityID uint) (int
 func (r *activityRepository) SoftDelete(tx *gorm.DB, activityID uint) error {
 	return tx.Unscoped().Model(&entity.Activity{}).Where("id = ?", activityID).
 		Updates(map[string]interface{}{
-			"is_del":       1,
+			"is_del":      1,
 			"delete_time": time.Now(),
 		}).Error
 }

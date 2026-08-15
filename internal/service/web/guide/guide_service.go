@@ -324,7 +324,14 @@ func (s *guideService) DeleteGuide(strategyID uint, memberID uint) error {
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.guideRepo.UpdateStatus(tx, strategyID, 0); err != nil {
+		changed, err := s.guideRepo.UpdateStatus(tx, strategyID, 0)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return nil // 已被并发删除/下架，幂等跳过，不再扣发布数
+		}
+		if err := s.guideRepo.SoftDelete(tx, strategyID); err != nil {
 			return err
 		}
 		if err := s.guideRepo.UpdateCommentStatusByTarget(tx, 2, strategyID, 0); err != nil {

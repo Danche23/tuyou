@@ -120,12 +120,12 @@ func (r *guideRepository) FindImagesByStrategyID(strategyID uint) ([]entity.Stra
 	return images, nil
 }
 
-// FindTagsByStrategyID 查攻略标签列表（JOIN strategy_tag + tag）
+// FindTagsByStrategyID 查攻略标签列表（JOIN strategy_tag + tag，仅启用且未删除的标签）
 func (r *guideRepository) FindTagsByStrategyID(strategyID uint) ([]entity.Tag, error) {
 	var tags []entity.Tag
 	if err := r.db.Model(&entity.Tag{}).
 		Joins("JOIN strategy_tag ON strategy_tag.tag_id = tag.id").
-		Where("strategy_tag.strategy_id = ?", strategyID).
+		Where("strategy_tag.strategy_id = ? AND tag.status = 1 AND tag.delete_time IS NULL", strategyID).
 		Find(&tags).Error; err != nil {
 		return nil, err
 	}
@@ -281,10 +281,21 @@ func (r *guideRepository) SetCachedCollectStatus(ctx context.Context, strategyID
 	_ = r.redisRepo.Set(ctx, collectStatusKey(strategyID, memberID), cacheStatusValue(isFavorited), likeCacheTTL)
 }
 
-// UpdateStatus 更新攻略上下架状态
-func (r *guideRepository) UpdateStatus(tx *gorm.DB, strategyID uint, status int) error {
+// UpdateStatus 更新攻略上下架状态；返回是否真正发生了状态变更
+// （WHERE status <> ? 保证并发重复删除时第二个请求命中 0 行 → changed=false → 不重复扣减发布数）
+func (r *guideRepository) UpdateStatus(tx *gorm.DB, strategyID uint, status int) (bool, error) {
+	res := tx.Model(&entity.Strategy{}).Where("id = ? AND status <> ?", strategyID, status).
+		UpdateColumn("status", status)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// SoftDelete 软删除攻略：设置 delete_time 为当前时间
+func (r *guideRepository) SoftDelete(tx *gorm.DB, strategyID uint) error {
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
-		UpdateColumn("status", status).Error
+		UpdateColumn("delete_time", time.Now()).Error
 }
 
 // UpdateCommentStatusByTarget 批量更新评论状态

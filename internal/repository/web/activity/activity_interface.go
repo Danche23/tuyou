@@ -38,8 +38,8 @@ type ActivityRepository interface {
 	// CreateJoin 创建报名记录（INSERT IGNORE 兜底：重复报名返回 false 且不报错）
 	CreateJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error)
 
-	// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）
-	DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) error
+	// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）；返回是否实际删除了记录
+	DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error)
 
 	// IncrCurrentPeople 报名人数 +1，返回实际影响行数（0=满员）
 	IncrCurrentPeople(tx *gorm.DB, activityID uint, maxPeople int) (int64, error)

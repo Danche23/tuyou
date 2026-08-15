@@ -103,7 +103,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	// ========== 组装响应 ==========
 	return &responseActivity.CreateActivityResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
-		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(author.ID), 10), Nickname: author.Nickname, Avatar: author.Avatar},
+		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(author.ID), 10), Nickname: author.Nickname, Avatar: author.Avatar, Bio: author.Bio},
 		Title:           activity.Title,
 		CoverImg:        activity.CoverImg,
 		Category:        req.Category,
@@ -173,7 +173,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 
 	return &responseActivity.ActivityDetailResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
-		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar},
+		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar, Bio: leader.Bio},
 		IsOwner:         activity.LeaderMemberID == memberID,
 		Title:           activity.Title,
 		CoverImg:        activity.CoverImg,
@@ -222,8 +222,12 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 			return nil, errors.New(errors.CodeInvalidParam, "活动已开始，无法取消报名")
 		}
 		err = s.db.Transaction(func(tx *gorm.DB) error {
-			if err := s.activityRepo.DeleteJoin(tx, activityID, memberID); err != nil {
+			deleted, err := s.activityRepo.DeleteJoin(tx, activityID, memberID)
+			if err != nil {
 				return err
+			}
+			if !deleted {
+				return nil // 本来就没报名/已被并发取消，不减人数
 			}
 			return s.activityRepo.DecrCurrentPeople(tx, activityID)
 		})
@@ -426,6 +430,7 @@ func (s *activityService) BuildActivityItems(memberID uint, activities []entity.
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
 				Nickname: m.Nickname,
 				Avatar:   m.Avatar,
+				Bio:      m.Bio,
 			}
 		}
 
