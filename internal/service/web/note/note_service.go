@@ -289,8 +289,12 @@ func (s *noteService) DeleteNote(noteID uint, memberID uint) error {
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.noteRepo.UpdateStatus(tx, noteID, 0); err != nil {
+		changed, err := s.noteRepo.UpdateStatus(tx, noteID, 0)
+		if err != nil {
 			return err
+		}
+		if !changed {
+			return nil // 已被并发删除/下架，幂等跳过，不再扣发布数
 		}
 		if err := s.noteRepo.SoftDelete(tx, noteID); err != nil {
 			return err

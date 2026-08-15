@@ -2,6 +2,7 @@ package admins
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/permission/admins"
 	"tuyou/internal/repository"
@@ -13,10 +14,11 @@ import (
 type Controller struct {
 	adminSvc  service.AdminService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
-func NewController(adminSvc service.AdminService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{adminSvc: adminSvc, redisRepo: redisRepo}
+func NewController(adminSvc service.AdminService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{adminSvc: adminSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListRoles 查询角色列表

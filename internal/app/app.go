@@ -21,6 +21,7 @@ import (
 	commentAdminCtrl "tuyou/internal/api/v1/admin/comment"
 	guideAdminCtrl "tuyou/internal/api/v1/admin/guide"
 	memberCtrl "tuyou/internal/api/v1/admin/member"
+	adminMsgCtrl "tuyou/internal/api/v1/admin/message"
 	noteAdminCtrl "tuyou/internal/api/v1/admin/note"
 	adminPermCtrl "tuyou/internal/api/v1/admin/permission/admins"
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
@@ -48,6 +49,7 @@ import (
 	repoAdminComment "tuyou/internal/repository/admin/comment"
 	repoAdminGuide "tuyou/internal/repository/admin/guide"
 	repoAdminMember "tuyou/internal/repository/admin/member"
+	repoAdminMsg "tuyou/internal/repository/admin/message"
 	repoAdminNote "tuyou/internal/repository/admin/note"
 	repoAdminPerm "tuyou/internal/repository/admin/permission/admins"
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
@@ -71,6 +73,7 @@ import (
 	serviceAdminComment "tuyou/internal/service/admin/comment"
 	serviceAdminGuide "tuyou/internal/service/admin/guide"
 	serviceAdminMember "tuyou/internal/service/admin/member"
+	serviceAdminMsg "tuyou/internal/service/admin/message"
 	serviceAdminNote "tuyou/internal/service/admin/note"
 	serviceAdminPerm "tuyou/internal/service/admin/permission/admins"
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
@@ -240,7 +243,7 @@ func (a *App) initDependencies() {
 	sseHub := stream.NewSSEHub()
 	adminSSEHub := stream.NewSSEHub()
 
-	// ========== 创建存储（OSS）==========
+	// ========== 创建存储（oss / local）==========
 	store, err := storage.New(a.cfg.Storage)
 	if err != nil {
 		logger.Fatal("存储初始化失败", zap.Error(err))
@@ -273,6 +276,7 @@ func (a *App) initDependencies() {
 	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
+	adminMsgMgrRepo := repoAdminMsg.NewMessageRepository(a.mysqlDB)
 
 	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
 	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
@@ -281,15 +285,15 @@ func (a *App) initDependencies() {
 	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo, adminMsgRepo, adminSSEHub)
 	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
-	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo)
+	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo, redisRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo, adminMsgRepo, adminSSEHub)
-	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo)
+	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo, redisRepo)
 	menuSvc := serviceAdminMenu.NewMenuService(menuRepo)
 	apiPermSvc := serviceAdminApiPerm.NewApiPermService(apiPermRepo)
 	roleSvc := serviceAdminRole.NewRoleService(roleRepo)
-	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB)
-	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB)
-	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB)
+	adminNoteSvc := serviceAdminNote.NewNoteService(adminNoteRepo, a.mysqlDB, notifier)
+	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB, notifier)
+	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB, notifier)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
 	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
 	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
@@ -303,34 +307,35 @@ func (a *App) initDependencies() {
 	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
 	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型、敏感词校验）；
 	// commentAdminSvc（admin）= 管理（筛选、看状态、硬删清理）。
-	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher)
+	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher, notifier)
 	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
 	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
 	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
-	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
+	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)
 
 	// ========== 创建 Handler ==========
 	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
-	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo)
+	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo, a.mysqlDB)
 	personalCtrl := personal.NewController(personalSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc, redisRepo)
 	// 评论控制器 ×2：redisRepo 传入中间件（MemberAuth/Auth）做登录态白名单校验。
 	// commentC（web）挂 /api/v1/comments；commentAdminC（admin）挂 /api/v1/admin/comments。
 	commentC := commentCtrl.NewController(commentSvc, redisRepo)
-	commentAdminC := commentAdminCtrl.NewController(commentAdminSvc, redisRepo)
-	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo)
-	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo, adminSSEHub)
-	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo)
-	menuC := menuCtrl.NewController(menuSvc, redisRepo)
-	apiPermC := apiPermCtrl.NewController(apiPermSvc, redisRepo)
-	roleC := roleCtrl.NewController(roleSvc, redisRepo)
-	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc)
-	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc)
-	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc)
-	tagAdminC := tagAdminCtrl.NewController(adminTagSvc)
+	commentAdminC := commentAdminCtrl.NewController(commentAdminSvc, redisRepo, a.mysqlDB)
+	memberC := memberCtrl.NewController(adminMemberSvc, redisRepo, a.mysqlDB)
+	centerC := centerCtrl.NewController(adminCenterSvc, redisRepo, adminSSEHub, a.mysqlDB)
+	adminPermC := adminPermCtrl.NewController(adminPermSvc, redisRepo, a.mysqlDB)
+	menuC := menuCtrl.NewController(menuSvc, redisRepo, a.mysqlDB)
+	apiPermC := apiPermCtrl.NewController(apiPermSvc, redisRepo, a.mysqlDB)
+	roleC := roleCtrl.NewController(roleSvc, redisRepo, a.mysqlDB)
+	noteAdminC := noteAdminCtrl.NewController(adminNoteSvc, redisRepo, a.mysqlDB)
+	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc, redisRepo, a.mysqlDB)
+	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc, redisRepo, a.mysqlDB)
+	tagAdminC := tagAdminCtrl.NewController(adminTagSvc, redisRepo, a.mysqlDB)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
@@ -339,10 +344,11 @@ func (a *App) initDependencies() {
 	searchC := searchCtrl.NewController(searchSvc, redisRepo)
 	msgC := messageCtrl.NewController(msgSvc, redisRepo, sseHub)
 	uploadC := uploadCtrl.NewController(uploadSvc, redisRepo)
-	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo)
+	workbenchC := workbenchCtrl.NewController(adminWorkbenchSvc, redisRepo, a.mysqlDB)
+	adminMsgC := adminMsgCtrl.NewController(adminMsgSvc, redisRepo, a.mysqlDB)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)
@@ -367,6 +373,11 @@ func (a *App) initServer() {
 
 	// 注册路由
 	a.router.Setup(engine)
+
+	// 本地存储驱动：挂载静态文件服务，对外访问 /static/{objectKey}
+	if a.cfg.Storage.Driver == "local" {
+		engine.Static("/static", a.cfg.Storage.Local.BaseDir)
+	}
 
 	// 创建 HTTP 服务器
 	a.server = &http.Server{

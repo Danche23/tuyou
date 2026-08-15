@@ -14,17 +14,19 @@ import (
 	response "tuyou/internal/model/dto/response/admin/guide"
 	"tuyou/internal/model/entity"
 	repo "tuyou/internal/repository/admin/guide"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 )
 
 type guideService struct {
 	guideRepo repo.GuideRepository
 	db        *gorm.DB
+	notifier  *serviceMsg.Notifier
 }
 
 // NewGuideService 创建后台攻略服务实例
-func NewGuideService(guideRepo repo.GuideRepository, db *gorm.DB) GuideService {
-	return &guideService{guideRepo: guideRepo, db: db}
+func NewGuideService(guideRepo repo.GuideRepository, db *gorm.DB, notifier *serviceMsg.Notifier) GuideService {
+	return &guideService{guideRepo: guideRepo, db: db, notifier: notifier}
 }
 
 // ListGuides 分页查询攻略列表
@@ -255,6 +257,11 @@ func (s *guideService) UpdateGuide(ctx context.Context, id uint, req *request.Up
 		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑攻略失败", err)
 	}
 
+	// 下架时通知作者（正常→下架）
+	if g.Status != status && status == 0 {
+		s.notifier.NotifyGuideOffline(g.MemberID, g.Title)
+	}
+
 	// 4. 返回更新后的详情
 	return s.GetGuideDetail(ctx, id)
 }
@@ -273,6 +280,7 @@ func (s *guideService) DeleteGuide(ctx context.Context, id uint) error {
 	if err := s.guideRepo.Delete(ctx, id, g.MemberID, decrPublish); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除攻略失败", err)
 	}
+	s.notifier.NotifyGuideDeleted(g.MemberID, g.Title)
 	return nil
 }
 
@@ -294,6 +302,9 @@ func (s *guideService) BatchDeleteGuides(ctx context.Context, req *request.Batch
 
 	if err := s.guideRepo.BatchDelete(ctx, strategies); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "批量删除攻略失败", err)
+	}
+	for i := range strategies {
+		s.notifier.NotifyGuideDeleted(strategies[i].MemberID, strategies[i].Title)
 	}
 	return nil
 }

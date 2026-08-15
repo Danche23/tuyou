@@ -73,6 +73,7 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 		Avatar:        entity.DefaultAvatar, // 默认头像写入库，保证笔记/攻略/评论等读 member 表的模块都有头像
 		Bio:           entity.DefaultBio,
 		BgImg:         entity.DefaultBgImg,
+		Role:          1, // 前台注册的都是普通会员
 		Status:        1,
 		LastLoginTime: &now,
 	}

@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"errors"
+	"gorm.io/gorm"
+	"net/http"
 	"strings"
 
 	"tuyou/internal/repository"
@@ -71,6 +73,60 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 		c.Set(ContextUsername, claims.GetUsername())
 
 		c.Next()
+	}
+}
+
+// PermissionAuth 权限认证，校验用户是否有该权限
+func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		adminID := GetUserID(c)
+		if adminID == 0 {
+			response.Error(c, http.StatusUnauthorized, "未登录")
+			c.Abort()
+			return
+		}
+
+		method := c.Request.Method
+		path := c.FullPath()
+
+		// ① 该接口是否在 sys_permission 全局表登记（status=1 的启用权限）
+		var registered int64
+		if err := db.Table("sys_permission").
+			Where("status = 1 AND request_method = ? AND api_path = ?", method, path).
+			Count(&registered).Error; err != nil {
+			c.Next() // DB 异常 fail-open
+			return
+		}
+		if registered == 0 {
+			c.Next() // 未登记的接口默认放行
+			return
+		}
+
+		// ② 已登记 → 查当前管理员角色拥有的接口权限，判断是否允许该操作
+		var perms []struct {
+			RequestMethod string
+			APIPath       string
+		}
+		err := db.Table("sys_permission AS p").
+			Select("p.request_method, p.api_path").
+			Joins("JOIN sys_role_perm rp ON rp.perm_id = p.id").
+			Joins("JOIN sys_admin a ON a.role_id = rp.role_id").
+			Where("a.id = ? AND p.status = 1", adminID).
+			Scan(&perms).Error
+		if err != nil {
+			c.Next() // DB 异常 fail-open
+			return
+		}
+
+		for _, p := range perms {
+			if p.RequestMethod == method && p.APIPath == path {
+				c.Next()
+				return
+			}
+		}
+
+		response.Error(c, http.StatusForbidden, "无访问权限")
+		c.Abort()
 	}
 }
 

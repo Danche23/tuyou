@@ -14,17 +14,19 @@ import (
 	response "tuyou/internal/model/dto/response/admin/note"
 	"tuyou/internal/model/entity"
 	repo "tuyou/internal/repository/admin/note"
+	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 )
 
 type noteService struct {
 	noteRepo repo.NoteRepository
 	db       *gorm.DB
+	notifier *serviceMsg.Notifier
 }
 
 // NewNoteService 创建后台笔记服务实例
-func NewNoteService(noteRepo repo.NoteRepository, db *gorm.DB) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db}
+func NewNoteService(noteRepo repo.NoteRepository, db *gorm.DB, notifier *serviceMsg.Notifier) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, notifier: notifier}
 }
 
 // ListNotes 分页查询笔记列表
@@ -319,6 +321,11 @@ func (s *noteService) UpdateNote(ctx context.Context, id uint, req *request.Upda
 		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑笔记失败", err)
 	}
 
+	// 下架时通知作者（正常→下架）
+	if note.Status != status && status == 0 {
+		s.notifier.NotifyNoteOffline(note.MemberID, note.Title)
+	}
+
 	// 4. 返回更新后的详情
 	return s.GetNoteDetail(ctx, id)
 }
@@ -337,6 +344,7 @@ func (s *noteService) DeleteNote(ctx context.Context, id uint) error {
 	if err := s.noteRepo.Delete(ctx, id, note.MemberID, decrPublish); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除笔记失败", err)
 	}
+	s.notifier.NotifyNoteDeleted(note.MemberID, note.Title)
 	return nil
 }
 
@@ -358,6 +366,9 @@ func (s *noteService) BatchDeleteNotes(ctx context.Context, req *request.BatchDe
 
 	if err := s.noteRepo.BatchDelete(ctx, notes); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "批量删除笔记失败", err)
+	}
+	for i := range notes {
+		s.notifier.NotifyNoteDeleted(notes[i].MemberID, notes[i].Title)
 	}
 	return nil
 }

@@ -153,3 +153,12 @@ func (r *activityRepository) Delete(tx *gorm.DB, activityID uint) error {
 	// 主行
 	return tx.Unscoped().Delete(&entity.Activity{}, activityID).Error
 }
+
+// FindJoinMemberIDs 查询活动所有已报名（未取消）的成员 id
+func (r *activityRepository) FindJoinMemberIDs(ctx context.Context, activityID uint) ([]uint, error) {
+	var ids []uint
+	err := r.db.WithContext(ctx).Model(&entity.ActivityJoin{}).
+		Where("activity_id = ? AND is_cancel = 0", activityID).
+		Pluck("member_id", &ids).Error
+	return ids, err
+}

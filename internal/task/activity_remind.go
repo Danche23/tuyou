@@ -47,7 +47,8 @@ func remindActivities(db *gorm.DB, notifier *serviceMsg.Notifier) {
 
 // remindActivity 给一个活动的所有已报名用户发"快开始"提醒；该提醒内容已入库过则跳过（幂等）。
 func remindActivity(db *gorm.DB, notifier *serviceMsg.Notifier, a *entity.Activity) {
-	content := "你报名的活动《" + a.Title + "》将于 " + a.StartTime.Format("2006-01-02 15:04") + " 开始"
+	// 用模板9渲染正文（与 NotifyActivityStart 内部一致），用于幂等查重
+	content := notifier.Render(9, map[string]string{"title": a.Title})
 
 	// 幂等：同一条提醒内容已存在 → 已发过，跳过（每个活动只提醒一次）
 	var cnt int64
@@ -67,6 +68,6 @@ func remindActivity(db *gorm.DB, notifier *serviceMsg.Notifier, a *entity.Activi
 		return
 	}
 	for _, j := range joins {
-		notifier.NotifyActivityStart(j.MemberID, content)
+		notifier.NotifyActivityStart(j.MemberID, a.Title)
 	}
 }

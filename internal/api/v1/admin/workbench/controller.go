@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/workbench"
 	"tuyou/pkg/response"
@@ -11,11 +12,12 @@ import (
 type Controller struct {
 	workbenchSvc service.WorkbenchService
 	redisRepo    repository.RedisRepository
+	db           *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(workbenchSvc service.WorkbenchService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{workbenchSvc: workbenchSvc, redisRepo: redisRepo}
+func NewController(workbenchSvc service.WorkbenchService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{workbenchSvc: workbenchSvc, redisRepo: redisRepo, db: db}
 }
 
 // GetWorkbench 获取工作台统计数据
