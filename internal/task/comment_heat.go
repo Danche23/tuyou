@@ -16,7 +16,7 @@ import (
 //
 //	兜底实时 ±1 可能漏掉的路径（如后台硬删笔记、手动改库等）。
 //
-// ② 评论热度全量重算：按设计文档 4.4 公式刷新 comment 表 heat 列。
+// ② 评论热度重算：只重算还热的评论（heat ≥ 1，老热评时间衰减）；凉透的不再重算（C6）。
 // 返回 ticker，app 优雅关闭时调用 Stop。
 func StartCommentHeatJob(db *gorm.DB) *time.Ticker {
 	recomputeCommentHeat(db)
