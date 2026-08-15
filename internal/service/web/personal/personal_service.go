@@ -79,17 +79,32 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 }
 
 func (s *personalService) UpdateProfile(memberID uint, req *requestPersonal.UpdateProfileRequest) (*responsePersonal.Profile, error) {
-	updates := map[string]interface{}{
-		"avatar":   strOr(req.Avatar, entity.DefaultAvatar), // 空值回写默认，避免把库里的默认头像清空
-		"nickname": req.Nickname,
-		"bio":      strOr(req.Bio, entity.DefaultBio),
-		"bg_img":   strOr(req.BgImg, entity.DefaultBgImg),
+	// P8：账号被禁用后不允许写操作
+	if _, err := s.findMemberActive(memberID); err != nil {
+		return nil, err
+	}
+
+	// P6：只写本次传了的字段，避免 strOr 默认值覆盖存量
+	updates := map[string]interface{}{}
+	if req.Avatar != "" {
+		updates["avatar"] = req.Avatar
+	}
+	if req.Nickname != "" {
+		updates["nickname"] = req.Nickname
+	}
+	if req.Bio != "" {
+		updates["bio"] = req.Bio
+	}
+	if req.BgImg != "" {
+		updates["bg_img"] = req.BgImg
+	}
+	if len(updates) == 0 {
+		return nil, errors.New(errors.CodeInvalidParam, "没有要更新的内容")
 	}
 
 	if err := s.repo.UpdateProfile(memberID, updates); err != nil {
 		return nil, err
 	}
-
 	return s.GetProfile(memberID)
 }
 
