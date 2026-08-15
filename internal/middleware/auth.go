@@ -76,6 +76,7 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 	}
 }
 
+// PermissionAuth 权限认证，校验用户是否有该权限
 func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		adminID := GetUserID(c)
