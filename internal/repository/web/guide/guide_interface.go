@@ -82,8 +82,11 @@ type GuideRepository interface {
 	// SetCachedCollectStatus 写入收藏状态缓存
 	SetCachedCollectStatus(ctx context.Context, strategyID, memberID uint, isFavorited bool)
 
-	// UpdateStatus 更新攻略上下架状态
-	UpdateStatus(tx *gorm.DB, strategyID uint, status int) error
+	// UpdateStatus 更新攻略上下架状态；返回是否真正发生了状态变更（status 已是目标值时返回 false）
+	UpdateStatus(tx *gorm.DB, strategyID uint, status int) (bool, error)
+
+	// SoftDelete 软删除攻略：设置 delete_time 为当前时间
+	SoftDelete(tx *gorm.DB, strategyID uint) error
 
 	// UpdateCommentStatusByTarget 批量更新评论状态
 	UpdateCommentStatusByTarget(tx *gorm.DB, targetType int, targetID uint, status int) error

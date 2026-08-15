@@ -3,6 +3,7 @@ package home
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 	"tuyou/internal/model/entity"
@@ -19,9 +20,11 @@ func NewHomeRepository(db *gorm.DB) HomeRepository {
 // ==================== 轮播：管理员已标记 is_slide=1（优先级 ①②③） ====================
 
 // FindSlideActivities 轮播活动（排除已删除、已结束）
+// 已结束按 end_time > 当前时间判断，而非依赖 activity_status：
+// activity_status 是懒同步字段（仅详情/报名时刷新），已到 end_time 但未被访问的活动状态可能还是旧值。
 func (r *homeRepository) FindSlideActivities() ([]entity.Activity, error) {
 	var list []entity.Activity
-	err := r.db.Where("is_slide = ? AND is_del = ? AND activity_status != ?", 1, 0, 3).
+	err := r.db.Where("is_slide = ? AND is_del = ? AND end_time > ?", 1, 0, time.Now()).
 		Order("create_time DESC").Limit(5).Find(&list).Error
 	return list, err
 }
@@ -43,9 +46,10 @@ func (r *homeRepository) FindSlideStrategies() ([]entity.Strategy, error) {
 }
 
 // FindFillActivities 补齐候选活动（is_slide=0，排除已删除、已结束）
+// 已结束按 end_time > 当前时间判断，原因同 FindSlideActivities（activity_status 为懒同步字段）。
 func (r *homeRepository) FindFillActivities(limit int) ([]entity.Activity, error) {
 	var list []entity.Activity
-	err := r.db.Where("is_slide = ? AND is_del = ? AND activity_status != ?", 0, 0, 3).
+	err := r.db.Where("is_slide = ? AND is_del = ? AND end_time > ?", 0, 0, time.Now()).
 		Order("create_time DESC").Limit(limit).Find(&list).Error
 	return list, err
 }

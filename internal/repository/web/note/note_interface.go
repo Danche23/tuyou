@@ -49,8 +49,8 @@ type NoteRepository interface {
 	// DeleteCollect 删除收藏记录（硬删除）
 	DeleteCollect(tx *gorm.DB, noteID uint, memberID uint) error
 
-	// UpdateStatus 更新笔记上下架状态
-	UpdateStatus(tx *gorm.DB, noteID uint, status int) error
+	// UpdateStatus 更新笔记上下架状态；返回是否真正发生了状态变更（status 已是目标值时返回 false）
+	UpdateStatus(tx *gorm.DB, noteID uint, status int) (bool, error)
 
 	// SoftDelete 软删除笔记：设置 delete_time 为当前时间
 	SoftDelete(tx *gorm.DB, noteID uint) error
