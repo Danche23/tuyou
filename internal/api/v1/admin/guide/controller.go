@@ -1,10 +1,12 @@
 package guide
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"tuyou/internal/repository"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,12 +18,14 @@ import (
 
 // Controller 后台攻略管理控制器
 type Controller struct {
-	guideSvc service.GuideService
+	guideSvc  service.GuideService
+	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(guideSvc service.GuideService) *Controller {
-	return &Controller{guideSvc: guideSvc}
+func NewController(guideSvc service.GuideService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{guideSvc: guideSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListGuides 分页查询攻略

@@ -1,6 +1,7 @@
 package message
 
 import (
+	"gorm.io/gorm"
 	"strconv"
 
 	"tuyou/internal/middleware"
@@ -16,11 +17,12 @@ import (
 type Controller struct {
 	msgSvc    service.MessageService
 	redisRepo repository.RedisRepository
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(msgSvc service.MessageService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{msgSvc: msgSvc, redisRepo: redisRepo}
+func NewController(msgSvc service.MessageService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{msgSvc: msgSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListInteractions 分页查询互动消息

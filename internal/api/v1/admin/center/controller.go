@@ -2,6 +2,7 @@ package center
 
 import (
 	"encoding/json"
+	"gorm.io/gorm"
 	"strconv"
 	"time"
 
@@ -20,11 +21,12 @@ type Controller struct {
 	centerSvc service.CenterService
 	redisRepo repository.RedisRepository
 	adminHub  *stream.SSEHub
+	db        *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(centerSvc service.CenterService, redisRepo repository.RedisRepository, adminHub *stream.SSEHub) *Controller {
-	return &Controller{centerSvc: centerSvc, redisRepo: redisRepo, adminHub: adminHub}
+func NewController(centerSvc service.CenterService, redisRepo repository.RedisRepository, adminHub *stream.SSEHub, db *gorm.DB) *Controller {
+	return &Controller{centerSvc: centerSvc, redisRepo: redisRepo, adminHub: adminHub, db: db}
 }
 
 // UpdateAvatar 更新头像

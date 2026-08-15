@@ -1,6 +1,7 @@
 package apipermissions
 
 import (
+	"gorm.io/gorm"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +15,11 @@ import (
 type Controller struct {
 	apiPermSvc service.ApiPermService
 	redisRepo  repository.RedisRepository
+	db         *gorm.DB
 }
 
-func NewController(apiPermSvc service.ApiPermService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{apiPermSvc: apiPermSvc, redisRepo: redisRepo}
+func NewController(apiPermSvc service.ApiPermService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{apiPermSvc: apiPermSvc, redisRepo: redisRepo, db: db}
 }
 
 // List 查询接口权限列表

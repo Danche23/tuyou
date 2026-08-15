@@ -35,7 +35,7 @@ import (
 // Router 路由
 type Router struct {
 	authHandler       *handlerAuth.AuthHandler
-	adminHandler      *handlerAdmin.AdminHandler
+	adminHandler      *handlerAdmin.AdminController
 	centerCtrl        *center.Controller
 	commentAdminCtrl  *commentAdmin.Controller
 	noteCtrl          *note.Controller
@@ -68,7 +68,7 @@ func NewRouter(
 	personalCtrl *personal.Controller,
 	commentCtrl *commentCtrl.Controller,
 	authHandler *handlerAuth.AuthHandler,
-	adminHandler *handlerAdmin.AdminHandler,
+	adminHandler *handlerAdmin.AdminController,
 	memberCtrl *member.Controller,
 	adminPerCtrl *adminPermCtrl.Controller,
 	adminMenuCtrl *adminMenuCtrl.Controller,

@@ -9,7 +9,10 @@ import (
 // RegisterRoutes 注册后台攻略路由
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	admin := r.Group("/admin")
-	admin.Use(middleware.Auth())
+	admin.Use(
+		middleware.Auth(c.redisRepo),
+		middleware.PermissionAuth(c.db),
+	)
 	{
 		admin.GET("/guides", c.ListGuides)
 		admin.GET("/guides/:id", c.GetGuideDetail)

@@ -15,6 +15,7 @@ package comment
 //   - 鉴权用 middleware.Auth（管理员登录态 + 白名单），不是 MemberAuth（用户登录态）。
 //   - 列表/详情用 Unscoped() 连"已软删的评论"一起查出来，status 字段标记正常/已删除。
 import (
+	"gorm.io/gorm"
 	"strconv"
 
 	"tuyou/internal/repository"
@@ -30,11 +31,12 @@ import (
 type Controller struct {
 	commentSvc service.CommentService
 	redisRepo  repository.RedisRepository // middleware.Auth 后台登录态白名单校验需要
+	db         *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(commentSvc service.CommentService, redisRepo repository.RedisRepository) *Controller {
-	return &Controller{commentSvc: commentSvc, redisRepo: redisRepo}
+func NewController(commentSvc service.CommentService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{commentSvc: commentSvc, redisRepo: redisRepo, db: db}
 }
 
 // ListComments 分页查询评论

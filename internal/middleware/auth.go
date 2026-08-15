@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"errors"
+	"gorm.io/gorm"
+	"net/http"
 	"strings"
 
 	"tuyou/internal/repository"
@@ -70,6 +72,54 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 		c.Set(ContextUserID, claims.GetUserID())
 		c.Set(ContextUsername, claims.GetUsername())
 
+		c.Next()
+	}
+}
+
+func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		adminID := GetUserID(c)
+		if adminID == 0 {
+			response.Error(c, http.StatusUnauthorized, "未登录")
+			c.Abort()
+			return
+		}
+
+		method := c.Request.Method
+		path := c.FullPath()
+
+		var perms []struct {
+			RequestMethod string
+			APIPath       string
+		}
+		err := db.Table("sys_permission AS p").
+			Select("p.request_method, p.api_path").
+			Joins("JOIN sys_role_perm rp ON rp.perm_id = p.id").
+			Joins("JOIN sys_admin a ON a.role_id = rp.role_id").
+			Where("a.id = ? AND p.status = 1", adminID).
+			Scan(&perms).Error
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		pathExists := false
+		for _, p := range perms {
+			if p.APIPath != path {
+				continue
+			}
+			pathExists = true
+			if p.RequestMethod == method {
+				c.Next()
+				return
+			}
+		}
+
+		if pathExists {
+			response.Error(c, http.StatusForbidden, "无访问权限")
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

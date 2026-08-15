@@ -1,10 +1,12 @@
 package activity
 
 import (
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"tuyou/internal/repository"
 
 	"github.com/gin-gonic/gin"
 
@@ -17,11 +19,13 @@ import (
 // Controller 后台活动管理控制器
 type Controller struct {
 	activitySvc service.ActivityService
+	redisRepo   repository.RedisRepository
+	db          *gorm.DB
 }
 
 // NewController 创建控制器实例
-func NewController(activitySvc service.ActivityService) *Controller {
-	return &Controller{activitySvc: activitySvc}
+func NewController(activitySvc service.ActivityService, redisRepo repository.RedisRepository, db *gorm.DB) *Controller {
+	return &Controller{activitySvc: activitySvc, redisRepo: redisRepo, db: db}
 }
 
 // CreateActivity 创建活动
