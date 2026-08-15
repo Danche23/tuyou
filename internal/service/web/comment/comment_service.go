@@ -219,6 +219,8 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 			rootID = *replied.ReplyToID
 		}
 		replyToID = &rootID
+		// 直接父 = 真正回复的那条评论（消息中心回复列表按此绑定；reply_to_id 仍指向根保线程结构）
+		parentID = &replied.ID
 		// C5：忽略客户端传的被回复用户，一律取被回复评论的作者（防伪造被回复人）
 		mid := replied.MemberID
 		replyToMemberID = &mid
