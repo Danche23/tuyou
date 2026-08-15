@@ -191,8 +191,9 @@ func targetModel(targetType int) interface{} {
 // 若自身已不存在（批量场景下已被父评论连带删除）则直接跳过，避免重复扣减。
 func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
 	// 0. 先锁根一级评论行（若为二级评论，统一"先锁根"锁序 root → child → comment_like，
-	//    与前台 Create/DeleteComment 一致，消除 admin 删二级 child→root 的 AB-BA 死锁面），
-	//    再锁本行。根行已物理删除 → 其子孙必然已级联删除，跳过，保持原语义。
+	//    与前台 Create/DeleteComment 一致，消除 admin 删二级 child→root 的 AB-BA 死锁面）；
+	//    再锁本行（comment → comment_like，与前台 ToggleLike 一致，并发点赞排队在删除之后）。
+	//    根行/本行已物理删除（批量场景下已被父评论连带删除）→ 跳过，保持原语义。
 	if comment.ReplyToID != nil {
 		var root entity.Comment
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -204,9 +205,6 @@ func deleteCommentInTx(tx *gorm.DB, comment *entity.Comment) error {
 			return err
 		}
 	}
-	// 1. 再锁本行（SELECT ... FOR UPDATE）：统一"先锁评论行"锁序（comment → comment_like），
-	//    与前台 ToggleLike 一致，消除死锁；并发点赞排队在删除之后。
-	//    行已不存在（批量场景下已被父评论连带删除）→ 跳过，保持原语义。
 	var locked entity.Comment
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Unscoped().
