@@ -4,20 +4,22 @@ import (
 	"context"
 	"math"
 	"strconv"
-
 	request "tuyou/internal/model/dto/request/admin/member"
 	response "tuyou/internal/model/dto/response/admin/member"
+	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/member"
 	appErrors "tuyou/pkg/errors"
+	"tuyou/pkg/jwt"
 )
 
 type memberService struct {
 	memberRepo member.MemberRepository
+	redisRepo  repository.RedisRepository
 }
 
 // NewMemberService 创建会员服务实例
-func NewMemberService(memberRepo member.MemberRepository) MemberService {
-	return &memberService{memberRepo: memberRepo}
+func NewMemberService(memberRepo member.MemberRepository, redisRepo repository.RedisRepository) MemberService {
+	return &memberService{memberRepo: memberRepo, redisRepo: redisRepo}
 }
 
 // ListMembers 查询会员列表
@@ -72,6 +74,8 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 			updates["status"] = 1
 		} else {
 			updates["status"] = 0
+			//禁用将用户踢下线
+			_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
 		}
 	}
 	if req.Role != nil {
@@ -94,6 +98,7 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 
 // DeleteMember 删除会员
 func (s *memberService) DeleteMember(ctx context.Context, id uint) error {
+	_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
 	return s.memberRepo.Delete(ctx, id)
 }
 
@@ -116,6 +121,9 @@ func (s *memberService) BatchDeleteMembers(ctx context.Context, req *request.Bat
 	if err != nil {
 		return err
 	}
+	for _, id := range ids {
+		_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+	}
 	return s.memberRepo.BatchDelete(ctx, ids)
 }
 
@@ -128,6 +136,11 @@ func (s *memberService) BatchUpdateStatus(ctx context.Context, req *request.Batc
 	status := 0
 	if req.Status {
 		status = 1
+	}
+	if status == 0 {
+		for _, id := range ids {
+			_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+		}
 	}
 	return s.memberRepo.BatchUpdateStatus(ctx, ids, status)
 }

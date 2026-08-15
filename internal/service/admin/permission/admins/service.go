@@ -9,16 +9,19 @@ import (
 	request "tuyou/internal/model/dto/request/admin/permission/admins"
 	response "tuyou/internal/model/dto/response/admin/permission/admins"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/permission/admins"
 	appErrors "tuyou/pkg/errors"
+	"tuyou/pkg/jwt"
 )
 
 type adminService struct {
 	adminRepo admins.AdminRepository
+	redisRepo repository.RedisRepository
 }
 
-func NewAdminService(adminRepo admins.AdminRepository) AdminService {
-	return &adminService{adminRepo: adminRepo}
+func NewAdminService(adminRepo admins.AdminRepository, redisRepo repository.RedisRepository) AdminService {
+	return &adminService{adminRepo: adminRepo, redisRepo: redisRepo}
 }
 
 // statusToInt 状态中文转 int：启用=1，禁用=0
@@ -117,6 +120,12 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 	}
 	if req.Status != "" {
 		updates["status"] = statusToInt(req.Status)
+		if updates["status"] == 0 {
+			keys, _ := s.redisRepo.ScanKeys(ctx, jwt.AdminTokenPrefix(id))
+			for _, k := range keys {
+				_ = s.redisRepo.Del(ctx, k)
+			}
+		}
 	}
 
 	if len(updates) == 0 {
@@ -128,6 +137,10 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 
 // DeleteAdmin 删除管理员
 func (s *adminService) DeleteAdmin(ctx context.Context, id uint) error {
+	keys, _ := s.redisRepo.ScanKeys(ctx, jwt.AdminTokenPrefix(id))
+	for _, k := range keys {
+		_ = s.redisRepo.Del(ctx, k)
+	}
 	return s.adminRepo.Delete(ctx, id)
 }
 
