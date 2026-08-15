@@ -33,7 +33,7 @@ func (r *personalRepository) UpdateProfile(memberID uint, updates map[string]int
 func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int) ([]entity.Member, int64, error) {
 	var total int64
 	if err := r.db.Table("member").
-		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -42,7 +42,7 @@ func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int
 	var rows []entity.Member
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
-		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.followee_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.follower_id = ? AND member.delete_time IS NULL", followerID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
@@ -57,7 +57,7 @@ func (r *personalRepository) FindFollowedMembers(followerID uint, page, size int
 func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]entity.Member, int64, error) {
 	var total int64
 	if err := r.db.Table("member").
-		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -66,7 +66,7 @@ func (r *personalRepository) FindFansMembers(memberID uint, page, size int) ([]e
 	var rows []entity.Member
 	if err := r.db.Table("member").
 		Select("member.id, member.nickname, member.avatar, member.bio, member.role").
-		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL").
+		Joins("JOIN follow ON follow.follower_id = member.id AND follow.delete_time IS NULL AND follow.status = 1").
 		Where("follow.followee_id = ? AND member.delete_time IS NULL", memberID).
 		Order("follow.create_time DESC").
 		Offset((page - 1) * size).
@@ -82,7 +82,7 @@ func (r *personalRepository) FindFollowedIDs(followerID uint) (map[uint]bool, er
 	var ids []uint
 	if err := r.db.Table("follow").
 		Select("followee_id").
-		Where("follower_id = ? AND delete_time IS NULL", followerID).
+		Where("follower_id = ? AND delete_time IS NULL AND status = 1", followerID).
 		Pluck("followee_id", &ids).Error; err != nil {
 		return nil, err
 	}
