@@ -3,16 +3,17 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 	"tuyou/internal/task"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"tuyou/internal/api"
 	activityAdminCtrl "tuyou/internal/api/v1/admin/activity"

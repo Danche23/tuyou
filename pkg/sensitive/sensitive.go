@@ -3,6 +3,7 @@ package sensitive
 import (
 	"strings"
 	"sync"
+	"unicode"
 
 	"gorm.io/gorm"
 
@@ -91,7 +92,22 @@ func (m *SensitiveMatcher) Reload(words []string) {
 	}
 }
 
-// normalize 词/内容统一规范化：TrimSpace + ToLower（英文大小写通吃）
+// normalize 词/内容统一规范化：
+//   - ToLower（英文大小写通吃）
+//   - 去掉全部空白（含全角空格 U+3000），关闭「赌 博」式空格绕过
+//   - 全角 ASCII 转半角（ｆｕｃｋ → fuck），关闭全角绕过
+// 插入词与校验内容共用，保证二者落在同一规范化空间。
 func normalize(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case unicode.IsSpace(r):
+			continue
+		case r >= 0xFF01 && r <= 0xFF5E: // 全角 ASCII → 半角
+			b.WriteRune(r - 0xFEE0)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
