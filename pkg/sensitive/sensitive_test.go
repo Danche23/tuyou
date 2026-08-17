@@ -52,6 +52,44 @@ func TestValidate_Trim(t *testing.T) {
 	}
 }
 
+func TestValidate_SpaceBypassClosed(t *testing.T) {
+	// 2026-08-17 normalize 修复：去全部空白（含全角空格），「赌 博」式绕过应被拦
+	m := newTest([]string{"赌博"})
+	for _, content := range []string{"赌 博", "赌  博", "赌\t博", "赌\n博", "赌　博"} {
+		if word, hit := m.Validate(content); !hit || word != "赌博" {
+			t.Fatalf("去空格后 %q 应命中 赌博（got word=%q hit=%v）", content, word, hit)
+		}
+	}
+}
+
+func TestValidate_FullWidthASCII(t *testing.T) {
+	// 2026-08-17 normalize 修复：全角 ASCII 转半角，全角绕过应被拦
+	m := newTest([]string{"fuck"})
+	for _, content := range []string{"ｆｕｃｋ", "ｆＵＣｋ", "ＦｕＣＫ"} {
+		if word, hit := m.Validate(content); !hit || word != "fuck" {
+			t.Fatalf("全角转半角后 %q 应命中 fuck（got word=%q hit=%v）", content, word, hit)
+		}
+	}
+}
+
+func TestValidate_WhitespaceOnlyNoHit(t *testing.T) {
+	m := newTest([]string{"赌博", "fuck"})
+	for _, content := range []string{"", " ", "  \t  ", "　"} {
+		if _, hit := m.Validate(content); hit {
+			t.Fatalf("纯空白内容 %q 不应命中", content)
+		}
+	}
+}
+
+func TestValidate_SpaceJoinTradeoff(t *testing.T) {
+	// 已知取舍（2026-08-17 评审拍板）：去空格会拼出词边界，属接受误伤。
+	// 「颜色 情调」规范化后含「色情」→ 会命中；硬拦截优先，软拦截送审为 Phase 2。
+	m := newTest([]string{"色情"})
+	if word, hit := m.Validate("颜色 情调"); !hit || word != "色情" {
+		t.Fatalf("已接受的取舍：去空格后「颜色 情调」应命中 色情（got word=%q hit=%v）", word, hit)
+	}
+}
+
 func TestValidate_EmptyWordIgnored(t *testing.T) {
 	m := newTest([]string{"", "   ", "毒品"})
 	if _, hit := m.Validate("  毒品 "); !hit {
