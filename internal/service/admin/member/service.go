@@ -23,8 +23,11 @@ func NewMemberService(memberRepo member.MemberRepository, redisRepo repository.R
 }
 
 // ListMembers 查询会员列表
-func (s *memberService) ListMembers(ctx context.Context, role int, req *request.ListMemberReq) (*response.ListMemberResp, error) {
-	filters := map[string]interface{}{"role": role}
+func (s *memberService) ListMembers(ctx context.Context, role *int, req *request.ListMemberReq) (*response.ListMemberResp, error) {
+	filters := map[string]interface{}{}
+	if role != nil {
+		filters["role"] = *role
+	}
 	if req.ID != "" {
 		filters["id"] = req.ID
 	}
