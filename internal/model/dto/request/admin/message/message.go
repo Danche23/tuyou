@@ -11,7 +11,7 @@ type ListMessageReq struct {
 
 // PublishSystemMsgReq 发布系统消息请求
 type PublishSystemMsgReq struct {
-	Content     string `json:"content" binding:"required"`      // 消息正文 msg_content
-	ReceiveType int    `json:"receive_type" binding:"required"` // 接收类型：0=全体，1=指定会员（对应 receive_obj_type）
-	MemberIDs   []uint `json:"member_ids"`                      // receive_type=1 时的接收会员id列表
+	Content     string `json:"content" binding:"required"` // 消息正文 msg_content
+	ReceiveType int    `json:"receive_type"`               // 接收类型：0=全体，1=指定会员（对应 receive_obj_type）
+	MemberIDs   []uint `json:"member_ids"`                 // receive_type=1 时的接收会员id列表
 }

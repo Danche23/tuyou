@@ -38,8 +38,6 @@ type MessageRepository interface {
 	FindRepliesByParent(parentID, memberID uint) ([]entity.Comment, error)
 	// FindCommentLikes 批量查当前用户对哪些评论点过赞
 	FindCommentLikes(commentIDs []uint, memberID uint) (map[uint]bool, error)
-	// FindMemberNickname 查询会员昵称（消息正文渲染用）
-	FindMemberNickname(memberID uint) (string, error)
 	// CreateMessage 在事务中插入消息主表
 	CreateMessage(tx *gorm.DB, info *entity.MsgInfo) error
 	// CreateUserRecord 在事务中插入用户接收记录
