@@ -20,4 +20,7 @@ type MemberRepository interface {
 
 	// UpdatePassword 更新用户密码
 	UpdatePassword(ctx context.Context, id uint, password string) error
+
+	// UpdatePhone 更新用户手机号
+	UpdatePhone(ctx context.Context, id uint, phone string) error
 }

@@ -4,7 +4,8 @@ package sms
 type Scene string
 
 const (
-	SceneRegister Scene = "register"
-	SceneLogin    Scene = "login"
-	SceneResetPwd Scene = "reset-pwd"
+	SceneRegister    Scene = "register"
+	SceneLogin       Scene = "login"
+	SceneResetPwd    Scene = "reset-pwd"
+	SceneChangePhone Scene = "change-phone"
 )

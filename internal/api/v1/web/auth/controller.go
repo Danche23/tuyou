@@ -4,9 +4,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"tuyou/internal/middleware"
 	request "tuyou/internal/model/dto/request/web/auth"
 	"tuyou/internal/repository"
 	"tuyou/internal/service/web/auth"
+	"tuyou/internal/service/web/auth/sms"
 	"tuyou/pkg/jwt"
 	"tuyou/pkg/response"
 )
@@ -67,6 +69,16 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+
+	// 改绑手机号发码需登录；register/login/reset-pwd 三个场景保持公开
+	if req.Scene == string(sms.SceneChangePhone) {
+		token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+		if _, err := jwt.ParseToken(token); err != nil {
+			response.Unauthorized(c, "未登录")
+			return
+		}
+	}
+
 	resp, err := h.authSvc.SendCode(c.Request.Context(), &req)
 	if err != nil {
 		response.BizError(c, err)
@@ -93,6 +105,30 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+// ChangePhone 修改绑定手机号
+// POST /api/v1/web/auth/change-phone（需登录）
+func (h *AuthHandler) ChangePhone(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	var req request.ChangePhoneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	resp, err := h.authSvc.ChangePhone(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	// 成功响应：message 取服务层文案，data 为空
+	response.SuccessWithMessage(c, resp.Message, struct{}{})
 }
 
 // Logout 退出登录

@@ -1,6 +1,10 @@
 package auth
 
-import "github.com/gin-gonic/gin"
+import (
+	"tuyou/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
 
 func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 	authGroup := group.Group("/auth")
@@ -10,5 +14,6 @@ func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 		authGroup.POST("/logout", h.Logout)
 		authGroup.POST("/reset-password", h.ResetPassword)
 		authGroup.POST("/send-code", h.SendCode)
+		authGroup.POST("/change-phone", middleware.MemberAuth(h.redisRepo), h.ChangePhone)
 	}
 }

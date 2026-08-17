@@ -20,7 +20,7 @@ type LoginRequest struct {
 // SendCodeRequest 发送验证码请求
 type SendCodeRequest struct {
 	Phone string `json:"phone" binding:"required"`
-	Scene string `json:"scene" binding:"required,oneof=register login reset-pwd"`
+	Scene string `json:"scene" binding:"required,oneof=register login reset-pwd change-phone"`
 }
 
 // ResetPasswordRequest 重置密码请求
@@ -29,4 +29,10 @@ type ResetPasswordRequest struct {
 	Code            string `json:"code" binding:"required,len=6"`
 	NewPassword     string `json:"newPassword" binding:"required,min=6"`
 	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+}
+
+// ChangePhoneRequest 修改手机号请求
+type ChangePhoneRequest struct {
+	NewPhone string `json:"newPhone" binding:"required"`
+	Code     string `json:"code" binding:"required,len=6"`
 }
