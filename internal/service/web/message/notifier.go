@@ -28,7 +28,7 @@ func NewNotifier(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSE
 // NotifyLike 点赞通知（模板1）
 func (n *Notifier) NotifyLike(contentOwnerID, senderID uint, title string) {
 	n.send(contentOwnerID, senderID, 1, "like", map[string]string{
-		"nickname": n.nickname(senderID),
+		"nickname": "",
 		"title":    title,
 	})
 }
@@ -36,14 +36,14 @@ func (n *Notifier) NotifyLike(contentOwnerID, senderID uint, title string) {
 // NotifyFollow 关注通知（模板2）
 func (n *Notifier) NotifyFollow(followeeID, followerID uint) {
 	n.send(followeeID, followerID, 2, "follow", map[string]string{
-		"nickname": n.nickname(followerID),
+		"nickname": "",
 	})
 }
 
 // NotifyCollect 收藏通知（模板12）
 func (n *Notifier) NotifyCollect(ownerID, collectorID uint, title string) {
 	n.send(ownerID, collectorID, 12, "collect", map[string]string{
-		"nickname": n.nickname(collectorID),
+		"nickname": "",
 		"title":    title,
 	})
 }
@@ -51,7 +51,7 @@ func (n *Notifier) NotifyCollect(ownerID, collectorID uint, title string) {
 // NotifySignup 报名通知（给活动领队，模板6）
 func (n *Notifier) NotifySignup(leaderID, memberID uint, title string) {
 	n.send(leaderID, memberID, 6, "signup", map[string]string{
-		"nickname": n.nickname(memberID),
+		"nickname": "",
 		"title":    title,
 	})
 }
@@ -65,10 +65,9 @@ func (n *Notifier) NotifySignupSuccess(memberID uint, title string) {
 
 // NotifyActivityDeleted 活动删除通知（给所有已报名成员，模板11）
 func (n *Notifier) NotifyActivityDeleted(memberIDs []uint, leaderID uint, title string) {
-	nickname := n.nickname(leaderID)
 	for _, memberID := range memberIDs {
 		n.send(memberID, leaderID, 11, "activity-deleted", map[string]string{
-			"nickname": nickname,
+			"nickname": "",
 			"title":    title,
 		})
 	}
@@ -78,7 +77,7 @@ func (n *Notifier) NotifyActivityDeleted(memberIDs []uint, leaderID uint, title 
 // commentID 关联新评论，接收者可从消息中心回复该评论。
 func (n *Notifier) NotifyComment(ownerID, commenterID uint, title string, commentID uint) {
 	n.sendTo(ownerID, commenterID, 3, "comment", commentID, map[string]string{
-		"nickname": n.nickname(commenterID),
+		"nickname": "",
 		"title":    title,
 	})
 }
@@ -87,7 +86,7 @@ func (n *Notifier) NotifyComment(ownerID, commenterID uint, title string, commen
 // commentID 关联新回复评论，接收者可从消息中心继续回复。
 func (n *Notifier) NotifyCommentReply(commentOwnerID, replyerID uint, content string, commentID uint) {
 	n.sendTo(commentOwnerID, replyerID, 10, "comment-reply", commentID, map[string]string{
-		"nickname": n.nickname(replyerID),
+		"nickname": "",
 		"comment":  content,
 	})
 }
@@ -95,7 +94,7 @@ func (n *Notifier) NotifyCommentReply(commentOwnerID, replyerID uint, content st
 // NotifyCommentLike 点赞评论通知（给评论作者，模板13）
 func (n *Notifier) NotifyCommentLike(commentOwnerID, likerID uint) {
 	n.send(commentOwnerID, likerID, 13, "comment-like", map[string]string{
-		"nickname": n.nickname(likerID),
+		"nickname": "",
 	})
 }
 
@@ -210,15 +209,6 @@ func renderContent(tpl string, vars map[string]string) string {
 		tpl = strings.ReplaceAll(tpl, "{"+k+"}", v)
 	}
 	return tpl
-}
-
-// nickname 查发送者昵称，查不到兜底"用户"
-func (n *Notifier) nickname(memberID uint) string {
-	nick, _ := n.msgRepo.FindMemberNickname(memberID)
-	if nick == "" {
-		return "用户"
-	}
-	return nick
 }
 
 // pushUnread 推送该会员最新未读数
