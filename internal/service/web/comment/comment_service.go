@@ -308,7 +308,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	}, nil
 }
 
-// ListComments 评论列表：前2条热评（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
+// ListComments 评论列表：前2条热评仅第1页展示（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
 func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) {
 	if req.TargetType != 1 && req.TargetType != 2 {
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
@@ -340,9 +340,12 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
 
-	// 热评 + 本页其余 = list
+	// 热评仅第1页展示，第2页起不再重复带出；分页"其余"每页照常排除热评，total/TotalPage 保持一致
+	// Page<=1 而非 ==1：绑定层已保证 min=1，但程序化调用 Page=0 时不应丢热评
 	comments := make([]entity.Comment, 0, len(top)+len(rest))
-	comments = append(comments, top...)
+	if req.Page <= 1 {
+		comments = append(comments, top...)
+	}
 	comments = append(comments, rest...)
 
 	items, err := s.buildCommentItems(comments, memberID, targetAuthorID)
