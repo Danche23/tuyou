@@ -61,6 +61,7 @@ func (r *memberRepository) List(ctx context.Context, filters map[string]interfac
 			phone,
 			IF(status = 1, TRUE, FALSE) AS status,
 			bio, bg_img,
+			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
 			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login`)
 	query = applyFilters(query, filters)
