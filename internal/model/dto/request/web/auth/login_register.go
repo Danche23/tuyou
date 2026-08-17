@@ -36,3 +36,10 @@ type ChangePhoneRequest struct {
 	NewPhone string `json:"newPhone" binding:"required"`
 	Code     string `json:"code" binding:"required,len=6"`
 }
+
+// UpdatePasswordRequest 登录后修改密码请求
+type UpdatePasswordRequest struct {
+	OldPassword     string `json:"oldPassword" binding:"required,min=6"`
+	NewPassword     string `json:"newPassword" binding:"required,min=6"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+}

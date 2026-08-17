@@ -290,6 +290,32 @@ func (s *authService) ChangePhone(ctx context.Context, userID uint, req *request
 	}, nil
 }
 
+// UpdatePassword 登录后修改密码
+func (s *authService) UpdatePassword(ctx context.Context, userID uint, req *request.UpdatePasswordRequest) (*response.MessageResponse, error) {
+	//查找当前用户
+	member, err := s.memberRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	//校验旧密码
+	if err := bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.OldPassword)); err != nil {
+		return nil, appErrors.ErrInvalidCredentials
+	}
+
+	//对新密码进行加密并更新
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.memberRepo.UpdatePassword(ctx, member.ID, string(hashedPassword)); err != nil {
+		return nil, err
+	}
+	return &response.MessageResponse{
+		Message: "密码修改成功",
+	}, nil
+}
+
 // Logout 退出登录：删除该用户白名单登录态，使其立即失效（幂等，Redis 不可用时忽略）
 func (s *authService) Logout(ctx context.Context, userID uint) error {
 	return s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))

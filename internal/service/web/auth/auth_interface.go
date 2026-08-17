@@ -16,4 +16,5 @@ type WebAuthService interface {
 	GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error)
 	Logout(ctx context.Context, userID uint) error
 	ChangePhone(ctx context.Context, userID uint, req *request.ChangePhoneRequest) (*response.MessageResponse, error)
+	UpdatePassword(ctx context.Context, userID uint, req *request.UpdatePasswordRequest) (*response.MessageResponse, error)
 }

@@ -139,17 +139,6 @@ func (r *msgRepository) FindCommentLikes(commentIDs []uint, memberID uint) (map[
 	return result, nil
 }
 
-// FindMemberNickname 查询会员昵称（消息正文渲染用）
-func (r *msgRepository) FindMemberNickname(memberID uint) (string, error) {
-	var row struct {
-		Nickname string `gorm:"column:nickname"`
-	}
-	if err := r.db.Table("member").Select("nickname").Where("id = ?", memberID).Scan(&row).Error; err != nil {
-		return "", err
-	}
-	return row.Nickname, nil
-}
-
 // CreateMessage 在事务中插入消息主表
 func (r *msgRepository) CreateMessage(tx *gorm.DB, info *entity.MsgInfo) error {
 	return tx.Create(info).Error
