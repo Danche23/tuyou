@@ -41,6 +41,7 @@ func Error(c *gin.Context, code int, message string) {
 	c.JSON(200, Response{
 		Code:    code,
 		Message: message,
+		Data:    struct{}{},
 	})
 }
 
@@ -59,6 +60,7 @@ func BizError(c *gin.Context, err error) {
 		c.JSON(200, Response{
 			Code:    bizErr.Code,
 			Message: bizErr.Message,
+			Data:    struct{}{},
 		})
 		return
 	}

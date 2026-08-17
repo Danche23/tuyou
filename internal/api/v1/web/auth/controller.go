@@ -131,9 +131,35 @@ func (h *AuthHandler) ChangePhone(c *gin.Context) {
 	response.SuccessWithMessage(c, resp.Message, struct{}{})
 }
 
-// Logout 退出登录
-// POST /api/v1/auth/logout
-// 删除该用户白名单登录态使其立即失效；幂等，token 已失效时也返回成功
+// UpdatePassword 修改密码
+// PUT /api/v1/web/auth/password（需登录）
+func (h *AuthHandler) UpdatePassword(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	var req request.UpdatePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		response.BadRequest(c, "两次输入密码不一致")
+		return
+	}
+
+	resp, err := h.authSvc.UpdatePassword(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	// 成功响应：message 取服务层文案，data 为空
+	response.SuccessWithMessage(c, resp.Message, struct{}{})
+}
+
+// Logout 删除该用户白名单登录态使其立即失效；幂等，token 已失效时也返回成功
 func (h *AuthHandler) Logout(c *gin.Context) {
 	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 	if claims, err := jwt.ParseToken(token); err == nil {
