@@ -37,7 +37,7 @@ type CommentRepository interface {
 	CountRepliesByParentIDs(parentIDs []uint) (map[uint]int64, error)                                              // 批量统计每个一级评论下二级评论总数
 	FindTopReplies(parentID uint, limit int) ([]entity.Comment, error)                                             // 某一级评论下热度最高前 limit 条二级评论
 	FindRepliesByParentIDs(parentIDs []uint) ([]entity.Comment, error)                                             // 批量查询多个一级评论下的全部二级评论（C4 防 N+1）
-	FindReplyPage(parentID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error)                   // 二级评论分页（发布时间倒序，排除热评）
+	FindReplyPage(parentID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error)                   // 二级评论分页（发布时间正序，排除热评）
 	CountReplyPage(parentID uint, excludeIDs []uint) (int64, error)                                                // 二级评论（排除热评）总数
 	FindCommentLikes(commentIDs []uint, memberID uint) (map[uint]bool, error)                                      // 批量查当前用户点赞状态
 	FindMembersByIDs(memberIDs []uint) (map[uint]*entity.Member, error)                                            // 批量查用户信息

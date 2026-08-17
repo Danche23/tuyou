@@ -198,14 +198,14 @@ func (r *commentRepository) FindRepliesByParentIDs(parentIDs []uint) ([]entity.C
 	return replies, nil
 }
 
-// FindReplyPage 二级评论分页（发布时间倒序，排除热评）
+// FindReplyPage 二级评论分页（发布时间正序，排除热评）
 func (r *commentRepository) FindReplyPage(parentID uint, excludeIDs []uint, offset, limit int) ([]entity.Comment, error) {
 	var comments []entity.Comment
 	query := r.db.Where("reply_to_id = ?", parentID)
 	if len(excludeIDs) > 0 {
 		query = query.Where("id NOT IN ?", excludeIDs)
 	}
-	if err := query.Order("create_time DESC, id DESC").Offset(offset).Limit(limit).Find(&comments).Error; err != nil {
+	if err := query.Order("create_time ASC, id ASC").Offset(offset).Limit(limit).Find(&comments).Error; err != nil {
 		return nil, err
 	}
 	return comments, nil

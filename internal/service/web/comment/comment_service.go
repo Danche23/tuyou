@@ -514,7 +514,7 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 	return nil
 }
 
-// ListReplies 二级评论列表：前2条热回复（不占分页计数）+ 其余按发布时间倒序分页，total=其余回复数
+// ListReplies 二级评论列表：前2条热回复（不占分页计数）+ 其余按发布时间正序分页，total=其余回复数
 func (s *commentService) ListReplies(commentID uint, memberID uint, page, size int) (*response.PageResponse, error) {
 	// 一级评论必须存在
 	parent, err := s.repo.FindByID(commentID)
@@ -540,7 +540,7 @@ func (s *commentService) ListReplies(commentID uint, memberID uint, page, size i
 		excludeIDs = append(excludeIDs, c.ID)
 	}
 
-	// 其余按发布时间倒序分页
+	// 其余按发布时间正序分页
 	offset := (page - 1) * size
 	rest, err := s.repo.FindReplyPage(commentID, excludeIDs, offset, size)
 	if err != nil {
