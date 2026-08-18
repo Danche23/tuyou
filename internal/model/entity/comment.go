@@ -14,6 +14,8 @@ type Comment struct {
 	Heat            int64  `gorm:"type:bigint;default:0;column:heat;comment:热度值(互动分×时间因子+新鲜度加分)，写操作时异步更新" json:"heat"`
 	HeatScore       int64  `gorm:"type:bigint;default:0;column:heat_score;comment:累计热度分(只增不减，写路径事务内按配额/上限累加)" json:"heatScore"`
 	HeatScored      int    `gorm:"type:tinyint;default:0;column:heat_scored;comment:二级评论标记：该回复是否已计入父级热度(1=已计入)" json:"heatScored"`
+	IsSensitive     int    `gorm:"type:tinyint;default:0;column:is_sensitive;comment:发布时敏感词快照：1=命中敏感词(内容仍存原文)" json:"isSensitive"`
+	HitWords        string `gorm:"type:varchar(255);default:'';column:hit_words;comment:命中的敏感词，分号分隔(发布时快照)" json:"hitWords"`
 	Status          int    `gorm:"type:tinyint;default:1;index;comment:评论状态：0=下架/删除，1=正常" json:"status"`
 }
 
