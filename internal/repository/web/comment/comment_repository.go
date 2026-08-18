@@ -297,23 +297,35 @@ func (r *commentRepository) DecrTargetCommentCount(tx *gorm.DB, targetType int, 
 		UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - ?, 0)", n)).Error
 }
 
-// RecomputeHeatExpr 评论热度公式 SQL 表达式（设计文档 4.4）：
-// heat = 互动分 × 时间因子 + 新鲜度加分
+// CountScoredReplies 统计某用户对根评论"已计入热度"的回复数。
+// Unscoped 连软删一起数：用掉不回涨——删除已计分回复也不释放单评论名额（设计 §2.2）。
+func (r *commentRepository) CountScoredReplies(tx *gorm.DB, rootID, memberID uint) (int64, error) {
+	var total int64
+	if err := tx.Unscoped().Model(&entity.Comment{}).
+		Where("reply_to_id = ? AND member_id = ? AND heat_scored = 1", rootID, memberID).
+		Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+// IncrHeatScore 评论累计热度分 +n（只增不减；调用方需先过配额/单评论上限校验）
+func (r *commentRepository) IncrHeatScore(tx *gorm.DB, commentID uint, n int64) error {
+	return tx.Model(&entity.Comment{}).
+		Where("id = ?", commentID).
+		UpdateColumn("heat_score", gorm.Expr("heat_score + ?", n)).Error
+}
+
+// RecomputeHeatExpr 评论热度公式 SQL 表达式（设计 §2.3）：
+// heat = 累计热度分 × 时间因子 + 新鲜度加分
 //
-//	互动分   = like_count + reply_count × 2
-//	时间因子 = 28天内=1；之后每 7 天 ×0.6
-//	新鲜度   = 发布后第 1/2/3 周 +6/+4/+2，之后 +0
+//	累计热度分 = heat_score（只增不减，写路径事务内按"每日配额 + 单评论回复上限"累加）
+//	时间因子   = 28天内=1；之后每 7 天 ×0.6
+//	新鲜度     = 发布后第 1/2/3 周 +6/+4/+2，之后 +0
 //
-// reply_count：一级评论 = 其下未删二级数（用双层派生表规避 MySQL 1093：不能在同一 UPDATE 里子查询被更新的表），二级评论 = 0（子查询自然不命中）
+// like_count / reply_count 不再参与热度（它们只影响展示计数），热度由 heat_score 单独驱动。
 const RecomputeHeatExpr = `
-	(like_count + COALESCE((
-		SELECT cnt FROM (
-			SELECT reply_to_id, COUNT(*) AS cnt
-			FROM comment
-			WHERE delete_time IS NULL
-			GROUP BY reply_to_id
-		) t WHERE t.reply_to_id = comment.id
-	), 0) * 2)
+	heat_score
 	* POWER(0.6, FLOOR(GREATEST(DATEDIFF(NOW(), create_time) - 28, 0) / 7))
 	+ CASE
 		WHEN DATEDIFF(NOW(), create_time) < 7 THEN 6
@@ -322,7 +334,7 @@ const RecomputeHeatExpr = `
 		ELSE 0
 	END`
 
-// RecomputeHeat 事务内按公式重算单条评论热度（写操作后调用：发评论/删除/点赞）
+// RecomputeHeat 事务内按公式重算单条评论热度（发新评论后调用（算新鲜度）；删除/点赞不再需要——热度只由 heat_score 与时间驱动）
 func (r *commentRepository) RecomputeHeat(tx *gorm.DB, commentID uint) error {
 	return tx.Model(&entity.Comment{}).
 		Where("id = ?", commentID).

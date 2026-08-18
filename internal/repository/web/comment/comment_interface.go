@@ -47,5 +47,7 @@ type CommentRepository interface {
 	CountRepliesByParentID(tx *gorm.DB, parentID uint) (int64, error)                 // 统计单个一级评论下未删二级数（事务内）
 	IncrTargetCommentCount(tx *gorm.DB, targetType int, targetID uint) error          // 目标 note/strategy 评论数 +1（SQL 原子）
 	DecrTargetCommentCount(tx *gorm.DB, targetType int, targetID uint, n int64) error // 目标评论数 -n（GREATEST 防负）
+	CountScoredReplies(tx *gorm.DB, rootID, memberID uint) (int64, error)             // 统计某用户对根评论"已计入热度"的回复数（Unscoped 连软删一起数）
+	IncrHeatScore(tx *gorm.DB, commentID uint, n int64) error                         // 评论累计热度分 +n（只增不减，事务内）
 	RecomputeHeat(tx *gorm.DB, commentID uint) error                                  // 事务内重算单条评论热度（4.4 公式）
 }

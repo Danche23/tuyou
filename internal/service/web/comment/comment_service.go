@@ -18,13 +18,16 @@ package comment
 // 本项目事务的用法：s.db.Transaction(func(tx) error { ... }) 里所有带 tx 的仓储方法
 // 都在同一个数据库事务里，任一步出错整体回滚。
 import (
+	"context"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
+	"tuyou/internal/model/entity"
 	requestComment "tuyou/internal/model/dto/request/web/comment"
 	responseComment "tuyou/internal/model/dto/response/web/comment"
-	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	repoComment "tuyou/internal/repository/web/comment"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/response"
@@ -45,15 +48,27 @@ type commentService struct {
 	db        *gorm.DB
 	repo      repoComment.CommentRepository
 	sensitive *sensitive.SensitiveMatcher
+	redis     repository.RedisRepository
 	notifier  CommentNotifier
 }
 
-func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher, notifier CommentNotifier) CommentService {
-	return &commentService{db: db, repo: repo, sensitive: sensitive, notifier: notifier}
+func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher, redis repository.RedisRepository, notifier CommentNotifier) CommentService {
+	return &commentService{db: db, repo: repo, sensitive: sensitive, redis: redis, notifier: notifier}
 }
 
 // timeFormat 时间格式化样式（与项目其他模块一致）
 const timeFormat = "2006-01-02 15:04:05"
+
+const (
+	// heatQuotaDaily 每用户每天可贡献的热度分上限（全局配额，设计 §2.2）
+	heatQuotaDaily int64 = 50
+	// heatReplyPerComment 单评论每用户最多计入热度的回复数（设计 §2.2）
+	heatReplyPerComment int64 = 3
+	// heatLikeScore 点赞贡献的热度分
+	heatLikeScore int64 = 1
+	// heatReplyScore 回复贡献的热度分
+	heatReplyScore int64 = 2
+)
 
 // idStr uint 转字符串 ID
 func idStr(id uint) string {
@@ -66,6 +81,43 @@ func optionalIDStr(id *uint) string {
 		return ""
 	}
 	return idStr(*id)
+}
+
+// heatQuotaKey 每日热度配额 key（自然日维度，次日换 key 天然重置）
+func heatQuotaKey(memberID uint) string {
+	return "member:heat:quota:" + time.Now().Format("20060102") + ":" + idStr(memberID)
+}
+
+// consumeHeatQuota 消费热度配额（Redis INCRBY 原子扣减）。返回 true=配额内（可计分），false=已超限（不计分）。
+//   - Redis 不可用：fail-open 返回 true（不限制，与登录白名单降级一致）；
+//   - 超限：回滚本次扣减（用掉的不回涨，超出的部分不占配额）；
+//   - 首次创建 key：顺带设置"当天结束"过期，避免 key 无限堆积。
+func (s *commentService) consumeHeatQuota(memberID uint, score int64) bool {
+	if s.redis == nil {
+		return true
+	}
+	ctx := context.Background()
+	key := heatQuotaKey(memberID)
+	newVal, err := s.redis.IncrBy(ctx, key, score)
+	if err != nil {
+		return true // Redis 不可用 → fail-open
+	}
+	if newVal == score {
+		now := time.Now()
+		endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
+		_ = s.redis.Expire(ctx, key, endOfDay.Sub(now)+time.Second)
+	}
+	if newVal > heatQuotaDaily {
+		_, _ = s.redis.IncrBy(ctx, key, -score)
+		return false
+	}
+	return true
+}
+
+// shouldScoreReply 判断某条回复能否为父级贡献热度：① 未达单评论上限；② 配额有余额。
+// 用掉不回涨：删除已计分回复不恢复名额、不扣父级热度（设计 §2.2）。
+func shouldScoreReply(scoredReplies int64, quotaOK bool) bool {
+	return scoredReplies < heatReplyPerComment && quotaOK
 }
 
 // commentUser 组装评论用户信息
@@ -185,9 +237,11 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 			}
 			isLiked = true
 		}
-		// like_count 变化后重算该评论热度
-		if err := s.repo.RecomputeHeat(tx, commentID); err != nil {
-			return err
+		// 点赞贡献热度（配额内才计分）；取消点赞不回扣（用掉不回涨，设计 §2.2）
+		if isLiked && s.consumeHeatQuota(memberID, heatLikeScore) {
+			if err := s.repo.IncrHeatScore(tx, commentID, heatLikeScore); err != nil {
+				return err
+			}
 		}
 
 		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）；-1 用 max 防负
@@ -273,6 +327,20 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 		if replyToID != nil {
 			if _, err := s.repo.LockCommentByID(tx, *replyToID); err != nil {
 				return errors.NewWithErr(errors.CodeNotFound, "被回复的评论不存在", err)
+			}
+			// 回复计分（设计 §2.3）：单评论上限（该用户对根评论已计分回复 <3）+ 全局配额。
+			// 用掉不回涨：删回复不扣父级热度、不恢复配额（heat_scored 标记保持 1）。
+			scoredReplies, err := s.repo.CountScoredReplies(tx, *replyToID, memberID)
+			if err != nil {
+				return err
+			}
+			// 短路求值：上限未过才消费配额（避免上限已满还白白扣配额）
+			quotaOK := scoredReplies < heatReplyPerComment && s.consumeHeatQuota(memberID, heatReplyScore)
+			if shouldScoreReply(scoredReplies, quotaOK) {
+				if err := s.repo.IncrHeatScore(tx, *replyToID, heatReplyScore); err != nil {
+					return err
+				}
+				comment.HeatScored = 1
 			}
 		}
 		if err := s.repo.CreateComment(tx, comment); err != nil {
@@ -535,7 +603,8 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 		if err := s.repo.DecrTargetCommentCount(tx, comment.TargetType, comment.TargetID, 1); err != nil {
 			return err
 		}
-		return s.repo.RecomputeHeat(tx, *comment.ReplyToID)
+		// 删除回复不重算父级热度：热度只由 heat_score（删除不回扣）与时间驱动（设计 §2.2）
+		return nil
 	})
 	if err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除评论失败", err)
