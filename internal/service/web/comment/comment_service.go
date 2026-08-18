@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	"tuyou/internal/model/entity"
 	requestComment "tuyou/internal/model/dto/request/web/comment"
 	responseComment "tuyou/internal/model/dto/response/web/comment"
+	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	repoComment "tuyou/internal/repository/web/comment"
 	"tuyou/pkg/errors"
@@ -141,25 +141,25 @@ func (s *commentService) maskContent(content string) string {
 	return s.sensitive.Mask(content)
 }
 
-// commentUser 组装评论用户信息
-func commentUser(m *entity.Member) *responseComment.CommentUser {
+// commentUser 组装评论用户信息（昵称打星）
+func (s *commentService) commentUser(m *entity.Member) *responseComment.CommentUser {
 	if m == nil {
 		return &responseComment.CommentUser{}
 	}
 	return &responseComment.CommentUser{
 		ID:       idStr(m.ID),
-		Nickname: m.Nickname,
+		Nickname: s.maskContent(m.Nickname),
 		Avatar:   m.Avatar,
 	}
 }
 
-// replyToNickname 取被回复用户的昵称（nil→""）
-func replyToNickname(memberID *uint, members map[uint]*entity.Member) string {
+// replyToNickname 取被回复用户的昵称（nil→""，昵称打星）
+func (s *commentService) replyToNickname(memberID *uint, members map[uint]*entity.Member) string {
 	if memberID == nil {
 		return ""
 	}
 	if m := members[*memberID]; m != nil {
-		return m.Nickname
+		return s.maskContent(m.Nickname)
 	}
 	return ""
 }
@@ -211,12 +211,12 @@ func (s *commentService) buildReplyItems(replies []entity.Comment, members map[u
 	for _, r := range replies {
 		items = append(items, &responseComment.CommentReplyItem{
 			ID:              idStr(r.ID),
-			User:            commentUser(members[r.MemberID]),
+			User:            s.commentUser(members[r.MemberID]),
 			Content:         s.maskContent(r.Content),
 			LikeCount:       r.LikeCount,
 			IsLiked:         likes[r.ID],
 			ReplyToID:       optionalIDStr(r.ReplyToID),
-			ReplyToNickname: replyToNickname(r.ReplyToMemberID, members),
+			ReplyToNickname: s.replyToNickname(r.ReplyToMemberID, members),
 			CreatedAt:       r.CreatedAt.Format(timeFormat),
 			CanDelete:       r.MemberID == memberID || targetAuthorID == memberID,
 		})
@@ -406,12 +406,12 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	var replyToNicknameStr string
 	if replyToMemberID != nil {
 		if m := members[*replyToMemberID]; m != nil {
-			replyToNicknameStr = m.Nickname
+			replyToNicknameStr = s.maskContent(m.Nickname)
 		}
 	}
 	return &responseComment.CommentItem{
 		ID:              idStr(comment.ID),
-		User:            commentUser(members[memberID]),
+		User:            s.commentUser(members[memberID]),
 		Content:         s.maskContent(comment.Content),
 		LikeCount:       0,
 		IsLiked:         false,
@@ -560,12 +560,12 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 	for _, c := range comments {
 		items = append(items, &responseComment.CommentItem{
 			ID:              idStr(c.ID),
-			User:            commentUser(members[c.MemberID]),
+			User:            s.commentUser(members[c.MemberID]),
 			Content:         s.maskContent(c.Content),
 			LikeCount:       c.LikeCount,
 			IsLiked:         likes[c.ID],
 			ReplyToID:       optionalIDStr(c.ReplyToID),
-			ReplyToNickname: replyToNickname(c.ReplyToMemberID, members),
+			ReplyToNickname: s.replyToNickname(c.ReplyToMemberID, members),
 			CreatedAt:       c.CreatedAt.Format(timeFormat),
 			Replies:         s.buildReplyItems(replyMap[c.ID], members, likes, memberID, targetAuthorID),
 			ReplyCount:      replyCounts[c.ID],

@@ -70,9 +70,9 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 
 	return &responsePersonal.Profile{
 		ID:           strconv.FormatUint(uint64(member.ID), 10),
-		Nickname:     strOr(member.Nickname, "用户"+strconv.FormatUint(uint64(member.ID), 10)),
+		Nickname:     strOr(s.mask(member.Nickname), "用户"+strconv.FormatUint(uint64(member.ID), 10)),
 		Avatar:       strOr(member.Avatar, entity.DefaultAvatar),
-		Bio:          strOr(member.Bio, entity.DefaultBio),
+		Bio:          strOr(s.mask(member.Bio), entity.DefaultBio),
 		BgImg:        strOr(member.BgImg, entity.DefaultBgImg),
 		PublishCount: member.PublishCount,
 		FollowCount:  member.FollowCount,
@@ -121,9 +121,9 @@ func (s *personalService) GetFollowedMembers(memberID uint, page, size int) ([]r
 	for _, m := range members {
 		result = append(result, responsePersonal.FollowedMember{
 			FolloweeID: strconv.FormatUint(uint64(m.ID), 10),
-			Nickname:   m.Nickname,
+			Nickname:   s.mask(m.Nickname),
 			Avatar:     m.Avatar,
-			Bio:        m.Bio,
+			Bio:        s.mask(m.Bio),
 			IsFollowed: true, // 关注列表里的人都是我已经关注的
 		})
 	}
@@ -147,9 +147,9 @@ func (s *personalService) GetFansMembers(memberID uint, page, size int) ([]respo
 	for _, m := range members {
 		result = append(result, responsePersonal.FansMember{
 			FollowerID: strconv.FormatUint(uint64(m.ID), 10),
-			Nickname:   m.Nickname,
+			Nickname:   s.mask(m.Nickname),
 			Avatar:     m.Avatar,
-			Bio:        m.Bio,
+			Bio:        s.mask(m.Bio),
 			IsFollowed: followed[m.ID],
 		})
 	}
@@ -386,7 +386,7 @@ func (s *personalService) buildNoteCards(notes []entity.Note, memberID uint) ([]
 		if m, ok := memberMap[n.MemberID]; ok {
 			author = &responsePersonal.AuthorInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
@@ -455,7 +455,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 		if m, ok := memberMap[g.MemberID]; ok {
 			author = &responsePersonal.AuthorInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
@@ -515,7 +515,7 @@ func (s *personalService) buildActivityItems(activities []entity.Activity, membe
 		if m, ok := memberMap[a.LeaderMemberID]; ok {
 			leader = &responseActivity.LeaderInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
