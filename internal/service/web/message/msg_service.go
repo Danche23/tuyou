@@ -14,6 +14,7 @@ import (
 	repoMsg "tuyou/internal/repository/web/message"
 	serviceComment "tuyou/internal/service/web/comment"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 )
 
 // 消息类型（与 msg_info.msg_type 约定一致）
@@ -27,11 +28,12 @@ type msgService struct {
 	db         *gorm.DB
 	hub        *stream.SSEHub
 	commentSvc serviceComment.CommentService // 回复评论时复用评论模块的发表评论逻辑
+	sensitive  *sensitive.SensitiveMatcher
 }
 
 // NewMessageService 创建消息服务实例
-func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub, commentSvc serviceComment.CommentService) MessageService {
-	return &msgService{msgRepo: msgRepo, db: db, hub: hub, commentSvc: commentSvc}
+func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub, commentSvc serviceComment.CommentService, matcher *sensitive.SensitiveMatcher) MessageService {
+	return &msgService{msgRepo: msgRepo, db: db, hub: hub, commentSvc: commentSvc, sensitive: matcher}
 }
 
 // GetInteractions 获取互动消息列表

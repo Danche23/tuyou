@@ -285,10 +285,16 @@ func (a *App) initDependencies() {
 	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
 	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
 
+	// 敏感词匹配器：启动时从 sensitive_word 表加载启用词构建 trie（加载失败不带病上线）
+	sensitiveMatcher, err := sensitive.NewFromDB(a.mysqlDB)
+	if err != nil {
+		logger.Fatal("敏感词库加载失败", zap.Error(err))
+	}
+
 	// ========== 创建 Service ==========
-	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo, sensitiveMatcher)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo, adminMsgRepo, adminSSEHub)
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, sensitiveMatcher, notifier)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo, redisRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo, adminMsgRepo, adminSSEHub)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo, redisRepo)
@@ -299,14 +305,9 @@ func (a *App) initDependencies() {
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB, notifier)
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB, notifier)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
-	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
-	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
-	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
-	// 敏感词匹配器：启动时从 sensitive_word 表加载启用词构建 trie（加载失败不带病上线）
-	sensitiveMatcher, err := sensitive.NewFromDB(a.mysqlDB)
-	if err != nil {
-		logger.Fatal("敏感词库加载失败", zap.Error(err))
-	}
+	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, sensitiveMatcher, notifier)
+	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, sensitiveMatcher, notifier)
+	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, sensitiveMatcher, notifier)
 	// 后台敏感词管理：增删后热更 shared 的 sensitiveMatcher（评论等服务同实例共享）
 	sensitiveWordRepo := repoAdminSensitiveWord.NewSensitiveWordRepository(a.mysqlDB)
 	sensitiveWordSvc := serviceAdminSensitiveWord.NewSensitiveWordService(sensitiveWordRepo, sensitiveMatcher)
@@ -317,9 +318,9 @@ func (a *App) initDependencies() {
 	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher, redisRepo, notifier)
 	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
-	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo, sensitiveMatcher)
 	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
-	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc, sensitiveMatcher)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)

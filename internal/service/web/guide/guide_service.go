@@ -12,6 +12,7 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -23,12 +24,13 @@ var difficultyIntToStr = map[int]string{1: "入门", 2: "中等", 3: "中高等"
 type guideService struct {
 	guideRepo repoGuide.GuideRepository
 	db        *gorm.DB
+	sensitive *sensitive.SensitiveMatcher
 	notifier  *serviceMsg.Notifier
 }
 
 // NewGuideService 创建攻略服务实例
-func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, notifier *serviceMsg.Notifier) GuideService {
-	return &guideService{guideRepo: guideRepo, db: db, notifier: notifier}
+func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) GuideService {
+	return &guideService{guideRepo: guideRepo, db: db, sensitive: matcher, notifier: notifier}
 }
 
 // CreateGuide 发布攻略

@@ -16,6 +16,7 @@ import (
 	repoPersonal "tuyou/internal/repository/web/personal"
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -28,12 +29,13 @@ type personalService struct {
 	noteRepo     repoNote.NoteRepository
 	guideRepo    repoGuide.GuideRepository
 	activityRepo repoActivity.ActivityRepository
+	sensitive    *sensitive.SensitiveMatcher
 	notifier     *serviceMsg.Notifier
 }
 
 // NewPersonalService 创建服务实例
-func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository, notifier *serviceMsg.Notifier) PersonalService {
-	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo, notifier: notifier}
+func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) PersonalService {
+	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo, sensitive: matcher, notifier: notifier}
 }
 
 // strOr 空串返回默认值，非空返回原值

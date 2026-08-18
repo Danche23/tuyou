@@ -16,6 +16,7 @@ import (
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+	"tuyou/pkg/sensitive"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -24,11 +25,12 @@ import (
 type authService struct {
 	memberRepo auth.MemberRepository
 	redisRepo  repository.RedisRepository
+	sensitive  *sensitive.SensitiveMatcher
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(memberRepo auth.MemberRepository, redisRepo repository.RedisRepository) WebAuthService {
-	return &authService{memberRepo: memberRepo, redisRepo: redisRepo}
+func NewAuthService(memberRepo auth.MemberRepository, redisRepo repository.RedisRepository, matcher *sensitive.SensitiveMatcher) WebAuthService {
+	return &authService{memberRepo: memberRepo, redisRepo: redisRepo, sensitive: matcher}
 }
 
 // Register 注册

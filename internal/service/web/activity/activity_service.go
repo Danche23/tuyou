@@ -11,6 +11,7 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -18,12 +19,13 @@ import (
 type activityService struct {
 	activityRepo repoActivity.ActivityRepository
 	db           *gorm.DB
+	sensitive    *sensitive.SensitiveMatcher
 	notifier     *serviceMsg.Notifier
 }
 
 // NewActivityService 创建活动服务实例
-func NewActivityService(activityRepo repoActivity.ActivityRepository, db *gorm.DB, notifier *serviceMsg.Notifier) ActivityService {
-	return &activityService{activityRepo: activityRepo, db: db, notifier: notifier}
+func NewActivityService(activityRepo repoActivity.ActivityRepository, db *gorm.DB, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) ActivityService {
+	return &activityService{activityRepo: activityRepo, db: db, sensitive: matcher, notifier: notifier}
 }
 
 // CreateActivity 创建活动（仅领队 role=0 可创建）

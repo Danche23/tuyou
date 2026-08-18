@@ -14,18 +14,20 @@ import (
 	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 )
 
 type homeService struct {
 	homeRepo  repoHome.HomeRepository
 	noteRepo  repoNote.NoteRepository
 	guideRepo repoGuide.GuideRepository
+	sensitive *sensitive.SensitiveMatcher
 }
 
 // NewHomeService 创建首页服务实例
 // 注入 note/guide 仓储以复用点赞状态缓存（Redis 优先）
-func NewHomeService(homeRepo repoHome.HomeRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository) HomeService {
-	return &homeService{homeRepo: homeRepo, noteRepo: noteRepo, guideRepo: guideRepo}
+func NewHomeService(homeRepo repoHome.HomeRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, matcher *sensitive.SensitiveMatcher) HomeService {
+	return &homeService{homeRepo: homeRepo, noteRepo: noteRepo, guideRepo: guideRepo, sensitive: matcher}
 }
 
 // GetSlides 获取首页轮播（固定 5 张）

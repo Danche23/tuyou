@@ -12,19 +12,21 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
 
 type noteService struct {
-	noteRepo repoNote.NoteRepository
-	db       *gorm.DB
-	notifier *serviceMsg.Notifier
+	noteRepo  repoNote.NoteRepository
+	db        *gorm.DB
+	sensitive *sensitive.SensitiveMatcher
+	notifier  *serviceMsg.Notifier
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, notifier *serviceMsg.Notifier) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db, notifier: notifier}
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, sensitive: matcher, notifier: notifier}
 }
 
 // CreateNote 发布笔记
