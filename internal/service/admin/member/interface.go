@@ -29,4 +29,7 @@ type MemberService interface {
 
 	// ExportMembers 导出某角色全部记录（role 由路由传入）
 	ExportMembers(ctx context.Context, role int) ([]response.MemberListItem, error)
+
+	// Restore 恢复已注销会员（status 2→1；手机号已被他人占用则拒绝）
+	Restore(ctx context.Context, id uint) error
 }

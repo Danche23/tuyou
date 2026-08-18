@@ -2,9 +2,11 @@ package member
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
+	"tuyou/internal/model/entity"
 	response "tuyou/internal/model/dto/response/admin/member"
 	appErrors "tuyou/pkg/errors"
 )
@@ -183,4 +185,17 @@ func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]respo
 		return nil, err
 	}
 	return list, nil
+}
+
+// FindActiveByPhoneExcept 查询"在用的手机号"且排除指定 id 的账号
+func (r *memberRepository) FindActiveByPhoneExcept(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
+	var member entity.Member
+	err := r.db.WithContext(ctx).Where("phone = ? AND status <> 2 AND id <> ?", phone, exceptID).First(&member).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &member, nil
 }

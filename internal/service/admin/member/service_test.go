@@ -89,3 +89,57 @@ func TestUpdateMemberGuardCancelled(t *testing.T) {
 		t.Fatalf("期望'已注销会员请使用恢复接口'，实际 %v", err)
 	}
 }
+
+func TestRestoreNotCancelled(t *testing.T) {
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			return &response.MemberDetail{ID: "1", Status: 1}, nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	err := svc.Restore(context.Background(), 1)
+	if err == nil || !strings.Contains(err.Error(), "该会员未注销") {
+		t.Fatalf("期望'该会员未注销，无需恢复'，实际 %v", err)
+	}
+}
+
+func TestRestorePhoneOccupied(t *testing.T) {
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: 2}, nil
+		},
+		findActiveByPhoneExc: func(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
+			return &entity.Member{BaseEntity: entity.BaseEntity{ID: 2}, Phone: phone, Status: 1}, nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	err := svc.Restore(context.Background(), 1)
+	if err == nil || !strings.Contains(err.Error(), "手机号已被占用") {
+		t.Fatalf("期望'手机号已被占用'，实际 %v", err)
+	}
+}
+
+func TestRestoreSuccess(t *testing.T) {
+	var gotID uint
+	var gotUpdates map[string]interface{}
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: 2}, nil
+		},
+		findActiveByPhoneExc: func(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
+			return nil, appErrors.ErrUserNotFound // 无在用账号占用，允许恢复
+		},
+		update: func(ctx context.Context, id uint, updates map[string]interface{}) error {
+			gotID = id
+			gotUpdates = updates
+			return nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	if err := svc.Restore(context.Background(), 1); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if gotID != 1 || gotUpdates["status"] != 1 {
+		t.Fatalf("期望 Update(1, {status:1})，实际 Update(%d, %v)", gotID, gotUpdates)
+	}
+}

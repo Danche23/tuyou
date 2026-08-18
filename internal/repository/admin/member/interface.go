@@ -3,6 +3,7 @@ package member
 import (
 	"context"
 
+	"tuyou/internal/model/entity"
 	response "tuyou/internal/model/dto/response/admin/member"
 )
 
@@ -31,4 +32,7 @@ type MemberRepository interface {
 
 	// ListAllByRole 查询某角色全部记录（无分页），用于导出
 	ListAllByRole(ctx context.Context, role int) ([]response.MemberListItem, error)
+
+	// FindActiveByPhoneExcept 查询"在用的手机号"（status<>2）且排除指定 id 的账号（恢复注销会员时校验手机号是否被他人占用）
+	FindActiveByPhoneExcept(ctx context.Context, phone string, exceptID uint) (*entity.Member, error)
 }

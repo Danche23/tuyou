@@ -74,6 +74,20 @@ func (c *Controller) GetDetail(ctx *gin.Context) {
 	response.Success(ctx, resp)
 }
 
+// Restore 恢复已注销会员（/admin/members/{id}/restore）
+func (c *Controller) Restore(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "参数错误: id格式不正确")
+		return
+	}
+	if err := c.memberSvc.Restore(ctx, uint(id)); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.SuccessWithMessage(ctx, "恢复成功", nil)
+}
+
 // Update 编辑会员/领队
 func (c *Controller) Update(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
