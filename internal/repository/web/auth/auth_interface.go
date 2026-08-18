@@ -6,9 +6,6 @@ import (
 )
 
 type MemberRepository interface {
-	// FindByPhone 根据手机号查询用户
-	FindByPhone(ctx context.Context, phone string) (*entity.Member, error)
-
 	// FindActiveByPhone 查询"在用的手机号"（status<>2）对应的账号（注销后手机号可被重新注册）
 	FindActiveByPhone(ctx context.Context, phone string) (*entity.Member, error)
 

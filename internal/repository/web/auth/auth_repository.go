@@ -19,19 +19,6 @@ func NewMemberRepository(db *gorm.DB) MemberRepository {
 	}
 }
 
-// FindByPhone 根据手机号查询用户
-func (r *memberRepository) FindByPhone(ctx context.Context, phone string) (*entity.Member, error) {
-	var member entity.Member
-	err := r.db.WithContext(ctx).Where("phone = ?", phone).First(&member).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, appErrors.ErrUserNotFound
-		}
-		return nil, err
-	}
-	return &member, nil
-}
-
 // FindActiveByPhone 查询"在用的手机号"对应的账号（status<>2）
 func (r *memberRepository) FindActiveByPhone(ctx context.Context, phone string) (*entity.Member, error) {
 	var member entity.Member
