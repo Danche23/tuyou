@@ -177,7 +177,7 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 		Token: token,
 		Member: response.MemberInfo{
 			ID:       strconv.Itoa(int(member.ID)),
-			Nickname: member.Nickname,
+			Nickname: s.mask(member.Nickname),
 			Phone:    member.Phone,
 			Avatar:   member.Avatar,
 		},
@@ -223,7 +223,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		Token: token,
 		Member: response.MemberInfo{
 			ID:       strconv.Itoa(int(member.ID)),
-			Nickname: member.Nickname,
+			Nickname: s.mask(member.Nickname),
 			Phone:    member.Phone,
 			Avatar:   member.Avatar,
 		},
@@ -331,7 +331,7 @@ func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp
 	}
 	return &memberResp.MemberBaseInfo{
 		ID:       strconv.Itoa(int(member.ID)),
-		Nickname: member.Nickname,
+		Nickname: s.mask(member.Nickname),
 		Avatar:   member.Avatar,
 		Role:     roleName(member.Role),
 	}, nil
@@ -347,4 +347,12 @@ func roleName(role int) string {
 	default:
 		return "未知"
 	}
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *authService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

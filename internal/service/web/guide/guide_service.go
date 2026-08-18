@@ -177,7 +177,7 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 	return &responseGuide.GuideDetailResponse{
 		ID:           strconv.FormatUint(uint64(strategy.ID), 10),
 		Type:         "guide",
-		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
+		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      strategy.MemberID == memberID,
 		Title:        s.mask(strategy.Title),

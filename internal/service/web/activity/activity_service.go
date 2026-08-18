@@ -113,7 +113,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	// ========== 组装响应 ==========
 	return &responseActivity.CreateActivityResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
-		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(author.ID), 10), Nickname: author.Nickname, Avatar: author.Avatar, Bio: author.Bio},
+		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(author.ID), 10), Nickname: s.mask(author.Nickname), Avatar: author.Avatar, Bio: s.mask(author.Bio)},
 		Title:           s.mask(activity.Title),
 		CoverImg:        activity.CoverImg,
 		Category:        req.Category,
@@ -153,7 +153,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 	for _, m := range members {
 		memberInfos = append(memberInfos, responseActivity.MemberInfo{
 			ID:       strconv.FormatUint(uint64(m.ID), 10),
-			Nickname: m.Nickname,
+			Nickname: s.mask(m.Nickname),
 			Avatar:   m.Avatar,
 		})
 	}
@@ -183,7 +183,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 
 	return &responseActivity.ActivityDetailResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
-		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar, Bio: leader.Bio},
+		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: s.mask(leader.Nickname), Avatar: leader.Avatar, Bio: s.mask(leader.Bio)},
 		IsOwner:         activity.LeaderMemberID == memberID,
 		Title:           s.mask(activity.Title),
 		CoverImg:        activity.CoverImg,
@@ -438,9 +438,9 @@ func (s *activityService) BuildActivityItems(memberID uint, activities []entity.
 		if m, ok := memberMap[a.LeaderMemberID]; ok {
 			leader = &responseActivity.LeaderInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
-				Bio:      m.Bio,
+				Bio:      s.mask(m.Bio),
 			}
 		}
 

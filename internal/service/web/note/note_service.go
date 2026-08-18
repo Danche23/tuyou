@@ -99,7 +99,7 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 	return &responseNote.CreateNoteResponse{
 		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
-		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
+		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
 		Title:        s.mask(note.Title),
 		CoverImg:     coverImg,
 		Images:       req.Images,
@@ -183,7 +183,7 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 	return &responseNote.NoteDetailResponse{
 		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
-		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
+		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      note.MemberID == memberID,
 		Title:        s.mask(note.Title),

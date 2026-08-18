@@ -195,7 +195,7 @@ func (s *msgService) buildItems(rows []repoMsg.MessageRow, memberID uint) []resp
 		if r.SenderID > 0 {
 			item.Sender = &responseMsg.Sender{
 				ID:       strconv.FormatUint(uint64(r.SenderID), 10),
-				Nickname: r.Nickname,
+				Nickname: s.mask(r.Nickname),
 				Avatar:   r.Avatar,
 			}
 		}
@@ -249,4 +249,12 @@ func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *response
 		})
 	}
 	return msg
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *msgService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

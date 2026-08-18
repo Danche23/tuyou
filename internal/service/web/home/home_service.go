@@ -410,7 +410,7 @@ func (s *homeService) BuildFeedItems(memberID uint, entries []FeedEntry) ([]resp
 			Category:  e.Category,
 		}
 		if m, ok := members[e.MemberID]; ok && m != nil {
-			item.Member = &responseHome.FeedAuthor{Nickname: m.Nickname, Avatar: m.Avatar}
+			item.Member = &responseHome.FeedAuthor{Nickname: s.mask(m.Nickname), Avatar: m.Avatar}
 		}
 		if e.IsNote {
 			item.Type = "note"
