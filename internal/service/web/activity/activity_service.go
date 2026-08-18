@@ -114,11 +114,11 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	return &responseActivity.CreateActivityResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
 		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(author.ID), 10), Nickname: author.Nickname, Avatar: author.Avatar, Bio: author.Bio},
-		Title:           activity.Title,
+		Title:           s.mask(activity.Title),
 		CoverImg:        activity.CoverImg,
 		Category:        req.Category,
-		Address:         activity.Address,
-		ActivityContent: activity.ActivityContent,
+		Address:         s.mask(activity.Address),
+		ActivityContent: s.mask(activity.ActivityContent),
 		StartTime:       activity.StartTime.Format("2006-01-02 15:04:05"),
 		EndTime:         activity.EndTime.Format("2006-01-02 15:04:05"),
 		SignUpStart:     signUpStart.Format("2006-01-02 15:04:05"),
@@ -185,11 +185,11 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
 		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: leader.Nickname, Avatar: leader.Avatar, Bio: leader.Bio},
 		IsOwner:         activity.LeaderMemberID == memberID,
-		Title:           activity.Title,
+		Title:           s.mask(activity.Title),
 		CoverImg:        activity.CoverImg,
 		Category:        categoryIntToStr[activity.ActivityType],
-		Address:         activity.Address,
-		ActivityContent: activity.ActivityContent,
+		Address:         s.mask(activity.Address),
+		ActivityContent: s.mask(activity.ActivityContent),
 		StartTime:       activity.StartTime.Format("2006-01-02 15:04:05"),
 		EndTime:         activity.EndTime.Format("2006-01-02 15:04:05"),
 		SignUpStart:     activity.SignUpStart.Format("2006-01-02 15:04:05"),
@@ -450,10 +450,10 @@ func (s *activityService) BuildActivityItems(memberID uint, activities []entity.
 		list = append(list, responseActivity.ActivityListItem{
 			ID:             strconv.FormatUint(uint64(a.ID), 10),
 			Leader:         leader,
-			Title:          a.Title,
+			Title:          s.mask(a.Title),
 			CoverImg:       a.CoverImg,
 			Category:       categoryIntToStr[a.ActivityType],
-			Address:        a.Address,
+			Address:        s.mask(a.Address),
 			StartTime:      a.StartTime.Format("2006-01-02 15:04:05"),
 			EndTime:        a.EndTime.Format("2006-01-02 15:04:05"),
 			SignUpEnd:      a.SignUpEnd.Format("2006-01-02 15:04:05"),
@@ -494,4 +494,12 @@ func computeActivityStatus(signUpEnd, endTime time.Time) (int, string) {
 		return 2, "进行中"
 	}
 	return 1, "报名中"
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *activityService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

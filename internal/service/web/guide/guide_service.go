@@ -180,11 +180,11 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      strategy.MemberID == memberID,
-		Title:        strategy.Title,
+		Title:        s.mask(strategy.Title),
 		CoverImg:     coverImg,
 		Images:       images,
 		VideoURL:     strategy.VideoURL,
-		Content:      strategy.Content,
+		Content:      s.mask(strategy.Content),
 		ViewCount:    strategy.ViewCount,
 		LikeCount:    likeCount,
 		CollectCount: strategy.CollectCount,
@@ -198,7 +198,7 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 			Distance:   strategy.Distance,
 			Duration:   strategy.Duration,
 			Difficulty: difficulty,
-			Transport:  strategy.Transport,
+			Transport:  s.mask(strategy.Transport),
 		},
 	}, nil
 }
@@ -354,4 +354,12 @@ func (s *guideService) DeleteGuide(strategyID uint, memberID uint) error {
 	}
 
 	return nil
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *guideService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

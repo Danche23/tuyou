@@ -396,7 +396,7 @@ func (s *personalService) buildNoteCards(notes []entity.Note, memberID uint) ([]
 			Author:    author,
 			CoverImg:  cover,
 			IsVideo:   n.VideoURL != "",
-			Title:     n.Title,
+			Title:     s.mask(n.Title),
 			Tag:       tag,
 			LikeCount: n.LikeCount,
 			IsLiked:   likedMap[n.ID],
@@ -465,7 +465,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 			Author:    author,
 			CoverImg:  cover,
 			IsVideo:   g.VideoURL != "",
-			Title:     g.Title,
+			Title:     s.mask(g.Title),
 			Tag:       tag,
 			LikeCount: g.LikeCount,
 			IsLiked:   likedMap[g.ID],
@@ -530,10 +530,10 @@ func (s *personalService) buildActivityItems(activities []entity.Activity, membe
 		list = append(list, responseActivity.ActivityListItem{
 			ID:             strconv.FormatUint(uint64(a.ID), 10),
 			Leader:         leader,
-			Title:          a.Title,
+			Title:          s.mask(a.Title),
 			CoverImg:       a.CoverImg,
 			Category:       activityCategoryIntToStr[a.ActivityType],
-			Address:        a.Address,
+			Address:        s.mask(a.Address),
 			StartTime:      a.StartTime.Format("2006-01-02 15:04:05"),
 			EndTime:        a.EndTime.Format("2006-01-02 15:04:05"),
 			SignUpEnd:      a.SignUpEnd.Format("2006-01-02 15:04:05"),
@@ -638,4 +638,12 @@ var activityCategoryIntToStr = map[int]string{
 // activityDifficultyIntToStr 活动难度数值 → 名称
 var activityDifficultyIntToStr = map[int]string{
 	1: "入门", 2: "中等", 3: "中高等", 4: "高等",
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *personalService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

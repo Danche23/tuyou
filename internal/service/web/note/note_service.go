@@ -100,11 +100,11 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
 		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
-		Title:        note.Title,
+		Title:        s.mask(note.Title),
 		CoverImg:     coverImg,
 		Images:       req.Images,
 		VideoURL:     note.VideoURL,
-		Content:      note.Content,
+		Content:      s.mask(note.Content),
 		ViewCount:    note.ViewCount,
 		LikeCount:    note.LikeCount,
 		CollectCount: note.CollectCount,
@@ -186,11 +186,11 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      note.MemberID == memberID,
-		Title:        note.Title,
+		Title:        s.mask(note.Title),
 		CoverImg:     coverImg,
 		Images:       images,
 		VideoURL:     note.VideoURL,
-		Content:      note.Content,
+		Content:      s.mask(note.Content),
 		ViewCount:    note.ViewCount,
 		LikeCount:    likeCount,
 		CollectCount: collectCount,
@@ -367,4 +367,12 @@ func (s *noteService) readCollectCount(ctx context.Context, noteID uint, fallbac
 	}
 	s.noteRepo.SetCachedCollectCount(ctx, noteID, fallback)
 	return fallback
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *noteService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }
