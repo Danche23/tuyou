@@ -233,7 +233,7 @@ func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *response
 	msg := &responseMsg.CommentMessage{
 		CommentID: strconv.FormatUint(uint64(c.ID), 10),
 		Sender:    "you",
-		Content:   c.Content,
+		Content:   s.mask(c.Content),
 		SendTime:  c.CreatedAt.Format("2006-01-02 15:04:05"),
 		LikeCount: c.LikeCount,
 		IsLiked:   likes[c.ID],
@@ -242,7 +242,7 @@ func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *response
 		msg.Replies = append(msg.Replies, &responseMsg.CommentMessage{
 			CommentID: strconv.FormatUint(uint64(tc.ID), 10),
 			Sender:    "me",
-			Content:   tc.Content,
+			Content:   s.mask(tc.Content),
 			SendTime:  tc.CreatedAt.Format("2006-01-02 15:04:05"),
 			LikeCount: tc.LikeCount,
 			IsLiked:   likes[tc.ID],
