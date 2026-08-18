@@ -18,6 +18,7 @@ type ActivityListItem struct {
 	ActivityStatus string  `json:"activity_status"`  // 活动状态：报名中/进行中/已结束
 	Status         string  `json:"status"`           // 状态：正常/下架
 	DeleteTime     string  `json:"delete_time"`      // 删除时间，未删除时为空字符串
+	IsSensitive    int     `json:"is_sensitive"`     // 发布时命中敏感词：1=是（内容仍为原文）
 }
 
 // ListActivityResp 后台活动分页响应
