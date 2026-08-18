@@ -28,6 +28,7 @@ import (
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	sensitiveWordAdminCtrl "tuyou/internal/api/v1/admin/sensitiveword"
 	tagAdminCtrl "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
@@ -56,6 +57,7 @@ import (
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
 	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
 	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminSensitiveWord "tuyou/internal/repository/admin/sensitiveword"
 	repoAdminTag "tuyou/internal/repository/admin/tag"
 	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
@@ -80,6 +82,7 @@ import (
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
 	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminSensitiveWord "tuyou/internal/service/admin/sensitiveword"
 	serviceAdminTag "tuyou/internal/service/admin/tag"
 	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
 	serviceUpload "tuyou/internal/service/upload"
@@ -304,6 +307,9 @@ func (a *App) initDependencies() {
 	if err != nil {
 		logger.Fatal("敏感词库加载失败", zap.Error(err))
 	}
+	// 后台敏感词管理：增删后热更 shared 的 sensitiveMatcher（评论等服务同实例共享）
+	sensitiveWordRepo := repoAdminSensitiveWord.NewSensitiveWordRepository(a.mysqlDB)
+	sensitiveWordSvc := serviceAdminSensitiveWord.NewSensitiveWordService(sensitiveWordRepo, sensitiveMatcher)
 
 	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
 	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型、敏感词校验）；
@@ -337,6 +343,7 @@ func (a *App) initDependencies() {
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc, redisRepo, a.mysqlDB)
 	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc, redisRepo, a.mysqlDB)
 	tagAdminC := tagAdminCtrl.NewController(adminTagSvc, redisRepo, a.mysqlDB)
+	sensitiveWordC := sensitiveWordAdminCtrl.NewController(sensitiveWordSvc, redisRepo, a.mysqlDB)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
@@ -349,7 +356,7 @@ func (a *App) initDependencies() {
 	adminMsgC := adminMsgCtrl.NewController(adminMsgSvc, redisRepo, a.mysqlDB)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC, sensitiveWordC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

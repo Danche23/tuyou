@@ -13,6 +13,7 @@ import (
 	adminApiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	adminMenuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	adminRoleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	sensitiveWordAdmin "tuyou/internal/api/v1/admin/sensitiveword"
 	tagAdmin "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
@@ -34,32 +35,33 @@ import (
 
 // Router 路由
 type Router struct {
-	authHandler       *handlerAuth.AuthHandler
-	adminHandler      *handlerAdmin.AdminController
-	centerCtrl        *center.Controller
-	commentAdminCtrl  *commentAdmin.Controller
-	noteCtrl          *note.Controller
-	personalCtrl      *personal.Controller
-	commentCtrl       *commentCtrl.Controller
-	memberCtrl        *member.Controller
-	adminPerCtrl      *adminPermCtrl.Controller
-	adminMenuCtrl     *adminMenuCtrl.Controller
-	adminApiPermCtrl  *adminApiPermCtrl.Controller
-	adminRoleCtrl     *adminRoleCtrl.Controller
-	guideCtrl         *guide.Controller
-	activityCtrl      *activity.Controller
-	noteAdminCtrl     *noteAdmin.Controller
-	guideAdminCtrl    *guideAdmin.Controller
-	activityAdminCtrl *activityAdmin.Controller
-	tagAdminCtrl      *tagAdmin.Controller
-	tagCtrl           *tagCtrl.Controller
-	webMemberCtrl     *memberCtrl.Controller
-	homeCtrl          *homeCtrl.Controller
-	searchCtrl        *searchCtrl.Controller
-	messageCtrl       *messageCtrl.Controller
-	uploadCtrl        *uploadCtrl.Controller
-	workbenchCtrl     *workbenchCtrl.Controller
-	adminMsgCtrl      *adminMsgCtrl.Controller
+	authHandler            *handlerAuth.AuthHandler
+	adminHandler           *handlerAdmin.AdminController
+	centerCtrl             *center.Controller
+	commentAdminCtrl       *commentAdmin.Controller
+	noteCtrl               *note.Controller
+	personalCtrl           *personal.Controller
+	commentCtrl            *commentCtrl.Controller
+	memberCtrl             *member.Controller
+	adminPerCtrl           *adminPermCtrl.Controller
+	adminMenuCtrl          *adminMenuCtrl.Controller
+	adminApiPermCtrl       *adminApiPermCtrl.Controller
+	adminRoleCtrl          *adminRoleCtrl.Controller
+	guideCtrl              *guide.Controller
+	activityCtrl           *activity.Controller
+	noteAdminCtrl          *noteAdmin.Controller
+	guideAdminCtrl         *guideAdmin.Controller
+	activityAdminCtrl      *activityAdmin.Controller
+	tagAdminCtrl           *tagAdmin.Controller
+	tagCtrl                *tagCtrl.Controller
+	webMemberCtrl          *memberCtrl.Controller
+	homeCtrl               *homeCtrl.Controller
+	searchCtrl             *searchCtrl.Controller
+	messageCtrl            *messageCtrl.Controller
+	uploadCtrl             *uploadCtrl.Controller
+	workbenchCtrl          *workbenchCtrl.Controller
+	adminMsgCtrl           *adminMsgCtrl.Controller
+	sensitiveWordAdminCtrl *sensitiveWordAdmin.Controller
 }
 
 // NewRouter 创建路由
@@ -90,34 +92,36 @@ func NewRouter(
 	uploadCtrl *uploadCtrl.Controller,
 	workbenchCtrl *workbenchCtrl.Controller,
 	adminMsgCtrl *adminMsgCtrl.Controller,
+	sensitiveWordAdminCtrl *sensitiveWordAdmin.Controller,
 ) *Router {
 	return &Router{
-		noteCtrl:          noteCtrl,
-		personalCtrl:      personalCtrl,
-		commentCtrl:       commentCtrl,
-		authHandler:       authHandler,
-		adminHandler:      adminHandler,
-		memberCtrl:        memberCtrl,
-		adminPerCtrl:      adminPerCtrl,
-		adminMenuCtrl:     adminMenuCtrl,
-		adminApiPermCtrl:  adminApiPermCtrl,
-		adminRoleCtrl:     adminRoleCtrl,
-		guideCtrl:         guideCtrl,
-		activityCtrl:      activityCtrl,
-		centerCtrl:        centerCtrl,
-		commentAdminCtrl:  commentAdminCtrl,
-		noteAdminCtrl:     noteAdminCtrl,
-		guideAdminCtrl:    guideAdminCtrl,
-		activityAdminCtrl: activityAdminCtrl,
-		tagAdminCtrl:      tagAdminCtrl,
-		tagCtrl:           tagCtrl,
-		webMemberCtrl:     webMemberCtrl,
-		homeCtrl:          homeCtrl,
-		searchCtrl:        searchCtrl,
-		messageCtrl:       messageCtrl,
-		uploadCtrl:        uploadCtrl,
-		workbenchCtrl:     workbenchCtrl,
-		adminMsgCtrl:      adminMsgCtrl,
+		noteCtrl:               noteCtrl,
+		personalCtrl:           personalCtrl,
+		commentCtrl:            commentCtrl,
+		authHandler:            authHandler,
+		adminHandler:           adminHandler,
+		memberCtrl:             memberCtrl,
+		adminPerCtrl:           adminPerCtrl,
+		adminMenuCtrl:          adminMenuCtrl,
+		adminApiPermCtrl:       adminApiPermCtrl,
+		adminRoleCtrl:          adminRoleCtrl,
+		guideCtrl:              guideCtrl,
+		activityCtrl:           activityCtrl,
+		centerCtrl:             centerCtrl,
+		commentAdminCtrl:       commentAdminCtrl,
+		noteAdminCtrl:          noteAdminCtrl,
+		guideAdminCtrl:         guideAdminCtrl,
+		activityAdminCtrl:      activityAdminCtrl,
+		tagAdminCtrl:           tagAdminCtrl,
+		tagCtrl:                tagCtrl,
+		webMemberCtrl:          webMemberCtrl,
+		homeCtrl:               homeCtrl,
+		searchCtrl:             searchCtrl,
+		messageCtrl:            messageCtrl,
+		uploadCtrl:             uploadCtrl,
+		workbenchCtrl:          workbenchCtrl,
+		adminMsgCtrl:           adminMsgCtrl,
+		sensitiveWordAdminCtrl: sensitiveWordAdminCtrl,
 	}
 }
 
@@ -194,6 +198,9 @@ func (r *Router) Setup(engine *gin.Engine) {
 
 		// 后台标签管理路由
 		r.tagAdminCtrl.RegisterRoutes(apiGroup)
+
+		// 后台敏感词管理路由（/api/v1/admin/sensitive-words，运营视角，Auth 管理员登录）
+		r.sensitiveWordAdminCtrl.RegisterRoutes(apiGroup)
 
 		// Web 端标签路由
 		r.tagCtrl.RegisterRoutes(apiGroup)
