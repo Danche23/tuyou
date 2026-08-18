@@ -47,6 +47,12 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 
 	// ========== 写入（事务内） ==========
 
+	// 敏感词快照：命中置 is_sensitive=1，内容存原文（设计 §8.5）
+	isSensitive := 0
+	if s.sensitive.IsSensitive(req.Title, req.Content) {
+		isSensitive = 1
+	}
+
 	note := &entity.Note{
 		MemberID:    memberID,
 		Title:       req.Title,
@@ -56,6 +62,7 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 		Status:      1,
 		Heat:        10, // 初始基础热度，与 heat.go 公式中的基础热度10保持一致
 		PublishTime: time.Now(),
+		IsSensitive: isSensitive,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {

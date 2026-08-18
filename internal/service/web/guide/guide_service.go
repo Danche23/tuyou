@@ -58,6 +58,12 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 
 	// ========== 写入（事务内） ==========
 
+	// 敏感词快照：命中置 is_sensitive=1，内容存原文（设计 §8.5）
+	isSensitive := 0
+	if s.sensitive.IsSensitive(req.Title, req.Content, req.Transport) {
+		isSensitive = 1
+	}
+
 	strategy := &entity.Strategy{
 		MemberID:    memberID,
 		Title:       req.Title,
@@ -71,6 +77,7 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 		Duration:    req.Duration,
 		Difficulty:  difficulty,
 		Transport:   req.Transport,
+		IsSensitive: isSensitive,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {

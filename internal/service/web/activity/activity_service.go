@@ -74,6 +74,13 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	signUpEnd := startTime.Add(-48 * time.Hour)
 
 	// ========== 事务写入 ==========
+
+	// 敏感词快照：命中置 is_sensitive=1，内容存原文（设计 §8.5）
+	isSensitive := 0
+	if s.sensitive.IsSensitive(req.Title, req.ActivityContent, req.Address) {
+		isSensitive = 1
+	}
+
 	activity := &entity.Activity{
 		LeaderMemberID:  memberID,
 		Title:           req.Title,
@@ -89,6 +96,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		ActivityStatus:  1,
 		Difficulty:      difficulty,
 		ActivityType:    activityType,
+		IsSensitive:     isSensitive,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {

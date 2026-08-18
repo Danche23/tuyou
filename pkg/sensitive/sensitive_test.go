@@ -163,3 +163,16 @@ func TestFindWords_UniqueOrdered(t *testing.T) {
 		t.Fatalf("未命中应返回空，got %v", got)
 	}
 }
+
+func TestIsSensitive(t *testing.T) {
+	m := newTest([]string{"赌博"})
+	if !m.IsSensitive("在线赌博", "正常") {
+		t.Fatal("任一字段命中即 true")
+	}
+	if m.IsSensitive("爬山", "吃火锅") {
+		t.Fatal("全不命中应 false")
+	}
+	if m.IsSensitive() {
+		t.Fatal("空参应 false")
+	}
+}

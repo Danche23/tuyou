@@ -207,3 +207,13 @@ func (m *SensitiveMatcher) FindWords(content string) []string {
 	}
 	return words
 }
+
+// IsSensitive 判断多个文本中任一命中敏感词（供发布接口打 is_sensitive 快照）
+func (m *SensitiveMatcher) IsSensitive(texts ...string) bool {
+	for _, t := range texts {
+		if len(m.FindWords(t)) > 0 {
+			return true
+		}
+	}
+	return false
+}
