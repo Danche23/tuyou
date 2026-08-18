@@ -1,7 +1,8 @@
 package jwt
 
 import (
-	"crypto/md5"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -16,14 +17,17 @@ var (
 	ErrTokenExpired = errors.New("token 已过期")
 )
 
-// GenerateToken 生成 JWT Token
-func GenerateToken(userID uint, username string) (string, error) {
+// GenerateToken 生成 JWT Token，返回 (token, jti, err)。
+// jti 每次签发唯一，用于单端登录的会话标记与黑名单。
+func GenerateToken(userID uint, username string) (string, string, error) {
 	cfg := config.Get().JWT
+	jti := newJTI()
 
 	claims := CustomClaims{
 		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.ExpireHours)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -32,7 +36,15 @@ func GenerateToken(userID uint, username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(cfg.Secret))
+	signed, err := token.SignedString([]byte(cfg.Secret))
+	return signed, jti, err
+}
+
+// newJTI 生成随机 jti（16 字节随机 hex，32 字符）
+func newJTI() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // ParseToken 解析 JWT Token
@@ -64,23 +76,27 @@ func RefreshToken(tokenString string) (string, error) {
 		return "", err
 	}
 
-	return GenerateToken(claims.UserID, claims.Username)
+	token, _, err := GenerateToken(claims.UserID, claims.Username)
+	return token, err
 }
 
-// AdminTokenKey 后台登录态白名单 Key（按 token 维度存储，支持多端登录）
-// 使用 md5 压缩 token，避免把完整 token 拼进 Redis key
-func AdminTokenKey(adminID uint, token string) string {
-	hash := md5.Sum([]byte(token))
-	return fmt.Sprintf("admin:token:%d:%x", adminID, hash)
+// 登录态黑名单拉黑原因
+const (
+	ReasonKicked = "kicked" // 被顶号（其他设备登录）
+	ReasonLogout = "logout" // 主动退出 / 被禁用删除
+)
+
+// MemberSessionKey 前台当前会话 jti 键（仅登录/退出/禁用时读写，校验不查）
+func MemberSessionKey(userID uint) string {
+	return fmt.Sprintf("member:session:%d", userID)
 }
 
-// AdminTokenPrefix 后台登录态白名单 Key 前缀（按账号维度 SCAN 枚举所有在线 token）
-func AdminTokenPrefix(adminID uint) string {
-	return fmt.Sprintf("admin:token:%d:*", adminID)
+// AdminSessionKey 后台当前会话 jti 键
+func AdminSessionKey(adminID uint) string {
+	return fmt.Sprintf("admin:session:%d", adminID)
 }
 
-// MemberTokenKey 前台登录态白名单 Key（按用户维度存储，支持单端登录）
-// 存的是最新 token，新登录覆盖旧值实现顶号
-func MemberTokenKey(userID uint) string {
-	return fmt.Sprintf("member:token:%d", userID)
+// BlacklistKey 登录态黑名单键（scope：member/admin；jti 每次签发唯一，直接用做 key）
+func BlacklistKey(scope, jti string) string {
+	return fmt.Sprintf("%s:blacklist:%s", scope, jti)
 }

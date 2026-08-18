@@ -18,3 +18,9 @@ type LoginResponse struct {
 type MessageResponse struct {
 	Message string `json:"message"`
 }
+
+// CaptchaResp 图形验证码响应
+type CaptchaResp struct {
+	CaptchaID    string `json:"captcha_id"`
+	CaptchaImage string `json:"captcha_image"`
+}

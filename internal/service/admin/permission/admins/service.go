@@ -11,6 +11,7 @@ import (
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/permission/admins"
+	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 )
@@ -121,10 +122,7 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 	if req.Status != "" {
 		updates["status"] = statusToInt(req.Status)
 		if updates["status"] == 0 {
-			keys, _ := s.redisRepo.ScanKeys(ctx, jwt.AdminTokenPrefix(id))
-			for _, k := range keys {
-				_ = s.redisRepo.Del(ctx, k)
-			}
+			s.kickAdmin(ctx, id)
 		}
 	}
 
@@ -135,12 +133,20 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 	return s.adminRepo.Update(ctx, id, updates)
 }
 
+// kickAdmin 使管理员全部会话立即失效（单端场景即当前会话）：拉黑 jti 并清会话标记
+func (s *adminService) kickAdmin(ctx context.Context, id uint) {
+	key := jwt.AdminSessionKey(id)
+	var jti string
+	if err := s.redisRepo.Get(ctx, key, &jti); err != nil || jti == "" {
+		return
+	}
+	_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("admin", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+	_ = s.redisRepo.Del(ctx, key)
+}
+
 // DeleteAdmin 删除管理员
 func (s *adminService) DeleteAdmin(ctx context.Context, id uint) error {
-	keys, _ := s.redisRepo.ScanKeys(ctx, jwt.AdminTokenPrefix(id))
-	for _, k := range keys {
-		_ = s.redisRepo.Del(ctx, k)
-	}
+	s.kickAdmin(ctx, id)
 	return s.adminRepo.Delete(ctx, id)
 }
 

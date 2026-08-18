@@ -12,16 +12,8 @@ func buildExcel(list []response.MemberListItem) ([]byte, error) {
 	for _, item := range list {
 		rows = append(rows, []interface{}{
 			item.ID, item.Avatar, item.Nickname, item.Phone, item.Role,
-			statusText(item.Status), item.Bio, item.RegisterTime, item.LastLogin,
+			item.Status, item.Bio, item.RegisterTime, item.LastLogin,
 		})
 	}
 	return excel.Build("会员列表", headers, rows)
-}
-
-// statusText 状态转中文
-func statusText(status bool) string {
-	if status {
-		return "正常"
-	}
-	return "禁用"
 }

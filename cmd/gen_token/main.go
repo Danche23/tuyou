@@ -34,7 +34,7 @@ func main() {
 	fmt.Println("配置过期时间:", cfg.JWT.ExpireHours, "小时")
 	fmt.Printf("生成用户: ID=%d 用户名=%s\n", memberID, username)
 
-	token, err := jwt.GenerateToken(memberID, username)
+	token, _, err := jwt.GenerateToken(memberID, username)
 	if err != nil {
 		panic(err)
 	}
