@@ -38,6 +38,9 @@ func applyFilters(query *gorm.DB, filters map[string]interface{}) *gorm.DB {
 	if v, ok := filters["role"]; ok {
 		query = query.Where("role = ?", v)
 	}
+	if v, ok := filters["status"]; ok {
+		query = query.Where("status = ?", v)
+	}
 	return query
 }
 
@@ -59,7 +62,7 @@ func (r *memberRepository) List(ctx context.Context, filters map[string]interfac
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
 			phone,
-			IF(status = 1, TRUE, FALSE) AS status,
+			status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
@@ -82,7 +85,7 @@ func (r *memberRepository) GetDetailByID(ctx context.Context, id uint) (*respons
 			phone,
 			bio,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
-			IF(status = 1, TRUE, FALSE) AS status,
+			status,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
 			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login,
 			follow_count, favorite_count, publish_count, fans_count`).
@@ -156,10 +159,11 @@ func (r *memberRepository) BatchDelete(ctx context.Context, ids []uint) error {
 	})
 }
 
-// BatchUpdateStatus 批量更新状态
+// BatchUpdateStatus 批量更新状态（守卫：不触碰已注销 status=2 的会员，恢复走 /admin/members/{id}/restore）
 func (r *memberRepository) BatchUpdateStatus(ctx context.Context, ids []uint, status int) error {
 	return r.db.WithContext(ctx).Table("member").
 		Where("id IN ?", ids).
+		Where("status <> 2").
 		Updates(map[string]interface{}{"status": status}).Error
 }
 
@@ -169,7 +173,7 @@ func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]respo
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
 			phone,
-			IF(status = 1, TRUE, FALSE) AS status,
+			status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,

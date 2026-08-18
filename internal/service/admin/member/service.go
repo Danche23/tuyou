@@ -40,6 +40,13 @@ func (s *memberService) ListMembers(ctx context.Context, role int, req *request.
 	if req.RegisterEnd != "" {
 		filters["register_end"] = req.RegisterEnd + " 23:59:59"
 	}
+	if req.Status != "" {
+		v, err := strconv.Atoi(req.Status)
+		if err != nil {
+			return nil, appErrors.ErrInvalidParam
+		}
+		filters["status"] = v
+	}
 
 	total, err := s.memberRepo.Count(ctx, filters)
 	if err != nil {
@@ -70,6 +77,14 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 	updates := make(map[string]interface{})
 
 	if req.Status != nil {
+		// 守卫：已注销会员的状态只能走 /restore 或 /auth/cancel，改绑/禁用/启用都不允许
+		detail, err := s.memberRepo.GetDetailByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if detail.Status == 2 {
+			return appErrors.New(appErrors.CodeConflict, "已注销会员请使用恢复接口")
+		}
 		if *req.Status {
 			updates["status"] = 1
 		} else {

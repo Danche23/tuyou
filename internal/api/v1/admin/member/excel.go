@@ -19,9 +19,15 @@ func buildExcel(list []response.MemberListItem) ([]byte, error) {
 }
 
 // statusText 状态转中文
-func statusText(status bool) string {
-	if status {
+func statusText(status int) string {
+	switch status {
+	case 0:
+		return "禁用"
+	case 1:
 		return "正常"
+	case 2:
+		return "已注销"
+	default:
+		return "未知"
 	}
-	return "禁用"
 }
