@@ -230,6 +230,16 @@ func (a *App) initDatabase() error {
 		logger.Info("数据库迁移完成")
 	}
 
+	// 放开 member.phone 唯一索引：注销后手机号可被重新注册，唯一性改代码级校验（WHERE phone=? AND status<>2）。
+	// 幂等：仅当索引仍存在时删除（AutoMigrate 不会自动删索引，需显式迁移）。
+	if a.mysqlDB.Migrator().HasIndex(&entity.Member{}, "idx_member_phone") {
+		if err := a.mysqlDB.Migrator().DropIndex(&entity.Member{}, "idx_member_phone"); err != nil {
+			logger.Warn("删除 member.phone 唯一索引失败", zap.Error(err))
+		} else {
+			logger.Info("已删除 member.phone 唯一索引 idx_member_phone")
+		}
+	}
+
 	// 初始化 Redis（可选，失败不影响核心功能）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
 	if err != nil {

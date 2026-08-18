@@ -55,6 +55,8 @@ var (
 	ErrInvalidCredentials = NewDefault(CodeInvalidCredentials)
 	ErrInvalidToken       = NewDefault(CodeInvalidToken)
 	ErrTokenExpired       = NewDefault(CodeTokenExpired)
+	ErrAccountCancelled   = NewDefault(CodeAccountCancelled)
+	ErrPhoneNotMatch      = NewDefault(CodePhoneNotMatch)
 	ErrInvalidParam       = NewDefault(CodeInvalidParam)
 	ErrMissingParam       = NewDefault(CodeMissingParam)
 	ErrSmsSendFrequently  = NewDefault(CodeSmsSendFrequently)
