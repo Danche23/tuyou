@@ -16,5 +16,6 @@ func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 		authGroup.POST("/send-code", h.SendCode)
 		authGroup.POST("/change-phone", middleware.MemberAuth(h.redisRepo), h.ChangePhone)
 		authGroup.PUT("/password", middleware.MemberAuth(h.redisRepo), h.UpdatePassword)
+		authGroup.POST("/cancel", middleware.MemberAuth(h.redisRepo), h.Cancel)
 	}
 }

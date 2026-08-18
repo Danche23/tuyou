@@ -346,6 +346,46 @@ func (s *authService) Logout(ctx context.Context, userID uint) error {
 	return s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))
 }
 
+// Cancel 注销账号：密码 + 短信验证码双重校验，成功后 status=2 并删除登录态
+func (s *authService) Cancel(ctx context.Context, userID uint, req *request.CancelRequest) (*response.MessageResponse, error) {
+	// 1. 手机号格式
+	if err := sms.ValidatorPhone(req.Phone); err != nil {
+		return nil, err
+	}
+
+	// 2. 取当前账号
+	member, err := s.memberRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 手机号归属校验：必须本人手机号（防拿他人手机号的验证码注销自己）
+	if req.Phone != member.Phone {
+		return nil, appErrors.ErrPhoneNotMatch
+	}
+
+	// 4. 验证码（复用登录/注册的 sms 机制，场景 cancel-account，fail closed）
+	if err := sms.Receive(req.Phone, req.Code, sms.SceneCancelAccount); err != nil {
+		return nil, appErrors.ErrSmsCodeInvalid
+	}
+
+	// 5. 密码
+	if err := bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.Password)); err != nil {
+		return nil, appErrors.ErrInvalidCredentials
+	}
+
+	// 6. 置为已注销（数据全部保留，只改状态）
+	if err := s.memberRepo.UpdateStatus(ctx, userID, 2); err != nil {
+		return nil, err
+	}
+
+	// 7. 删除登录态 token（MemberAuth 查白名单，删后立即失效）
+	_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))
+
+	// 8. 返回
+	return &response.MessageResponse{Message: "注销成功"}, nil
+}
+
 // GetBaseInfo 获取会员基础信息（id/昵称/头像/角色）
 func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error) {
 	member, err := s.memberRepo.FindByID(ctx, userID)

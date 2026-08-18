@@ -6,6 +6,7 @@ package auth_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,5 +156,21 @@ func TestSendCodeCancelAccountNotRegistered(t *testing.T) {
 	_, err := svc.SendCode(context.Background(), &request.SendCodeRequest{Phone: "13800138000", Scene: "cancel-account"})
 	if err != appErrors.ErrPhoneNotRegistered {
 		t.Fatalf("期望 ErrPhoneNotRegistered，实际 %v", err)
+	}
+}
+
+func TestCancelPhoneMismatch(t *testing.T) {
+	repo := &mockMemberRepo{
+		findByID: func(ctx context.Context, id uint) (*entity.Member, error) {
+			return &entity.Member{BaseEntity: entity.BaseEntity{ID: id}, Phone: "13800138001", Status: 1}, nil
+		},
+	}
+	svc := newTestService(repo)
+	_, err := svc.Cancel(context.Background(), 1, &request.CancelRequest{Phone: "13800138000", Code: "123456", Password: "123456"})
+	if err != appErrors.ErrPhoneNotMatch {
+		t.Fatalf("期望 ErrPhoneNotMatch，实际 %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "手机号与当前账号不符") {
+		t.Fatalf("错误文案应含'手机号与当前账号不符'，实际 %v", err)
 	}
 }
