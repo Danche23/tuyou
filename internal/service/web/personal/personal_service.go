@@ -80,6 +80,53 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 	}, nil
 }
 
+// GetMemberCard 他人公开资料卡（登录即可查任意用户；不返回 phone/password；已注销/禁用仍返回资料卡）
+func (s *personalService) GetMemberCard(currentMemberID, targetID uint) (*responsePersonal.MemberCard, error) {
+	member, err := s.repo.FindByID(targetID)
+	if err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// 我关注了 TA？ TA 关注了我？（互关判断）
+	myFollowed, err := s.repo.FindFollowedIDs(currentMemberID)
+	if err != nil {
+		return nil, err
+	}
+	targetFollowed, err := s.repo.FindFollowedIDs(targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	roleStr := "普通会员"
+	if member.Role == 0 {
+		roleStr = "领队"
+	}
+	leadingCount := int64(0)
+	if member.LeadingCount != nil {
+		leadingCount = *member.LeadingCount
+	}
+
+	return &responsePersonal.MemberCard{
+		ID:            strconv.FormatUint(uint64(member.ID), 10),
+		Nickname:      strOr(s.mask(member.Nickname), "用户"+strconv.FormatUint(uint64(member.ID), 10)),
+		Avatar:        strOr(member.Avatar, entity.DefaultAvatar),
+		Bio:           strOr(s.mask(member.Bio), entity.DefaultBio),
+		BgImg:         strOr(member.BgImg, entity.DefaultBgImg),
+		Role:          roleStr,
+		Status:        member.Status,
+		FollowCount:   member.FollowCount,
+		FansCount:     member.FansCount,
+		PublishCount:  member.PublishCount,
+		FavoriteCount: member.FavoriteCount,
+		LeadingCount:  leadingCount,
+		IsFollowed:    myFollowed[targetID],
+		IsFollower:    targetFollowed[currentMemberID],
+	}, nil
+}
+
 func (s *personalService) UpdateProfile(memberID uint, req *requestPersonal.UpdateProfileRequest) (*responsePersonal.Profile, error) {
 	// P8：账号被禁用后不允许写操作
 	if _, err := s.findMemberActive(memberID); err != nil {

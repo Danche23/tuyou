@@ -8,6 +8,7 @@ import (
 
 type PersonalService interface {
 	GetProfile(memberID uint) (*responsePersonal.Profile, error)
+	GetMemberCard(currentMemberID, targetID uint) (*responsePersonal.MemberCard, error) // 他人公开资料卡（用户详情）
 	UpdateProfile(memberID uint, req *requestPersonal.UpdateProfileRequest) (*responsePersonal.Profile, error) // 编辑个人信息
 	GetFollowedMembers(memberID uint, page, size int) ([]responsePersonal.FollowedMember, int64, error)
 	GetFansMembers(memberID uint, page, size int) ([]responsePersonal.FansMember, int64, error)
