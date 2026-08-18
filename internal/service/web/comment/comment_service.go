@@ -8,7 +8,7 @@ package comment
 // 值得留意的业务设计（也是面试/评审常问的点）：
 //  1. 两级评论模型：所有回复统一落成二级，reply_to_id 永远指向根（一级）评论。
 //  2. 评论列表 = "热评置顶 + 时间倒序分页"：前2条按热度 heat 排，其余按 create_time 倒序。
-//     热评不占分页计数（total 只算其余部分），前端首屏就能看到优质评论。
+//     热评不占分页计数（total=一级评论真实总数，≤2 条时不排除热评），前端首屏就能看到优质评论。
 //  3. 点赞用"行锁 + 先删后插"：锁住评论行（SELECT FOR UPDATE）把并发点赞串行化，
 //     避免"取消再点赞"撞唯一索引 idx_comment_member 报 500。
 //  4. 防 N+1：列表里每个评论都要查用户、点赞态、回复数……全部批量一次查回 map。
@@ -101,6 +101,33 @@ func dedupe(ids []uint) []uint {
 		}
 		seen[id] = struct{}{}
 		result = append(result, id)
+	}
+	return result
+}
+
+// hotExcludeIDs 决定分页查询是否排除热评：一级评论总数 >2 时排除前2条热评（沿用原逻辑）；
+// ≤2 时热评即全部，返回 nil 不排除——否则 total 被排空成 0（历史 bug：note60 仅 2 条一级评论时 total=0）。
+func hotExcludeIDs(top []entity.Comment, totalTop int64) []uint {
+	if totalTop <= 2 {
+		return nil
+	}
+	ids := make([]uint, 0, len(top))
+	for _, c := range top {
+		ids = append(ids, c.ID)
+	}
+	return ids
+}
+
+// dedupeComments 按 ID 去重并保持顺序（总数≤2 时不排除热评，rest 与 top 会重复，合并后需去重）
+func dedupeComments(comments []entity.Comment) []entity.Comment {
+	seen := make(map[uint]struct{}, len(comments))
+	result := make([]entity.Comment, 0, len(comments))
+	for _, c := range comments {
+		if _, ok := seen[c.ID]; ok {
+			continue
+		}
+		seen[c.ID] = struct{}{}
+		result = append(result, c)
 	}
 	return result
 }
@@ -308,7 +335,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	}, nil
 }
 
-// ListComments 评论列表：前2条热评仅第1页展示（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
+// ListComments 评论列表：前2条热评仅第1页展示（分页排除热评）+ 其余按发布时间倒序分页，total=一级评论真实总数（≤2 条时不排除热评）
 func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) {
 	if req.TargetType != 1 && req.TargetType != 2 {
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
@@ -324,10 +351,14 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
-	excludeIDs := make([]uint, 0, len(top))
-	for _, c := range top {
-		excludeIDs = append(excludeIDs, c.ID)
+	// 一级评论真实总数（不排除任何评论）——total 必须等于它。
+	// 历史 bug：总数≤2 时热评即全部，旧代码把热评从 total 排除 → total=0（如 note60）。
+	total, err := s.repo.CountCommentPage(req.TargetType, req.TargetID, nil)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
+	// 分页排除热评；总数≤2 时不排除（热评即全部，excludeIDs=nil）
+	excludeIDs := hotExcludeIDs(top, total)
 
 	// 其余按发布时间倒序分页
 	offset := (req.Page - 1) * req.Size
@@ -335,18 +366,16 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
-	total, err := s.repo.CountCommentPage(req.TargetType, req.TargetID, excludeIDs)
-	if err != nil {
-		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
-	}
 
 	// 热评仅第1页展示，第2页起不再重复带出；分页"其余"每页照常排除热评，total/TotalPage 保持一致
 	// Page<=1 而非 ==1：绑定层已保证 min=1，但程序化调用 Page=0 时不应丢热评
+	// 总数≤2 时 excludeIDs 为空，rest 会重复带出 top → 合并后按 ID 去重
 	comments := make([]entity.Comment, 0, len(top)+len(rest))
 	if req.Page <= 1 {
 		comments = append(comments, top...)
 	}
 	comments = append(comments, rest...)
+	comments = dedupeComments(comments)
 
 	items, err := s.buildCommentItems(comments, memberID, targetAuthorID)
 	if err != nil {
