@@ -117,6 +117,17 @@ func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest
 			}
 			return nil, err
 		}
+	case sms.SceneCancelAccount:
+		//注销：手机号必须已注册（同 login/reset-pwd），且非已注销（已注销拒发）
+		if _, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone); err != nil {
+			if errors.Is(err, appErrors.ErrUserNotFound) {
+				if _, cerr := s.memberRepo.FindCancelledByPhone(ctx, req.Phone); cerr == nil {
+					return nil, appErrors.ErrAccountCancelled // 已注销拒发
+				}
+				return nil, appErrors.ErrPhoneNotRegistered
+			}
+			return nil, err
+		}
 	}
 
 	return sms.Send(req.Phone, sms.Scene(req.Scene))

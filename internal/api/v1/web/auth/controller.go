@@ -70,8 +70,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	// 改绑手机号发码需登录；register/login/reset-pwd 三个场景保持公开
-	if req.Scene == string(sms.SceneChangePhone) {
+	// 改绑手机号/注销发码需登录；register/login/reset-pwd 三个场景保持公开
+	if req.Scene == string(sms.SceneChangePhone) || req.Scene == string(sms.SceneCancelAccount) {
 		token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if _, err := jwt.ParseToken(token); err != nil {
 			response.Unauthorized(c, "未登录")

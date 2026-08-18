@@ -125,3 +125,35 @@ func TestSendCodeLoginNotRegistered(t *testing.T) {
 		t.Fatalf("期望 ErrPhoneNotRegistered，实际 %v", err)
 	}
 }
+
+func TestSendCodeCancelAccountCancelled(t *testing.T) {
+	repo := &mockMemberRepo{
+		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
+			return nil, appErrors.ErrUserNotFound
+		},
+		cancelledByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
+			return &entity.Member{BaseEntity: entity.BaseEntity{ID: 1}, Phone: phone, Status: 2}, nil
+		},
+	}
+	svc := newTestService(repo)
+	_, err := svc.SendCode(context.Background(), &request.SendCodeRequest{Phone: "13800138000", Scene: "cancel-account"})
+	if err != appErrors.ErrAccountCancelled {
+		t.Fatalf("期望 ErrAccountCancelled（已注销拒发），实际 %v", err)
+	}
+}
+
+func TestSendCodeCancelAccountNotRegistered(t *testing.T) {
+	repo := &mockMemberRepo{
+		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
+			return nil, appErrors.ErrUserNotFound
+		},
+		cancelledByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
+			return nil, appErrors.ErrUserNotFound
+		},
+	}
+	svc := newTestService(repo)
+	_, err := svc.SendCode(context.Background(), &request.SendCodeRequest{Phone: "13800138000", Scene: "cancel-account"})
+	if err != appErrors.ErrPhoneNotRegistered {
+		t.Fatalf("期望 ErrPhoneNotRegistered，实际 %v", err)
+	}
+}
