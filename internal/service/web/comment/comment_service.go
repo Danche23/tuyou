@@ -120,6 +120,27 @@ func shouldScoreReply(scoredReplies int64, quotaOK bool) bool {
 	return scoredReplies < heatReplyPerComment && quotaOK
 }
 
+// sensitiveSnapshot 发布时敏感词快照：命中→(is_sensitive=1, 命中词分号连接)；未命中→(0, "")。
+// 内容照常存原文（设计 §8.2），快照供后台筛选。
+func sensitiveSnapshot(m *sensitive.SensitiveMatcher, content string) (int, string) {
+	if m == nil {
+		return 0, ""
+	}
+	words := m.FindWords(content)
+	if len(words) == 0 {
+		return 0, ""
+	}
+	return 1, strings.Join(words, ";")
+}
+
+// maskContent 前台出口统一打星（nil 安全：匹配器未注入时原样返回）
+func (s *commentService) maskContent(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
+}
+
 // commentUser 组装评论用户信息
 func commentUser(m *entity.Member) *responseComment.CommentUser {
 	if m == nil {
@@ -185,13 +206,13 @@ func dedupeComments(comments []entity.Comment) []entity.Comment {
 }
 
 // buildReplyItems 组装二级评论列表项
-func buildReplyItems(replies []entity.Comment, members map[uint]*entity.Member, likes map[uint]bool, memberID, targetAuthorID uint) []*responseComment.CommentReplyItem {
+func (s *commentService) buildReplyItems(replies []entity.Comment, members map[uint]*entity.Member, likes map[uint]bool, memberID, targetAuthorID uint) []*responseComment.CommentReplyItem {
 	items := make([]*responseComment.CommentReplyItem, 0, len(replies))
 	for _, r := range replies {
 		items = append(items, &responseComment.CommentReplyItem{
 			ID:              idStr(r.ID),
 			User:            commentUser(members[r.MemberID]),
-			Content:         r.Content,
+			Content:         s.maskContent(r.Content),
 			LikeCount:       r.LikeCount,
 			IsLiked:         likes[r.ID],
 			ReplyToID:       optionalIDStr(r.ReplyToID),
@@ -274,10 +295,8 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if req.Content == "" {
 		return nil, errors.New(errors.CodeInvalidParam, "评论内容不能为空")
 	}
-	// 敏感词校验：命中即拒绝发布（不暴露具体词，防绕开）
-	if _, hit := s.sensitive.Validate(req.Content); hit {
-		return nil, errors.New(errors.CodeInvalidParam, "内容包含违规词汇")
-	}
+	// 敏感词快照：命中不拦截，is_sensitive/hit_words 落库，内容存原文（设计 §8.4）
+	isSensitive, hitWords := sensitiveSnapshot(s.sensitive, req.Content)
 	// 校验目标存在（笔记/攻略），并取作品作者 memberID 与标题（标题用于一级评论通知正文）
 	targetAuthorID, title, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
 	if err != nil {
@@ -318,6 +337,8 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 		LikeCount:       0,
 		Heat:            0,
 		Status:          1,
+		IsSensitive:     isSensitive,
+		HitWords:        hitWords,
 	}
 	// 事务：写评论 + 目标 comment_count +1 + 重算新评论热度；
 	// 若是回复，父一级评论的 reply_count 变了，同事务重算父评论热度，避免热评榜/回复预览滞后到小时任务
@@ -369,7 +390,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if replyToID == nil {
 		s.notifier.NotifyComment(targetAuthorID, memberID, title, comment.ID)
 	} else if replyToMemberID != nil {
-		s.notifier.NotifyCommentReply(*replyToMemberID, memberID, req.Content, comment.ID)
+		s.notifier.NotifyCommentReply(*replyToMemberID, memberID, s.maskContent(req.Content), comment.ID)
 	}
 
 	// 组装响应（作者=自己，canDelete=true）。
@@ -391,7 +412,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	return &responseComment.CommentItem{
 		ID:              idStr(comment.ID),
 		User:            commentUser(members[memberID]),
-		Content:         comment.Content,
+		Content:         s.maskContent(comment.Content),
 		LikeCount:       0,
 		IsLiked:         false,
 		ReplyToID:       optionalIDStr(replyToID),
@@ -540,13 +561,13 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 		items = append(items, &responseComment.CommentItem{
 			ID:              idStr(c.ID),
 			User:            commentUser(members[c.MemberID]),
-			Content:         c.Content,
+			Content:         s.maskContent(c.Content),
 			LikeCount:       c.LikeCount,
 			IsLiked:         likes[c.ID],
 			ReplyToID:       optionalIDStr(c.ReplyToID),
 			ReplyToNickname: replyToNickname(c.ReplyToMemberID, members),
 			CreatedAt:       c.CreatedAt.Format(timeFormat),
-			Replies:         buildReplyItems(replyMap[c.ID], members, likes, memberID, targetAuthorID),
+			Replies:         s.buildReplyItems(replyMap[c.ID], members, likes, memberID, targetAuthorID),
 			ReplyCount:      replyCounts[c.ID],
 			CanDelete:       c.MemberID == memberID || targetAuthorID == memberID,
 		})
@@ -672,6 +693,6 @@ func (s *commentService) ListReplies(commentID uint, memberID uint, page, size i
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
 	}
 
-	items := buildReplyItems(replies, members, likes, memberID, targetAuthorID)
+	items := s.buildReplyItems(replies, members, likes, memberID, targetAuthorID)
 	return response.NewPageResponse(items, total, page, size), nil
 }
