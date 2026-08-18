@@ -7,6 +7,18 @@ type SearchRepository interface {
 	// FindHotSearchNames 查询热门搜索关键词（status=1 AND is_hot=1 且未删除），按 id 升序
 	FindHotSearchNames() ([]string, error)
 
+	// UpsertSearchHistory 记录一条搜索历史（同词去重置顶，每人限最近 HistoryLimit 条）
+	UpsertSearchHistory(memberID uint, keyword string) error
+
+	// ListSearchHistory 查询某用户最近搜索历史（create_time 倒序，最多 limit 条）
+	ListSearchHistory(memberID uint, limit int) ([]entity.SearchHistory, error)
+
+	// DeleteSearchHistoryByID 删除单条搜索历史（硬删，仅本人，幂等）
+	DeleteSearchHistoryByID(memberID, id uint) error
+
+	// ClearSearchHistory 清空某用户全部搜索历史（硬删，幂等）
+	ClearSearchHistory(memberID uint) error
+
 	// SearchNotes 搜索笔记（标题/正文/分类 OR 命中），相关度优先、热度兜底，取 limit 条（limit=offset+size）
 	SearchNotes(keyword string, category int, limit int) ([]entity.Note, error)
 

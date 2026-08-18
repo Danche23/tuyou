@@ -1,6 +1,7 @@
 package search
 
 import (
+	"strconv"
 	"strings"
 
 	requestSearch "tuyou/internal/model/dto/request/web/search"
@@ -10,6 +11,7 @@ import (
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceHome "tuyou/internal/service/web/home"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/logger"
 )
 
 type searchService struct {
@@ -33,6 +35,44 @@ func (s *searchService) GetHotSearches() ([]string, error) {
 	return names, nil
 }
 
+// SearchHistoryItem 搜索历史返回项（id 供删单条使用，转字符串与全项目响应一致）
+type SearchHistoryItem struct {
+	ID      string `json:"id"`
+	Keyword string `json:"keyword"`
+}
+
+// ListSearchHistory 查询最近搜索历史（id + 关键词，时间倒序，最多 HistoryLimit 条）
+func (s *searchService) ListSearchHistory(memberID uint) ([]SearchHistoryItem, error) {
+	list, err := s.searchRepo.ListSearchHistory(memberID, repoSearch.HistoryLimit)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询搜索历史失败", err)
+	}
+	items := make([]SearchHistoryItem, 0, len(list))
+	for _, h := range list {
+		items = append(items, SearchHistoryItem{
+			ID:      strconv.FormatUint(uint64(h.ID), 10),
+			Keyword: h.Keyword,
+		})
+	}
+	return items, nil
+}
+
+// DeleteSearchHistory 删除单条搜索历史（仅本人；记录不存在或非本人也返回成功，幂等）
+func (s *searchService) DeleteSearchHistory(memberID, id uint) error {
+	if err := s.searchRepo.DeleteSearchHistoryByID(memberID, id); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "删除搜索历史失败", err)
+	}
+	return nil
+}
+
+// ClearSearchHistory 清空全部搜索历史（幂等）
+func (s *searchService) ClearSearchHistory(memberID uint) error {
+	if err := s.searchRepo.ClearSearchHistory(memberID); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "清空搜索历史失败", err)
+	}
+	return nil
+}
+
 // Search 全量搜索
 // type=content（默认）：笔记+攻略，标题/分类/标签 OR 命中，heat DESC 跨表归并 → FeedItem；
 // type=activity：活动，标题/分类/地点 OR 命中，start_time DESC → ActivityListItem。
@@ -52,6 +92,13 @@ func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) 
 	}
 	if req.Size < 1 || req.Size > 100 {
 		req.Size = 10
+	}
+
+	// 记录搜索历史（best-effort：写失败只记日志，不影响搜索；只记第 1 页，避免翻页反复置顶）
+	if req.Page == 1 {
+		if err := s.searchRepo.UpsertSearchHistory(memberID, keyword); err != nil {
+			logger.Errorf("记录搜索历史失败 memberID=%d keyword=%s err=%v", memberID, keyword, err)
+		}
 	}
 
 	switch req.Type {
