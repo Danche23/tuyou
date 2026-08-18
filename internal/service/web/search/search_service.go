@@ -39,8 +39,13 @@ func (s *searchService) GetHotSearches() ([]string, error) {
 // 不提供 sort/category 参数，排序固定：内容按热度值、活动按开始时间，均倒序。
 func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) (interface{}, int64, error) {
 	keyword := strings.TrimSpace(req.Keyword)
+	keyword = strings.ReplaceAll(keyword, `"`, "") // 去掉引号：AGAINST 里 " 是短语语法，用户输入会破坏查询
 	if keyword == "" {
 		return nil, 0, errors.New(errors.CodeInvalidParam, "搜索关键词不能为空")
+	}
+	// 最短词长拦截：ngram 分词器最短 2 字，1 字无法走全文索引；从入口挡住，避免全表扫
+	if len([]rune(keyword)) < 2 {
+		return nil, 0, errors.New(errors.CodeInvalidParam, "搜索词至少2个字")
 	}
 	if req.Page < 1 {
 		req.Page = 1
@@ -60,39 +65,26 @@ func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) 
 }
 
 // searchContent 内容搜索：笔记+攻略跨表归并
+// 关键词匹配走全文检索（标题+正文，FULLTEXT 倒排索引），分类枚举名做等值匹配，不做标签关联查询。
 func (s *searchService) searchContent(memberID uint, keyword string, req *requestSearch.SearchRequest) (interface{}, int64, error) {
 	offset := (req.Page - 1) * req.Size
 	limit := offset + req.Size
 	category := categoryStrToInt[keyword] // 0=非分类枚举名，不精确匹配分类
 
-	// 标签匹配：关键词命中启用标签名 → 关联内容ID集合（笔记/攻略各查）
-	tagIDs, err := s.searchRepo.FindTagIDsByKeyword(keyword)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询标签失败", err)
-	}
-	noteIDs, err := s.searchRepo.FindNoteIDsByTagIDs(tagIDs)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询笔记标签关联失败", err)
-	}
-	strategyIDs, err := s.searchRepo.FindStrategyIDsByTagIDs(tagIDs)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询攻略标签关联失败", err)
-	}
-
-	// 各取 offset+size 条（同一排序 heat DESC, id DESC），内存归并后截取当前页
-	notes, err := s.searchRepo.SearchNotes(keyword, category, noteIDs, limit)
+	// 各取 offset+size 条（同一排序：相关度优先、heat DESC, id DESC），内存归并后截取当前页
+	notes, err := s.searchRepo.SearchNotes(keyword, category, limit)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "搜索笔记失败", err)
 	}
-	strategies, err := s.searchRepo.SearchStrategies(keyword, category, strategyIDs, limit)
+	strategies, err := s.searchRepo.SearchStrategies(keyword, category, limit)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "搜索攻略失败", err)
 	}
-	noteTotal, err := s.searchRepo.CountSearchNotes(keyword, category, noteIDs)
+	noteTotal, err := s.searchRepo.CountSearchNotes(keyword, category)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "统计笔记失败", err)
 	}
-	strategyTotal, err := s.searchRepo.CountSearchStrategies(keyword, category, strategyIDs)
+	strategyTotal, err := s.searchRepo.CountSearchStrategies(keyword, category)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "统计攻略失败", err)
 	}
