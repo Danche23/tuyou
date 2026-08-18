@@ -11,10 +11,12 @@ type RegisterRequest struct {
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Phone    string `json:"phone"    binding:"required"`
-	Password string `json:"password" `
-	Code     string `json:"code"`
-	Type     string `json:"type"`
+	Phone     string `json:"phone"    binding:"required"`
+	Password  string `json:"password" `
+	Code      string `json:"code"`
+	Type      string `json:"type"`
+	CaptchaId string `json:"captcha_id"`
+	Captcha   string `json:"captcha"`
 }
 
 // SendCodeRequest 发送验证码请求

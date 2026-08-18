@@ -13,7 +13,7 @@ type ListMemberReq struct {
 
 // UpdateMemberReq 编辑会员请求
 type UpdateMemberReq struct {
-	Status *bool   `json:"status"` // true=正常, false=禁用
+	Status *string `json:"status"` // "启用" 或 "禁用"
 	Role   *string `json:"role"`   // "领队" 或 "普通会员"
 }
 
@@ -25,5 +25,5 @@ type BatchDeleteReq struct {
 // BatchUpdateStatusReq 批量修改状态请求
 type BatchUpdateStatusReq struct {
 	IDs    []string `json:"ids" binding:"required,min=1"`
-	Status bool     `json:"status"` // true=正常, false=禁用
+	Status string   `json:"status"` // "启用" 或 "禁用"
 }
