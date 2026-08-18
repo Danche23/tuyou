@@ -302,20 +302,53 @@ func (s *personalService) GetMyStrategys(memberID uint, page, size int) ([]respo
 	return cards, total, nil
 }
 
-// GetPublishActivities 当前用户发布的活动列表（分页）
-func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error) {
+// GetPublishActivities 当前用户发布的活动列表（分页；列表项带全量报名人，含手机号，仅领队本人可见）
+func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([]responsePersonal.PublishActivityItem, int64, error) {
 	activities, total, err := s.repo.FindPublishActivities(memberID, page, size)
 	if err != nil {
 		return nil, 0, err
 	}
 	if len(activities) == 0 {
-		return []responseActivity.ActivityListItem{}, total, nil
+		return []responsePersonal.PublishActivityItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, false)
+
+	baseList, err := s.buildActivityCards(activities, false)
 	if err != nil {
 		return nil, total, err
 	}
+
+	// 批量查报名人（本接口请求者即发布者 = 领队，手机号安全）
+	activityIDs := make([]uint, 0, len(activities))
+	for _, a := range activities {
+		activityIDs = append(activityIDs, a.ID)
+	}
+	participantsMap, err := s.repo.FindParticipantsByActivityIDs(activityIDs)
+	if err != nil {
+		return nil, total, err
+	}
+
+	list := make([]responsePersonal.PublishActivityItem, 0, len(baseList))
+	for i, item := range baseList {
+		list = append(list, responsePersonal.PublishActivityItem{
+			ActivityListItem: item,
+			Participants:     s.buildParticipants(participantsMap[activities[i].ID]),
+		})
+	}
 	return list, total, nil
+}
+
+// buildParticipants 报名人组装（昵称打星；手机号透传——仅领队可见出口调用）
+func (s *personalService) buildParticipants(members []entity.Member) []responsePersonal.ParticipantInfo {
+	list := make([]responsePersonal.ParticipantInfo, 0, len(members))
+	for _, m := range members {
+		list = append(list, responsePersonal.ParticipantInfo{
+			ID:       strconv.FormatUint(uint64(m.ID), 10),
+			Avatar:   m.Avatar,
+			Nickname: s.mask(m.Nickname),
+			Phone:    m.Phone,
+		})
+	}
+	return list
 }
 
 // GetJoinActivities 当前用户报名参加的活动列表（分页）

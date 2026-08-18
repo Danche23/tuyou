@@ -22,6 +22,6 @@ type PersonalService interface {
 	GetMyStrategys(memberID uint, page, size int) ([]responsePersonal.StrategyCard, int64, error)
 
 	// 我发布的活动 / 我参加的活动
-	GetPublishActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error)
+	GetPublishActivities(memberID uint, page, size int) ([]responsePersonal.PublishActivityItem, int64, error) // 我发布的活动（带报名人）
 	GetJoinActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error)
 }

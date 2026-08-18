@@ -61,4 +61,7 @@ type PersonalRepository interface {
 
 	// FindLikedStrategyIDs 批量查询用户点赞过的攻略ID集合
 	FindLikedStrategyIDs(strategyIDs []uint, memberID uint) (map[uint]bool, error)
+
+	// FindParticipantsByActivityIDs 批量查询多个活动的报名人（activity_join JOIN member，未取消、未软删；返回 activityID -> 报名用户列表，按报名时间升序，含手机号）
+	FindParticipantsByActivityIDs(activityIDs []uint) (map[uint][]entity.Member, error)
 }
