@@ -32,6 +32,37 @@ func (r *memberRepository) FindByPhone(ctx context.Context, phone string) (*enti
 	return &member, nil
 }
 
+// FindActiveByPhone 查询"在用的手机号"对应的账号（status<>2）
+func (r *memberRepository) FindActiveByPhone(ctx context.Context, phone string) (*entity.Member, error) {
+	var member entity.Member
+	err := r.db.WithContext(ctx).Where("phone = ? AND status <> 2", phone).First(&member).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &member, nil
+}
+
+// FindCancelledByPhone 查询已注销账号
+func (r *memberRepository) FindCancelledByPhone(ctx context.Context, phone string) (*entity.Member, error) {
+	var member entity.Member
+	err := r.db.WithContext(ctx).Where("phone = ? AND status = 2", phone).First(&member).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &member, nil
+}
+
+// UpdateStatus 更新账号状态
+func (r *memberRepository) UpdateStatus(ctx context.Context, id uint, status int) error {
+	return r.db.WithContext(ctx).Model(&entity.Member{}).Where("id = ?", id).Update("status", status).Error
+}
+
 // Create 创建用户
 func (r *memberRepository) Create(ctx context.Context, member *entity.Member) error {
 	return r.db.WithContext(ctx).Create(member).Error
