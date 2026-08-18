@@ -115,3 +115,95 @@ func normalize(s string) string {
 	}
 	return b.String()
 }
+
+// normalizeWithIndex 规范化内容并记录每个规范化后 rune 对应原文 rune 的下标。
+// 用 per-rune unicode.ToLower（而非整串 strings.ToLower），保证 rune 一一对应不串位。
+func normalizeWithIndex(s string) (runes []rune, origIndex []int) {
+	for i, r := range []rune(s) {
+		r = unicode.ToLower(r)
+		switch {
+		case unicode.IsSpace(r):
+			continue
+		case r >= 0xFF01 && r <= 0xFF5E:
+			r -= 0xFEE0
+		}
+		runes = append(runes, r)
+		origIndex = append(origIndex, i)
+	}
+	return runes, origIndex
+}
+
+// findSpans 在规范化 rune 上找所有命中词的 [start,end) 区间（可重叠，如「赌博网」含「赌」「赌博」）
+func (m *SensitiveMatcher) findSpans(runes []rune) [][2]int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var spans [][2]int
+	for i := 0; i < len(runes); i++ {
+		cur := m.root
+		for j := i; j < len(runes); j++ {
+			next, ok := cur.children[runes[j]]
+			if !ok {
+				break
+			}
+			cur = next
+			if cur.isEnd {
+				spans = append(spans, [2]int{i, j + 1})
+			}
+		}
+	}
+	return spans
+}
+
+// Mask 命中词等长打星：把原文中"命中词覆盖的连续区间"整体替换成等长 *。
+// 区间含规范化时被剥掉的内部空白/全角字符，保证输出长度 = 原文长度（设计 §8.2）。
+func (m *SensitiveMatcher) Mask(content string) string {
+	if content == "" {
+		return content
+	}
+	nr, origIndex := normalizeWithIndex(content)
+	spans := m.findSpans(nr)
+	if len(spans) == 0 {
+		return content
+	}
+	orig := []rune(content)
+	mask := make([]bool, len(orig))
+	for _, sp := range spans {
+		lo, hi := origIndex[sp[0]], origIndex[sp[1]-1]
+		for k := lo; k <= hi; k++ {
+			mask[k] = true
+		}
+	}
+	var b strings.Builder
+	for i, r := range orig {
+		if mask[i] {
+			b.WriteRune('*')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// FindWords 返回内容命中的敏感词（normalize 后词形），按首次出现顺序去重。
+func (m *SensitiveMatcher) FindWords(content string) []string {
+	nr, _ := normalizeWithIndex(content)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	seen := make(map[string]bool)
+	var words []string
+	for i := 0; i < len(nr); i++ {
+		cur := m.root
+		for j := i; j < len(nr); j++ {
+			next, ok := cur.children[nr[j]]
+			if !ok {
+				break
+			}
+			cur = next
+			if cur.isEnd && !seen[cur.word] {
+				seen[cur.word] = true
+				words = append(words, cur.word)
+			}
+		}
+	}
+	return words
+}
