@@ -1,6 +1,7 @@
 package search
 
 import (
+	"strconv"
 	"strings"
 
 	requestSearch "tuyou/internal/model/dto/request/web/search"
@@ -10,6 +11,7 @@ import (
 	serviceActivity "tuyou/internal/service/web/activity"
 	serviceHome "tuyou/internal/service/web/home"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/logger"
 )
 
 type searchService struct {
@@ -33,20 +35,70 @@ func (s *searchService) GetHotSearches() ([]string, error) {
 	return names, nil
 }
 
+// SearchHistoryItem 搜索历史返回项（id 供删单条使用，转字符串与全项目响应一致）
+type SearchHistoryItem struct {
+	ID      string `json:"id"`
+	Keyword string `json:"keyword"`
+}
+
+// ListSearchHistory 查询最近搜索历史（id + 关键词，时间倒序，最多 HistoryLimit 条）
+func (s *searchService) ListSearchHistory(memberID uint) ([]SearchHistoryItem, error) {
+	list, err := s.searchRepo.ListSearchHistory(memberID, repoSearch.HistoryLimit)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询搜索历史失败", err)
+	}
+	items := make([]SearchHistoryItem, 0, len(list))
+	for _, h := range list {
+		items = append(items, SearchHistoryItem{
+			ID:      strconv.FormatUint(uint64(h.ID), 10),
+			Keyword: h.Keyword,
+		})
+	}
+	return items, nil
+}
+
+// DeleteSearchHistory 删除单条搜索历史（仅本人；记录不存在或非本人也返回成功，幂等）
+func (s *searchService) DeleteSearchHistory(memberID, id uint) error {
+	if err := s.searchRepo.DeleteSearchHistoryByID(memberID, id); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "删除搜索历史失败", err)
+	}
+	return nil
+}
+
+// ClearSearchHistory 清空全部搜索历史（幂等）
+func (s *searchService) ClearSearchHistory(memberID uint) error {
+	if err := s.searchRepo.ClearSearchHistory(memberID); err != nil {
+		return errors.NewWithErr(errors.CodeInternalError, "清空搜索历史失败", err)
+	}
+	return nil
+}
+
 // Search 全量搜索
 // type=content（默认）：笔记+攻略，标题/分类/标签 OR 命中，heat DESC 跨表归并 → FeedItem；
 // type=activity：活动，标题/分类/地点 OR 命中，start_time DESC → ActivityListItem。
 // 不提供 sort/category 参数，排序固定：内容按热度值、活动按开始时间，均倒序。
 func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) (interface{}, int64, error) {
 	keyword := strings.TrimSpace(req.Keyword)
+	keyword = strings.ReplaceAll(keyword, `"`, "") // 去掉引号：AGAINST 里 " 是短语语法，用户输入会破坏查询
 	if keyword == "" {
 		return nil, 0, errors.New(errors.CodeInvalidParam, "搜索关键词不能为空")
+	}
+	// 最短词长拦截：ngram 分词器最短 2 字，1 字无法走全文索引；从入口挡住，避免全表扫
+	if len([]rune(keyword)) < 2 {
+		return nil, 0, errors.New(errors.CodeInvalidParam, "搜索词至少2个字")
 	}
 	if req.Page < 1 {
 		req.Page = 1
 	}
 	if req.Size < 1 || req.Size > 100 {
 		req.Size = 10
+	}
+
+	// 记录搜索历史（best-effort：写失败只记日志，不影响搜索；只记第 1 页，避免翻页反复置顶）
+	if req.Page == 1 {
+		if err := s.searchRepo.UpsertSearchHistory(memberID, keyword); err != nil {
+			logger.Errorf("记录搜索历史失败 memberID=%d keyword=%s err=%v", memberID, keyword, err)
+		}
 	}
 
 	switch req.Type {
@@ -60,39 +112,26 @@ func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) 
 }
 
 // searchContent 内容搜索：笔记+攻略跨表归并
+// 关键词匹配走全文检索（标题+正文，FULLTEXT 倒排索引），分类枚举名做等值匹配，不做标签关联查询。
 func (s *searchService) searchContent(memberID uint, keyword string, req *requestSearch.SearchRequest) (interface{}, int64, error) {
 	offset := (req.Page - 1) * req.Size
 	limit := offset + req.Size
 	category := categoryStrToInt[keyword] // 0=非分类枚举名，不精确匹配分类
 
-	// 标签匹配：关键词命中启用标签名 → 关联内容ID集合（笔记/攻略各查）
-	tagIDs, err := s.searchRepo.FindTagIDsByKeyword(keyword)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询标签失败", err)
-	}
-	noteIDs, err := s.searchRepo.FindNoteIDsByTagIDs(tagIDs)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询笔记标签关联失败", err)
-	}
-	strategyIDs, err := s.searchRepo.FindStrategyIDsByTagIDs(tagIDs)
-	if err != nil {
-		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "查询攻略标签关联失败", err)
-	}
-
-	// 各取 offset+size 条（同一排序 heat DESC, id DESC），内存归并后截取当前页
-	notes, err := s.searchRepo.SearchNotes(keyword, category, noteIDs, limit)
+	// 各取 offset+size 条（同一排序：相关度优先、heat DESC, id DESC），内存归并后截取当前页
+	notes, err := s.searchRepo.SearchNotes(keyword, category, limit)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "搜索笔记失败", err)
 	}
-	strategies, err := s.searchRepo.SearchStrategies(keyword, category, strategyIDs, limit)
+	strategies, err := s.searchRepo.SearchStrategies(keyword, category, limit)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "搜索攻略失败", err)
 	}
-	noteTotal, err := s.searchRepo.CountSearchNotes(keyword, category, noteIDs)
+	noteTotal, err := s.searchRepo.CountSearchNotes(keyword, category)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "统计笔记失败", err)
 	}
-	strategyTotal, err := s.searchRepo.CountSearchStrategies(keyword, category, strategyIDs)
+	strategyTotal, err := s.searchRepo.CountSearchStrategies(keyword, category)
 	if err != nil {
 		return nil, 0, errors.NewWithErr(errors.CodeInternalError, "统计攻略失败", err)
 	}

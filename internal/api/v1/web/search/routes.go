@@ -14,5 +14,8 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		searchGroup.GET("/search", c.Search)
 		searchGroup.GET("/hot-searches", c.GetHotSearches)
+		searchGroup.GET("/search/history", c.ListSearchHistory)
+		searchGroup.DELETE("/search/history/:id", c.DeleteSearchHistory)
+		searchGroup.DELETE("/search/history", c.ClearSearchHistory)
 	}
 }
