@@ -37,6 +37,11 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 		return nil, errors.New(errors.CodeInvalidParam, "视频笔记只能上传1张封面图片")
 	}
 
+	// 图片数量校验（1~5 张）——放 service 层返回具体错误，避免 DTO binding 拦截返回笼统的"参数校验失败"
+	if len(req.Images) < 1 || len(req.Images) > 5 {
+		return nil, errors.New(errors.CodeInvalidParam, "图片数量需为1~5张")
+	}
+
 	tags, err := s.noteRepo.FindTags(s.db, req.Tags)
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "标签查询失败", err)

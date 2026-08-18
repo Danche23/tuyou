@@ -9,6 +9,7 @@ import (
 	request "tuyou/internal/model/dto/request/admin/auth"
 	"tuyou/internal/repository"
 	"tuyou/internal/service/admin/auth"
+	"tuyou/pkg/config"
 	"tuyou/pkg/jwt"
 	"tuyou/pkg/response"
 )
@@ -53,11 +54,17 @@ func (c *AdminController) Login(context *gin.Context) {
 
 // Logout 退出登录
 // POST /api/v1/admin/logout
-// 从白名单删除当前 token 使其立即失效；幂等，token 已失效时也返回成功
+// 拉黑当前 jti 使其立即失效；幂等，token 已失效时也返回成功
 func (c *AdminController) Logout(context *gin.Context) {
 	token := strings.TrimPrefix(context.GetHeader("Authorization"), "Bearer ")
 	if claims, err := jwt.ParseToken(token); err == nil {
-		_ = c.redisRepo.Del(context.Request.Context(), jwt.AdminTokenKey(claims.GetUserID(), token))
+		userID := claims.GetUserID()
+		_ = c.redisRepo.Set(context.Request.Context(), jwt.BlacklistKey("admin", claims.ID), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+		// 仅当会话标记仍是该 jti 时才删除，避免误删新登录的会话
+		var cur string
+		if err := c.redisRepo.Get(context.Request.Context(), jwt.AdminSessionKey(userID), &cur); err == nil && cur == claims.ID {
+			_ = c.redisRepo.Del(context.Request.Context(), jwt.AdminSessionKey(userID))
+		}
 	}
 	response.SuccessWithMessage(context, "退出登录成功", struct{}{})
 }

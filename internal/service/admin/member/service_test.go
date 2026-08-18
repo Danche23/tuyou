@@ -57,8 +57,9 @@ func TestListMembersStatusFilter(t *testing.T) {
 			return []response.MemberListItem{}, nil
 		},
 	}
+	role := 1
 	svc := newTestAdminService(repo)
-	_, err := svc.ListMembers(context.Background(), 1, &request.ListMemberReq{Status: "2", Page: 1, Size: 10})
+	_, err := svc.ListMembers(context.Background(), &role, &request.ListMemberReq{Status: "2", Page: 1, Size: 10})
 	if err != nil {
 		t.Fatalf("ListMembers: %v", err)
 	}
@@ -69,22 +70,23 @@ func TestListMembersStatusFilter(t *testing.T) {
 
 func TestListMembersInvalidStatus(t *testing.T) {
 	repo := &mockAdminRepo{}
+	role := 1
 	svc := newTestAdminService(repo)
-	_, err := svc.ListMembers(context.Background(), 1, &request.ListMemberReq{Status: "abc", Page: 1, Size: 10})
+	_, err := svc.ListMembers(context.Background(), &role, &request.ListMemberReq{Status: "abc", Page: 1, Size: 10})
 	if err != appErrors.ErrInvalidParam {
 		t.Fatalf("期望 ErrInvalidParam，实际 %v", err)
 	}
 }
 
 func TestUpdateMemberGuardCancelled(t *testing.T) {
-	statusTrue := true
+	statusEnable := "启用"
 	repo := &mockAdminRepo{
 		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
-			return &response.MemberDetail{ID: "1", Status: 2}, nil
+			return &response.MemberDetail{ID: "1", Status: "已注销"}, nil
 		},
 	}
 	svc := newTestAdminService(repo)
-	err := svc.UpdateMember(context.Background(), 1, &request.UpdateMemberReq{Status: &statusTrue})
+	err := svc.UpdateMember(context.Background(), 1, &request.UpdateMemberReq{Status: &statusEnable})
 	if err == nil || !strings.Contains(err.Error(), "已注销会员请使用恢复接口") {
 		t.Fatalf("期望'已注销会员请使用恢复接口'，实际 %v", err)
 	}
@@ -93,7 +95,7 @@ func TestUpdateMemberGuardCancelled(t *testing.T) {
 func TestRestoreNotCancelled(t *testing.T) {
 	repo := &mockAdminRepo{
 		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
-			return &response.MemberDetail{ID: "1", Status: 1}, nil
+			return &response.MemberDetail{ID: "1", Status: "启用"}, nil
 		},
 	}
 	svc := newTestAdminService(repo)
@@ -106,7 +108,7 @@ func TestRestoreNotCancelled(t *testing.T) {
 func TestRestorePhoneOccupied(t *testing.T) {
 	repo := &mockAdminRepo{
 		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
-			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: 2}, nil
+			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: "已注销"}, nil
 		},
 		findActiveByPhoneExc: func(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
 			return &entity.Member{BaseEntity: entity.BaseEntity{ID: 2}, Phone: phone, Status: 1}, nil
@@ -124,7 +126,7 @@ func TestRestoreSuccess(t *testing.T) {
 	var gotUpdates map[string]interface{}
 	repo := &mockAdminRepo{
 		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
-			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: 2}, nil
+			return &response.MemberDetail{ID: "1", Phone: "13800138000", Status: "已注销"}, nil
 		},
 		findActiveByPhoneExc: func(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
 			return nil, appErrors.ErrUserNotFound // 无在用账号占用，允许恢复

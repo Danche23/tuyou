@@ -9,6 +9,7 @@ import (
 	response "tuyou/internal/model/dto/response/admin/member"
 	"tuyou/internal/repository"
 	"tuyou/internal/repository/admin/member"
+	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 )
@@ -24,8 +25,11 @@ func NewMemberService(memberRepo member.MemberRepository, redisRepo repository.R
 }
 
 // ListMembers 查询会员列表
-func (s *memberService) ListMembers(ctx context.Context, role int, req *request.ListMemberReq) (*response.ListMemberResp, error) {
-	filters := map[string]interface{}{"role": role}
+func (s *memberService) ListMembers(ctx context.Context, role *int, req *request.ListMemberReq) (*response.ListMemberResp, error) {
+	filters := map[string]interface{}{}
+	if role != nil {
+		filters["role"] = *role
+	}
 	if req.ID != "" {
 		filters["id"] = req.ID
 	}
@@ -73,6 +77,17 @@ func (s *memberService) GetMemberDetail(ctx context.Context, id uint) (*response
 	return s.memberRepo.GetDetailByID(ctx, id)
 }
 
+// kickMember 使会员全部会话立即失效（单端场景即当前会话）：拉黑 jti 并清会话标记
+func (s *memberService) kickMember(ctx context.Context, id uint) {
+	key := jwt.MemberSessionKey(id)
+	var jti string
+	if err := s.redisRepo.Get(ctx, key, &jti); err != nil || jti == "" {
+		return
+	}
+	_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+	_ = s.redisRepo.Del(ctx, key)
+}
+
 // UpdateMember 编辑会员
 func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.UpdateMemberReq) error {
 	updates := make(map[string]interface{})
@@ -83,15 +98,18 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 		if err != nil {
 			return err
 		}
-		if detail.Status == 2 {
+		if detail.Status == "已注销" {
 			return appErrors.New(appErrors.CodeConflict, "已注销会员请使用恢复接口")
 		}
-		if *req.Status {
+		switch *req.Status {
+		case "启用":
 			updates["status"] = 1
-		} else {
+		case "禁用":
 			updates["status"] = 0
 			//禁用将用户踢下线
-			_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+			s.kickMember(ctx, id)
+		default:
+			return appErrors.ErrInvalidParam
 		}
 	}
 	if req.Role != nil {
@@ -114,7 +132,7 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 
 // DeleteMember 删除会员
 func (s *memberService) DeleteMember(ctx context.Context, id uint) error {
-	_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+	s.kickMember(ctx, id)
 	return s.memberRepo.Delete(ctx, id)
 }
 
@@ -138,7 +156,7 @@ func (s *memberService) BatchDeleteMembers(ctx context.Context, req *request.Bat
 		return err
 	}
 	for _, id := range ids {
-		_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+		s.kickMember(ctx, id)
 	}
 	return s.memberRepo.BatchDelete(ctx, ids)
 }
@@ -149,13 +167,18 @@ func (s *memberService) BatchUpdateStatus(ctx context.Context, req *request.Batc
 	if err != nil {
 		return err
 	}
-	status := 0
-	if req.Status {
+	status := 1
+	switch req.Status {
+	case "启用":
 		status = 1
+	case "禁用":
+		status = 0
+	default:
+		return appErrors.ErrInvalidParam
 	}
 	if status == 0 {
 		for _, id := range ids {
-			_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(id))
+			s.kickMember(ctx, id)
 		}
 	}
 	return s.memberRepo.BatchUpdateStatus(ctx, ids, status)
@@ -176,7 +199,7 @@ func (s *memberService) Restore(ctx context.Context, id uint) error {
 	if err != nil {
 		return err
 	}
-	if detail.Status != 2 {
+	if detail.Status != "已注销" {
 		return appErrors.New(appErrors.CodeConflict, "该会员未注销，无需恢复")
 	}
 	// 手机号占用校验：恢复后该手机号不能已被其他在用账号占用

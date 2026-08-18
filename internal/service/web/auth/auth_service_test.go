@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mojocn/base64Captcha"
+
 	request "tuyou/internal/model/dto/request/web/auth"
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
@@ -43,7 +45,17 @@ func newTestService(repo *mockMemberRepo) serviceAuth.WebAuthService {
 	return serviceAuth.NewAuthService(repo, &mockRedis{}, sensitive.New(nil))
 }
 
+// newValidCaptcha 生成一枚有效图形验证码：写入 base64Captcha.DefaultMemStore，
+// b64c.Identify 校验同一 store，故登录测试可验过。
+func newValidCaptcha() (id, answer string) {
+	driver := base64Captcha.NewDriverDigit(80, 240, 5, 0.7, 80)
+	c := base64Captcha.NewCaptcha(driver, base64Captcha.DefaultMemStore)
+	id, _, answer, _ = c.Generate()
+	return id, answer
+}
+
 func TestPasswordLoginRejectsCancelled(t *testing.T) {
+	captchaId, captchaAns := newValidCaptcha()
 	repo := &mockMemberRepo{
 		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
 			return nil, appErrors.ErrUserNotFound
@@ -53,39 +65,42 @@ func TestPasswordLoginRejectsCancelled(t *testing.T) {
 		},
 	}
 	svc := newTestService(repo)
-	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password"})
+	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password", CaptchaId: captchaId, Captcha: captchaAns})
 	if err != appErrors.ErrAccountCancelled {
 		t.Fatalf("期望 ErrAccountCancelled，实际 %v", err)
 	}
 }
 
 func TestPasswordLoginRejectsDisabled(t *testing.T) {
+	captchaId, captchaAns := newValidCaptcha()
 	repo := &mockMemberRepo{
 		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
 			return &entity.Member{BaseEntity: entity.BaseEntity{ID: 1}, Phone: phone, Status: 0}, nil
 		},
 	}
 	svc := newTestService(repo)
-	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password"})
+	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password", CaptchaId: captchaId, Captcha: captchaAns})
 	if err != appErrors.ErrUserDisabled {
 		t.Fatalf("期望 ErrUserDisabled，实际 %v", err)
 	}
 }
 
 func TestPasswordLoginWrongPassword(t *testing.T) {
+	captchaId, captchaAns := newValidCaptcha()
 	repo := &mockMemberRepo{
 		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
 			return &entity.Member{BaseEntity: entity.BaseEntity{ID: 1}, Phone: phone, Status: 1, Password: ""}, nil
 		},
 	}
 	svc := newTestService(repo)
-	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password"})
+	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password", CaptchaId: captchaId, Captcha: captchaAns})
 	if err != appErrors.ErrInvalidCredentials {
 		t.Fatalf("期望 ErrInvalidCredentials，实际 %v", err)
 	}
 }
 
 func TestPasswordLoginNotRegistered(t *testing.T) {
+	captchaId, captchaAns := newValidCaptcha()
 	repo := &mockMemberRepo{
 		activeByPhone: func(ctx context.Context, phone string) (*entity.Member, error) {
 			return nil, appErrors.ErrUserNotFound
@@ -95,7 +110,7 @@ func TestPasswordLoginNotRegistered(t *testing.T) {
 		},
 	}
 	svc := newTestService(repo)
-	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password"})
+	_, err := svc.Login(context.Background(), &request.LoginRequest{Phone: "13800138000", Password: "123456", Type: "password", CaptchaId: captchaId, Captcha: captchaAns})
 	if err != appErrors.ErrPhoneNotRegistered {
 		t.Fatalf("期望 ErrPhoneNotRegistered，实际 %v", err)
 	}

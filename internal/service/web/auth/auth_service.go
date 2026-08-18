@@ -12,6 +12,7 @@ import (
 	"tuyou/internal/model/entity"
 	"tuyou/internal/repository"
 	"tuyou/internal/repository/web/auth"
+	"tuyou/internal/service/admin/auth/b64c"
 	"tuyou/internal/service/web/auth/sms"
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
@@ -133,6 +134,18 @@ func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest
 	return sms.Send(req.Phone, sms.Scene(req.Scene))
 }
 
+// GetCaptcha 获取图形验证码
+func (s *authService) GetCaptcha(ctx context.Context) (*response.CaptchaResp, error) {
+	captchaID, b64s, err := b64c.Generate()
+	if err != nil {
+		return nil, err
+	}
+	return &response.CaptchaResp{
+		CaptchaID:    captchaID,
+		CaptchaImage: b64s,
+	}, nil
+}
+
 // Login 登录
 func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResponse, error) {
 	//检验手机号格式
@@ -150,6 +163,10 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest) (*re
 func (s *authService) passwordLogin(ctx context.Context, req *request.LoginRequest) (*response.LoginResponse, error) {
 	if req.Password == "" {
 		return nil, appErrors.ErrMissingParam
+	}
+	//校验图形验证码
+	if err := b64c.Identify(req.CaptchaId, req.Captcha); err != nil {
+		return nil, appErrors.ErrCaptchaInvalid
 	}
 	//检查用户是否存在（仅查"在用的手机号"；若该号只剩已注销账号则区分提示）
 	member, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
@@ -182,13 +199,13 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 	}()
 
 	//生成JWT
-	token, err := jwt.GenerateToken(member.ID, member.Nickname)
+	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname)
 	if err != nil {
 		return nil, err
 	}
 
-	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
+	//单端黑名单：新登录顶号——拉黑上一会话 jti 后覆盖会话标记（Redis 不可用时忽略，不影响登录）
+	s.startSession(ctx, member.ID, jti)
 
 	return &response.LoginResponse{
 		Token: token,
@@ -234,13 +251,13 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		_ = s.memberRepo.UpdateLastLoginTime(context.Background(), member.ID)
 	}()
 
-	token, err := jwt.GenerateToken(member.ID, member.Nickname)
+	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname)
 	if err != nil {
 		return nil, err
 	}
 
-	//写入登录态白名单（单端登录：按用户维度覆盖，新登录顶掉旧 token；Redis 不可用时忽略，不影响登录）
-	_ = s.redisRepo.Set(ctx, jwt.MemberTokenKey(member.ID), token, config.Get().JWT.ExpireHours)
+	//单端黑名单：新登录顶号——拉黑上一会话 jti 后覆盖会话标记（Redis 不可用时忽略，不影响登录）
+	s.startSession(ctx, member.ID, jti)
 
 	return &response.LoginResponse{
 		Token: token,
@@ -341,9 +358,25 @@ func (s *authService) UpdatePassword(ctx context.Context, userID uint, req *requ
 	}, nil
 }
 
-// Logout 退出登录：删除该用户白名单登录态，使其立即失效（幂等，Redis 不可用时忽略）
-func (s *authService) Logout(ctx context.Context, userID uint) error {
-	return s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))
+// startSession 单端会话标记：拉黑上一会话 jti（顶号）后写入新会话 jti；Redis 异常静默忽略，不影响登录
+func (s *authService) startSession(ctx context.Context, userID uint, jti string) {
+	key := jwt.MemberSessionKey(userID)
+	var oldJTI string
+	if err := s.redisRepo.Get(ctx, key, &oldJTI); err == nil && oldJTI != "" && oldJTI != jti {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", oldJTI), jwt.ReasonKicked, config.Get().JWT.ExpireHours)
+	}
+	_ = s.redisRepo.Set(ctx, key, jti, config.Get().JWT.ExpireHours)
+}
+
+// Logout 退出登录：拉黑当前 jti 使 token 立即失效，并清掉会话标记（幂等，Redis 不可用时忽略）
+func (s *authService) Logout(ctx context.Context, userID uint, jti string) error {
+	_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+	// 仅当会话标记仍是该 jti 时才删除，避免误删新登录的会话
+	var cur string
+	if err := s.redisRepo.Get(ctx, jwt.MemberSessionKey(userID), &cur); err == nil && cur == jti {
+		_ = s.redisRepo.Del(ctx, jwt.MemberSessionKey(userID))
+	}
+	return nil
 }
 
 // Cancel 注销账号：密码 + 短信验证码双重校验，成功后 status=2 并删除登录态
@@ -379,8 +412,14 @@ func (s *authService) Cancel(ctx context.Context, userID uint, req *request.Canc
 		return nil, err
 	}
 
-	// 7. 删除登录态 token（MemberAuth 查白名单，删后立即失效）
-	_ = s.redisRepo.Del(ctx, jwt.MemberTokenKey(userID))
+	// 7. 拉黑当前 jti 并清会话标记（MemberAuth 查黑名单，拉黑后立即失效；Redis 异常忽略）
+	if key := jwt.MemberSessionKey(userID); key != "" {
+		var jti string
+		if err := s.redisRepo.Get(ctx, key, &jti); err == nil && jti != "" {
+			_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+			_ = s.redisRepo.Del(ctx, key)
+		}
+	}
 
 	// 8. 返回
 	return &response.MessageResponse{Message: "注销成功"}, nil

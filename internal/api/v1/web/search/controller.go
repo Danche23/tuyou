@@ -2,6 +2,7 @@ package search
 
 import (
 	"net/http"
+	"strconv"
 
 	"tuyou/internal/middleware"
 	requestSearch "tuyou/internal/model/dto/request/web/search"
@@ -38,6 +39,62 @@ func (c *Controller) GetHotSearches(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, names)
+}
+
+// ListSearchHistory 查询最近搜索历史
+// GET /api/v1/search/history
+func (c *Controller) ListSearchHistory(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	keywords, err := c.searchSvc.ListSearchHistory(memberID)
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, keywords)
+}
+
+// DeleteSearchHistory 删除单条搜索历史
+// DELETE /api/v1/search/history/:id
+func (c *Controller) DeleteSearchHistory(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id == 0 {
+		response.BadRequest(ctx, "参数不合法")
+		return
+	}
+
+	if err := c.searchSvc.DeleteSearchHistory(memberID, uint(id)); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// ClearSearchHistory 清空全部搜索历史
+// DELETE /api/v1/search/history
+func (c *Controller) ClearSearchHistory(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+
+	if err := c.searchSvc.ClearSearchHistory(memberID); err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
 }
 
 // Search 全量搜索

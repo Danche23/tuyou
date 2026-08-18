@@ -9,8 +9,8 @@ import (
 
 // MemberService 会员管理服务接口
 type MemberService interface {
-	// ListMembers 查询会员列表（role 由路由传入）
-	ListMembers(ctx context.Context, role int, req *request.ListMemberReq) (*response.ListMemberResp, error)
+	// ListMembers 查询会员列表（role 由路由传入；nil 表示不按角色过滤，会员和领队都展示）
+	ListMembers(ctx context.Context, role *int, req *request.ListMemberReq) (*response.ListMemberResp, error)
 
 	// GetMemberDetail 获取会员详情
 	GetMemberDetail(ctx context.Context, id uint) (*response.MemberDetail, error)

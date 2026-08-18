@@ -64,7 +64,7 @@ func (r *memberRepository) List(ctx context.Context, filters map[string]interfac
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
 			phone,
-			status,
+			CASE status WHEN 0 THEN '禁用' WHEN 1 THEN '启用' WHEN 2 THEN '已注销' ELSE '未知' END AS status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
@@ -87,7 +87,7 @@ func (r *memberRepository) GetDetailByID(ctx context.Context, id uint) (*respons
 			phone,
 			bio,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
-			status,
+			CASE status WHEN 0 THEN '禁用' WHEN 1 THEN '启用' WHEN 2 THEN '已注销' ELSE '未知' END AS status,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
 			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login,
 			follow_count, favorite_count, publish_count, fans_count`).
@@ -175,7 +175,7 @@ func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]respo
 	query := r.db.WithContext(ctx).Table("member").
 		Select(`id, avatar, nickname,
 			phone,
-			status,
+			CASE status WHEN 0 THEN '禁用' WHEN 1 THEN '启用' WHEN 2 THEN '已注销' ELSE '未知' END AS status,
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,

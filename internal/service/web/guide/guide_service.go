@@ -42,6 +42,11 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 		return nil, errors.New(errors.CodeInvalidParam, "视频攻略只能上传1张封面图片")
 	}
 
+	// 图片数量校验（1~5 张）——放 service 层返回具体错误，避免 DTO binding 拦截返回笼统的"参数校验失败"
+	if len(req.Images) < 1 || len(req.Images) > 5 {
+		return nil, errors.New(errors.CodeInvalidParam, "图片数量需为1~5张")
+	}
+
 	// 难度必须是枚举之一，映射为 int 入库
 	difficulty, ok := difficultyStrToInt[req.Difficulty]
 	if !ok {

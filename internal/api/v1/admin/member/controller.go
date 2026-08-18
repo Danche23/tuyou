@@ -34,8 +34,8 @@ func (c *Controller) ListMembers(ctx *gin.Context) {
 		return
 	}
 
-	//会员的角色用 1 表示
-	resp, err := c.memberSvc.ListMembers(ctx, 1, &req)
+	//会员列表同时展示会员(1)和领队(0)：role 传 nil 不按角色过滤
+	resp, err := c.memberSvc.ListMembers(ctx, nil, &req)
 	if err != nil {
 		response.BizError(ctx, err)
 		return
@@ -51,7 +51,8 @@ func (c *Controller) ListLeaders(ctx *gin.Context) {
 		return
 	}
 	//领队的角色用 0 表示
-	resp, err := c.memberSvc.ListMembers(ctx, 0, &req)
+	leaderRole := 0
+	resp, err := c.memberSvc.ListMembers(ctx, &leaderRole, &req)
 	if err != nil {
 		response.BizError(ctx, err)
 		return

@@ -224,6 +224,8 @@ func (a *App) initDatabase() error {
 		&entity.Follow{},
 		// 敏感词模块（1张）
 		&entity.SensitiveWord{},
+		// 搜索历史（1张）
+		&entity.SearchHistory{},
 	); err != nil {
 		logger.Warn("数据库迁移警告", zap.Error(err))
 	} else {
