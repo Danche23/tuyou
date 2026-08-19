@@ -3,6 +3,7 @@ package activity
 // ListActivityRequest 活动列表请求
 type ListActivityRequest struct {
 	Category string `form:"category"`                                 // 可选，活动分类中文名
+	Date     string `form:"date"`                                     // 可选，筛选日期（2006-01-02），返回该日期内进行的活动
 	Page     int    `form:"page"    binding:"required,min=1"`         // 页码，从1开始
 	Size     int    `form:"size"    binding:"required,min=1,max=100"` // 每页条数
 }
