@@ -381,8 +381,18 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 		}
 	}
 
-	// ========== 3. 查询活动列表 ==========
-	activities, total, err := s.activityRepo.FindList(category, req.Page, req.Size)
+	// ========== 3. 日期解析（可选） ==========
+	var dateFilter time.Time
+	if req.Date != "" {
+		parsed, parseErr := time.ParseInLocation("2006-01-02", req.Date, time.Local)
+		if parseErr != nil {
+			return nil, 0, errors.New(errors.CodeInvalidParam, "日期格式不正确，应为 2006-01-02")
+		}
+		dateFilter = parsed
+	}
+
+	// ========== 4. 查询活动列表 ==========
+	activities, total, err := s.activityRepo.FindList(category, req.Page, req.Size, dateFilter)
 	if err != nil {
 		return nil, 0, errors.New(errors.CodeInternalError, "获取活动列表失败")
 	}
@@ -391,7 +401,7 @@ func (s *activityService) GetActivityList(memberID uint, req *requestActivity.Li
 		return []responseActivity.ActivityListItem{}, total, nil
 	}
 
-	// ========== 4. 组装响应：复用 BuildActivityItems（唯一实现，search 模块共用） ==========
+	// ========== 5. 组装响应：复用 BuildActivityItems（唯一实现，search 模块共用） ==========
 	list, err := s.BuildActivityItems(memberID, activities)
 	if err != nil {
 		return nil, 0, err

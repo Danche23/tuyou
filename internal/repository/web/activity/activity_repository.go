@@ -144,14 +144,20 @@ func (r *activityRepository) SoftDelete(tx *gorm.DB, activityID uint) error {
 		}).Error
 }
 
-// FindList 查询活动列表（分页，按分类筛选，过滤已删除，按开始时间倒序）
-func (r *activityRepository) FindList(category int, page, size int) ([]entity.Activity, int64, error) {
+// FindList 查询活动列表（分页，按分类/日期筛选，过滤已删除，按开始时间倒序）
+// dateFilter 为零值时不启用日期筛选；非零值时筛选 start_time <= 当天23:59:59 AND end_time >= 当天00:00:00 的活动
+func (r *activityRepository) FindList(category int, page, size int, dateFilter time.Time) ([]entity.Activity, int64, error) {
 	var list []entity.Activity
 	var total int64
 
 	db := r.db.Model(&entity.Activity{}).Where("is_del = ?", 0)
 	if category > 0 {
 		db = db.Where("activity_type = ?", category)
+	}
+	if !dateFilter.IsZero() {
+		dayStart := time.Date(dateFilter.Year(), dateFilter.Month(), dateFilter.Day(), 0, 0, 0, 0, time.Local)
+		dayEnd := dayStart.Add(24*time.Hour - time.Second)
+		db = db.Where("start_time <= ? AND end_time >= ?", dayEnd, dayStart)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

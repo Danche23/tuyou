@@ -50,11 +50,7 @@ func (c *Controller) Create(ctx *gin.Context) {
 // GetDetail 获取活动详情
 // GET /api/v1/activities/:id
 func (c *Controller) GetDetail(ctx *gin.Context) {
-	memberID := middleware.GetUserID(ctx)
-	if memberID == 0 {
-		response.Error(ctx, http.StatusUnauthorized, "未登录")
-		return
-	}
+	memberID := middleware.GetUserID(ctx) // 未登录时为 0，允许访问
 
 	idStr := ctx.Param("id")
 	activityID, err := strconv.ParseUint(idStr, 10, 64)
