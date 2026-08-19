@@ -16,38 +16,38 @@ func NewWorkbenchRepository(db *gorm.DB) WorkbenchRepository {
 	return &workbenchRepository{db: db}
 }
 
-// CountMembers 用户总数（GORM 自动过滤软删除）
+// CountMembers 用户总数（含软删除 delete_time 置位，硬删除不在表中）
 func (r *workbenchRepository) CountMembers(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&entity.Member{}).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&entity.Member{}).Unscoped().Count(&count).Error
 	return count, err
 }
 
-// CountActivities 活动总数（activity 用自身逻辑删除字段 is_del）
+// CountActivities 活动总数（含逻辑删除 is_del=1 与软删 delete_time，硬删除不在表中）
 func (r *workbenchRepository) CountActivities(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&entity.Activity{}).Where("is_del = ?", 0).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&entity.Activity{}).Unscoped().Count(&count).Error
 	return count, err
 }
 
-// CountNotes 笔记总数
+// CountNotes 笔记总数（含软删除 delete_time，硬删除不在表中）
 func (r *workbenchRepository) CountNotes(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&entity.Note{}).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&entity.Note{}).Unscoped().Count(&count).Error
 	return count, err
 }
 
-// CountStrategies 攻略总数
+// CountStrategies 攻略总数（含软删除 delete_time，硬删除不在表中）
 func (r *workbenchRepository) CountStrategies(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&entity.Strategy{}).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&entity.Strategy{}).Unscoped().Count(&count).Error
 	return count, err
 }
 
-// CountComments 评论总数（仅正常 status=1）
+// CountComments 评论总数（含下架 status=0 与软删 delete_time，硬删除不在表中）
 func (r *workbenchRepository) CountComments(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&entity.Comment{}).Where("status = ?", 1).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&entity.Comment{}).Unscoped().Count(&count).Error
 	return count, err
 }
 
