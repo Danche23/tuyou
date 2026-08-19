@@ -16,12 +16,6 @@ type ActivityRepository interface {
 	// GetAuthor 获取作者（领队）信息
 	GetAuthor(memberID uint) (*entity.Member, error)
 
-	// IncrPublishCount 发布计数 +1
-	IncrPublishCount(tx *gorm.DB, memberID uint) error
-
-	// DecrPublishCount 发布计数 -1
-	DecrPublishCount(tx *gorm.DB, memberID uint) error
-
 	// FindByID 根据活动ID查询（未删除）
 	FindByID(activityID uint) (*entity.Activity, error)
 

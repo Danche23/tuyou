@@ -100,10 +100,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.activityRepo.Create(tx, activity); err != nil {
-			return err
-		}
-		return s.activityRepo.IncrPublishCount(tx, memberID)
+		return s.activityRepo.Create(tx, activity)
 	})
 	if err != nil {
 		logger.Errorf("创建活动事务失败 memberID=%d err=%v", memberID, err)
@@ -341,10 +338,7 @@ func (s *activityService) DeleteActivity(activityID uint, memberID uint) error {
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.activityRepo.SoftDelete(tx, activityID); err != nil {
-			return err
-		}
-		return s.activityRepo.DecrPublishCount(tx, memberID)
+		return s.activityRepo.SoftDelete(tx, activityID)
 	})
 	if err != nil {
 		logger.Errorf("删除活动事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
