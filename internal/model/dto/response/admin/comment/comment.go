@@ -27,7 +27,7 @@ type CommentItem struct {
 	CreateTime      string `json:"create_time"`       // 评论创建时间
 	Status          string `json:"status"`            // 状态：正常/已删除（派生自 delete_time）
 	IsSensitive     int    `json:"is_sensitive"`      // 发布时是否命中敏感词：1=是（内容为原文）
-	HitWords        string `json:"hit_words"`         // 命中的敏感词，分号分隔（发布时快照）
+	HitWords        []string `json:"hit_words"`       // 命中的敏感词数组（发布时快照；存储为分号分隔字符串，出参拆成数组）
 	DeleteTime      string `json:"delete_time"`       // 删除时间，未删除为空
 }
 
