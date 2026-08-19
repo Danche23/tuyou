@@ -1,6 +1,8 @@
 package activity
 
 import (
+	"time"
+
 	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
@@ -53,8 +55,8 @@ type ActivityRepository interface {
 	// SoftDelete 逻辑删除活动（is_del=1）
 	SoftDelete(tx *gorm.DB, activityID uint) error
 
-	// FindList 查询活动列表（分页，按分类筛选，过滤已删除）
-	FindList(category int, page, size int) ([]entity.Activity, int64, error)
+	// FindList 查询活动列表（分页，按分类/日期筛选，过滤已删除）
+	FindList(category int, page, size int, dateFilter time.Time) ([]entity.Activity, int64, error)
 
 	// GetMembersByIDs 批量获取成员信息
 	GetMembersByIDs(ids []uint) ([]entity.Member, error)
