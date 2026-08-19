@@ -96,11 +96,14 @@ func (m *SensitiveMatcher) Reload(words []string) {
 //   - ToLower（英文大小写通吃）
 //   - 去掉全部空白（含全角空格 U+3000），关闭「赌 博」式空格绕过
 //   - 全角 ASCII 转半角（ｆｕｃｋ → fuck），关闭全角绕过
+//   - 去掉全部标点（全角标点转半角后统一按 IsPunct 判定），关闭「赌#博」「赌.博」式符号绕过
 // 插入词与校验内容共用，保证二者落在同一规范化空间。
 //
-// 已知取舍（2026-08-17 评审拍板，硬拦截优先）：去空格会把无辜短语拼成命中词，
-// 如「颜色 情调」→「颜色情调」含「色情」会被误拦。缓解：命中后重跑保留空格的匹配、
+// 已知取舍（2026-08-17 评审拍板，硬拦截优先）：去空白会把无辜短语拼成命中词，
+// 如「颜色 情调」→「颜色情调」含「色情」会被误拦；滤标点同理会放大该问题
+// （如「颜色，情调」→「颜色情调」）。缓解：命中后重跑保留空格的匹配、
 // 软拦截送人工审核 → 列为 Phase 2 待办。
+// 注意：只滤 IsPunct 标点，不滤 IsSymbol（emoji/©/数学符号等），避免误删正常符号。
 func normalize(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {
@@ -108,7 +111,13 @@ func normalize(s string) string {
 		case unicode.IsSpace(r):
 			continue
 		case r >= 0xFF01 && r <= 0xFF5E: // 全角 ASCII → 半角
-			b.WriteRune(r - 0xFEE0)
+			r -= 0xFEE0
+			if unicode.IsPunct(r) {
+				continue // 全角标点（转半角后）滤除
+			}
+			b.WriteRune(r)
+		case unicode.IsPunct(r):
+			continue // 半角/中文标点滤除
 		default:
 			b.WriteRune(r)
 		}
@@ -118,6 +127,7 @@ func normalize(s string) string {
 
 // normalizeWithIndex 规范化内容并记录每个规范化后 rune 对应原文 rune 的下标。
 // 用 per-rune unicode.ToLower（而非整串 strings.ToLower），保证 rune 一一对应不串位。
+// 与 normalize 保持同一规范化规则（空格/标点一并滤除），保证 Mask 与 Validate 判定一致。
 func normalizeWithIndex(s string) (runes []rune, origIndex []int) {
 	for i, r := range []rune(s) {
 		r = unicode.ToLower(r)
@@ -126,6 +136,11 @@ func normalizeWithIndex(s string) (runes []rune, origIndex []int) {
 			continue
 		case r >= 0xFF01 && r <= 0xFF5E:
 			r -= 0xFEE0
+			if unicode.IsPunct(r) {
+				continue
+			}
+		case unicode.IsPunct(r):
+			continue
 		}
 		runes = append(runes, r)
 		origIndex = append(origIndex, i)
