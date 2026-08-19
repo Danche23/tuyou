@@ -12,19 +12,21 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
 
 type noteService struct {
-	noteRepo repoNote.NoteRepository
-	db       *gorm.DB
-	notifier *serviceMsg.Notifier
+	noteRepo  repoNote.NoteRepository
+	db        *gorm.DB
+	sensitive *sensitive.SensitiveMatcher
+	notifier  *serviceMsg.Notifier
 }
 
 // NewNoteService 创建笔记服务实例
-func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, notifier *serviceMsg.Notifier) NoteService {
-	return &noteService{noteRepo: noteRepo, db: db, notifier: notifier}
+func NewNoteService(noteRepo repoNote.NoteRepository, db *gorm.DB, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) NoteService {
+	return &noteService{noteRepo: noteRepo, db: db, sensitive: matcher, notifier: notifier}
 }
 
 // CreateNote 发布笔记
@@ -50,6 +52,12 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 
 	// ========== 写入（事务内） ==========
 
+	// 敏感词快照：命中置 is_sensitive=1，内容存原文（设计 §8.5）
+	isSensitive := 0
+	if s.sensitive.IsSensitive(req.Title, req.Content) {
+		isSensitive = 1
+	}
+
 	note := &entity.Note{
 		MemberID:    memberID,
 		Title:       req.Title,
@@ -59,6 +67,7 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 		Status:      1,
 		Heat:        10, // 初始基础热度，与 heat.go 公式中的基础热度10保持一致
 		PublishTime: time.Now(),
+		IsSensitive: isSensitive,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -95,12 +104,12 @@ func (s *noteService) CreateNote(memberID uint, req *requestNote.CreateNoteReque
 	return &responseNote.CreateNoteResponse{
 		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
-		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
-		Title:        note.Title,
+		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
+		Title:        s.mask(note.Title),
 		CoverImg:     coverImg,
 		Images:       req.Images,
 		VideoURL:     note.VideoURL,
-		Content:      note.Content,
+		Content:      s.mask(note.Content),
 		ViewCount:    note.ViewCount,
 		LikeCount:    note.LikeCount,
 		CollectCount: note.CollectCount,
@@ -179,14 +188,14 @@ func (s *noteService) GetNoteDetail(noteID uint, memberID uint) (*responseNote.N
 	return &responseNote.NoteDetailResponse{
 		ID:           strconv.FormatUint(uint64(note.ID), 10),
 		Type:         "note",
-		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
+		Author:       &responseNote.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      note.MemberID == memberID,
-		Title:        note.Title,
+		Title:        s.mask(note.Title),
 		CoverImg:     coverImg,
 		Images:       images,
 		VideoURL:     note.VideoURL,
-		Content:      note.Content,
+		Content:      s.mask(note.Content),
 		ViewCount:    note.ViewCount,
 		LikeCount:    likeCount,
 		CollectCount: collectCount,
@@ -363,4 +372,12 @@ func (s *noteService) readCollectCount(ctx context.Context, noteID uint, fallbac
 	}
 	s.noteRepo.SetCachedCollectCount(ctx, noteID, fallback)
 	return fallback
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *noteService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

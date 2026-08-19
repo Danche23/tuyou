@@ -9,6 +9,7 @@ type Note struct {
 	Title        string    `gorm:"type:varchar(100);not null;comment:笔记标题" json:"title"`
 	VideoURL     string    `gorm:"type:varchar(255);column:video_url;comment:视频地址" json:"videoUrl"`
 	Content      string    `gorm:"type:text;comment:笔记正文内容" json:"content"`
+	IsSensitive  int       `gorm:"type:tinyint;default:0;index;column:is_sensitive;comment:发布时命中敏感词标记(内容仍存原文) 0=否 1=是" json:"isSensitive"`
 	ViewCount    int64     `gorm:"type:bigint;default:0;column:view_count;comment:笔记浏览总次数" json:"viewCount"`
 	LikeCount    int64     `gorm:"type:bigint;default:0;column:like_count;comment:笔记点赞总数" json:"likeCount"`
 	CollectCount int64     `gorm:"type:bigint;default:0;column:collect_count;comment:笔记收藏总数" json:"collectCount"`

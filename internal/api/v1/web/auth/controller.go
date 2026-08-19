@@ -46,6 +46,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// GetCaptcha 获取图形验证码
+func (h *AuthHandler) GetCaptcha(c *gin.Context) {
+	resp, err := h.authSvc.GetCaptcha(c.Request.Context())
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, resp)
+}
+
 // Login 登录
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req request.LoginRequest
@@ -70,8 +80,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	// 改绑手机号发码需登录；register/login/reset-pwd 三个场景保持公开
-	if req.Scene == string(sms.SceneChangePhone) {
+	// 改绑手机号/注销发码需登录；register/login/reset-pwd 三个场景保持公开
+	if req.Scene == string(sms.SceneChangePhone) || req.Scene == string(sms.SceneCancelAccount) {
 		token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if _, err := jwt.ParseToken(token); err != nil {
 			response.Unauthorized(c, "未登录")
@@ -159,11 +169,35 @@ func (h *AuthHandler) UpdatePassword(c *gin.Context) {
 	response.SuccessWithMessage(c, resp.Message, struct{}{})
 }
 
-// Logout 删除该用户白名单登录态使其立即失效；幂等，token 已失效时也返回成功
+// Cancel 注销账号
+// POST /api/v1/web/auth/cancel（需登录）
+func (h *AuthHandler) Cancel(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	var req request.CancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	resp, err := h.authSvc.Cancel(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	// 成功响应：message 取服务层文案，data 为空
+	response.SuccessWithMessage(c, resp.Message, struct{}{})
+}
+
+// Logout 拉黑当前 jti 使其立即失效；幂等，token 已失效时也返回成功
 func (h *AuthHandler) Logout(c *gin.Context) {
 	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 	if claims, err := jwt.ParseToken(token); err == nil {
-		_ = h.authSvc.Logout(c.Request.Context(), claims.GetUserID())
+		_ = h.authSvc.Logout(c.Request.Context(), claims.GetUserID(), claims.ID)
 	}
 	response.SuccessWithMessage(c, "退出登录成功", struct{}{})
 }

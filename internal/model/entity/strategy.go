@@ -22,6 +22,7 @@ type Strategy struct {
 	Duration     string    `gorm:"type:varchar(20);comment:总时长" json:"duration"`
 	Difficulty   int       `gorm:"type:tinyint;comment:难度（下拉选择 入门、中等、中高等、高等）" json:"difficulty"`
 	Transport    string    `gorm:"type:varchar(20);comment:交通方式（用户自由填写）" json:"transport"`
+	IsSensitive  int       `gorm:"type:tinyint;default:0;index;column:is_sensitive;comment:发布时命中敏感词标记(内容仍存原文) 0=否 1=是" json:"isSensitive"`
 }
 
 // TableName 指定表名

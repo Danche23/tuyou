@@ -477,6 +477,7 @@ func (s *activityService) buildListItems(activities []entity.Activity) ([]respon
 			ActivityStatus: activityStatus,
 			Status:         isDel,
 			DeleteTime:     deleteTime,
+			IsSensitive:    a.IsSensitive,
 		})
 	}
 

@@ -17,6 +17,7 @@ type GuideListItem struct {
 	Heat         int64    `json:"heat"`
 	IsSlide      string   `json:"is_slide"`
 	Status       string   `json:"status"`
+	IsSensitive  int      `json:"is_sensitive"` // 发布时命中敏感词：1=是（内容仍为原文）
 }
 
 // ListGuideResp 后台攻略分页响应

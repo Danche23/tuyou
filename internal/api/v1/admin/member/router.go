@@ -17,6 +17,7 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 		// 会员
 		admin.GET("/members", c.ListMembers)
 		admin.GET("/members/:id", c.GetDetail)
+		admin.POST("/members/:id/restore", c.Restore)
 		admin.PUT("/members/:id", c.Update)
 		admin.DELETE("/members/:id", c.Delete)
 		admin.POST("/members/batch-delete", c.BatchDelete)

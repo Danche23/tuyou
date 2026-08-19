@@ -20,6 +20,11 @@ type RedisRepository interface {
 	// ScanKeys 按 pattern 增量遍历返回所有匹配的 key（nil 客户端时返回 nil, nil）
 	ScanKeys(ctx context.Context, pattern string) ([]string, error)
 
+	// IncrBy key 自增 increment，返回自增后的值（nil 客户端返回 redis.Nil，调用方按降级处理）
+	IncrBy(ctx context.Context, key string, increment int64) (int64, error)
+	// Expire 设置 key 过期时间（nil 客户端返回 nil）
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+
 	// XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil
 	XAdd(ctx context.Context, stream string, values map[string]interface{}) error
 	// XGroupCreate 创建消费者组（带 MKSTREAM，自动创建 Stream）。Redis 不可用时返回 redis.Nil

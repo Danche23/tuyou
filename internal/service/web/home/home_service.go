@@ -14,18 +14,20 @@ import (
 	repoHome "tuyou/internal/repository/web/home"
 	repoNote "tuyou/internal/repository/web/note"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 )
 
 type homeService struct {
 	homeRepo  repoHome.HomeRepository
 	noteRepo  repoNote.NoteRepository
 	guideRepo repoGuide.GuideRepository
+	sensitive *sensitive.SensitiveMatcher
 }
 
 // NewHomeService 创建首页服务实例
 // 注入 note/guide 仓储以复用点赞状态缓存（Redis 优先）
-func NewHomeService(homeRepo repoHome.HomeRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository) HomeService {
-	return &homeService{homeRepo: homeRepo, noteRepo: noteRepo, guideRepo: guideRepo}
+func NewHomeService(homeRepo repoHome.HomeRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, matcher *sensitive.SensitiveMatcher) HomeService {
+	return &homeService{homeRepo: homeRepo, noteRepo: noteRepo, guideRepo: guideRepo, sensitive: matcher}
 }
 
 // GetSlides 获取首页轮播（固定 5 张）
@@ -108,22 +110,22 @@ func (s *homeService) GetSlides() ([]responseHome.SlideItem, error) {
 	// ========== 组装（按优先级顺序） ==========
 	items := make([]responseHome.SlideItem, 0, 5)
 	for _, act := range slideActs {
-		items = append(items, toActivitySlide(act))
+		items = append(items, s.toActivitySlide(act))
 	}
 	for _, n := range slideNotes {
-		items = append(items, toNoteSlide(n, noteCovers[n.ID], noteTags[n.ID]))
+		items = append(items, s.toNoteSlide(n, noteCovers[n.ID], noteTags[n.ID]))
 	}
 	for _, st := range slideStrategies {
-		items = append(items, toStrategySlide(st, strategyCovers[st.ID], strategyTags[st.ID]))
+		items = append(items, s.toStrategySlide(st, strategyCovers[st.ID], strategyTags[st.ID]))
 	}
 	for _, act := range fillActs {
-		items = append(items, toActivitySlide(act))
+		items = append(items, s.toActivitySlide(act))
 	}
 	for _, n := range fillNotes {
-		items = append(items, toNoteSlide(n, noteCovers[n.ID], noteTags[n.ID]))
+		items = append(items, s.toNoteSlide(n, noteCovers[n.ID], noteTags[n.ID]))
 	}
 	for _, st := range fillStrategies {
-		items = append(items, toStrategySlide(st, strategyCovers[st.ID], strategyTags[st.ID]))
+		items = append(items, s.toStrategySlide(st, strategyCovers[st.ID], strategyTags[st.ID]))
 	}
 
 	// 防御性截断，最多 5 张
@@ -134,11 +136,11 @@ func (s *homeService) GetSlides() ([]responseHome.SlideItem, error) {
 }
 
 // toActivitySlide 活动 → 轮播项（字段全部来自活动主表）
-func toActivitySlide(act entity.Activity) responseHome.SlideItem {
+func (s *homeService) toActivitySlide(act entity.Activity) responseHome.SlideItem {
 	return responseHome.SlideItem{
 		ID:            strconv.FormatUint(uint64(act.ID), 10),
 		Type:          "activity",
-		Title:         act.Title,
+		Title:         s.mask(act.Title),
 		Cover:         act.CoverImg,
 		Tag:           activityCategory[act.ActivityType],
 		SignUpStart:   act.SignUpStart.Format("2006-01-02 15:04:05"),
@@ -149,14 +151,14 @@ func toActivitySlide(act entity.Activity) responseHome.SlideItem {
 
 // toNoteSlide 笔记 → 轮播项（封面/标签来自批量查询结果）
 // 降级标签渲染：无启用标签时兜底为内容分类名
-func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
+func (s *homeService) toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
 	if tag == "" {
 		tag = activityCategory[n.Category]
 	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(n.ID), 10),
 		Type:  "note",
-		Title: n.Title,
+		Title: s.mask(n.Title),
 		Cover: cover,
 		Tag:   tag,
 	}
@@ -164,14 +166,14 @@ func toNoteSlide(n entity.Note, cover, tag string) responseHome.SlideItem {
 
 // toStrategySlide 攻略 → 轮播项（封面/标签来自批量查询结果）
 // 降级标签渲染：无启用标签时兜底为内容分类名
-func toStrategySlide(st entity.Strategy, cover, tag string) responseHome.SlideItem {
+func (s *homeService) toStrategySlide(st entity.Strategy, cover, tag string) responseHome.SlideItem {
 	if tag == "" {
 		tag = activityCategory[st.Category]
 	}
 	return responseHome.SlideItem{
 		ID:    strconv.FormatUint(uint64(st.ID), 10),
 		Type:  "guide",
-		Title: st.Title,
+		Title: s.mask(st.Title),
 		Cover: cover,
 		Tag:   tag,
 	}
@@ -401,14 +403,14 @@ func (s *homeService) BuildFeedItems(memberID uint, entries []FeedEntry) ([]resp
 	for _, e := range entries {
 		item := responseHome.FeedItem{
 			ID:        strconv.FormatUint(uint64(e.ID), 10),
-			Title:     e.Title,
+			Title:     s.mask(e.Title),
 			Images:    []string{},
 			Tags:      []string{},
 			LikeCount: e.LikeCount,
 			Category:  e.Category,
 		}
 		if m, ok := members[e.MemberID]; ok && m != nil {
-			item.Member = &responseHome.FeedAuthor{Nickname: m.Nickname, Avatar: m.Avatar}
+			item.Member = &responseHome.FeedAuthor{Nickname: s.mask(m.Nickname), Avatar: m.Avatar}
 		}
 		if e.IsNote {
 			item.Type = "note"
@@ -599,4 +601,12 @@ type FeedEntry struct {
 	VideoURL  string // 视频URL（图文为空）
 	Category  int    // 分类枚举
 	LikeCount int64  // 主表点赞数字段（点赞数缓存未命中时兜底）
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *homeService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

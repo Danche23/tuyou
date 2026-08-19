@@ -169,6 +169,7 @@ func (s *noteService) buildListItems(ctx context.Context, notes []entity.Note) (
 			Heat:         int64(n.Heat),
 			IsSlide:      isSlide,
 			Status:       status,
+			IsSensitive:  n.IsSensitive,
 		})
 	}
 
@@ -243,6 +244,7 @@ func (s *noteService) GetNoteDetail(ctx context.Context, id uint) (*response.Not
 			Heat:         int64(note.Heat),
 			IsSlide:      isSlide,
 			Status:       status,
+			IsSensitive:  note.IsSensitive,
 		},
 		Content:    note.Content,
 		DeleteTime: deleteTime,

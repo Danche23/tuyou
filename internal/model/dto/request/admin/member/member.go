@@ -7,13 +7,14 @@ type ListMemberReq struct {
 	Phone         string `form:"phone"`
 	RegisterStart string `form:"register_start"`
 	RegisterEnd   string `form:"register_end"`
+	Status        string `form:"status"` // 0/1/2，空=全部
 	Page          int    `form:"page" binding:"required,min=1"`
 	Size          int    `form:"size" binding:"required,min=1,max=100"`
 }
 
 // UpdateMemberReq 编辑会员请求
 type UpdateMemberReq struct {
-	Status *bool   `json:"status"` // true=正常, false=禁用
+	Status *string `json:"status"` // "启用" 或 "禁用"
 	Role   *string `json:"role"`   // "领队" 或 "普通会员"
 }
 
@@ -25,5 +26,5 @@ type BatchDeleteReq struct {
 // BatchUpdateStatusReq 批量修改状态请求
 type BatchUpdateStatusReq struct {
 	IDs    []string `json:"ids" binding:"required,min=1"`
-	Status bool     `json:"status"` // true=正常, false=禁用
+	Status string   `json:"status"` // "启用" 或 "禁用"
 }

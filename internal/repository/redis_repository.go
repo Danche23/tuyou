@@ -73,6 +73,22 @@ func (r *redisRepository) ScanKeys(ctx context.Context, pattern string) ([]strin
 	return keys, nil
 }
 
+// IncrBy key 自增 increment（原子），返回自增后的值
+func (r *redisRepository) IncrBy(ctx context.Context, key string, increment int64) (int64, error) {
+	if r.redis == nil {
+		return 0, redis.Nil
+	}
+	return r.redis.IncrBy(ctx, key, increment).Result()
+}
+
+// Expire 设置 key 过期时间
+func (r *redisRepository) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if r.redis == nil {
+		return nil
+	}
+	return r.redis.Expire(ctx, key, expiration).Err()
+}
+
 // XAdd 向 Stream 发送一条消息。Redis 不可用时返回 redis.Nil 以触发调用方降级
 func (r *redisRepository) XAdd(ctx context.Context, stream string, values map[string]interface{}) error {
 	if r.redis == nil {

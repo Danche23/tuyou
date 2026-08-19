@@ -9,6 +9,7 @@ import (
 func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 	authGroup := group.Group("/auth")
 	{
+		authGroup.GET("/captcha", h.GetCaptcha)
 		authGroup.POST("/register", h.Register)
 		authGroup.POST("/login", h.Login)
 		authGroup.POST("/logout", h.Logout)
@@ -16,5 +17,6 @@ func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 		authGroup.POST("/send-code", h.SendCode)
 		authGroup.POST("/change-phone", middleware.MemberAuth(h.redisRepo), h.ChangePhone)
 		authGroup.PUT("/password", middleware.MemberAuth(h.redisRepo), h.UpdatePassword)
+		authGroup.POST("/cancel", middleware.MemberAuth(h.redisRepo), h.Cancel)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -86,16 +85,18 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest, user
 	}()
 
 	//获取登录token
-	token, err := jwt.GenerateToken(admin.ID, admin.Username)
+	token, jti, err := jwt.GenerateToken(admin.ID, admin.Username)
 	if err != nil {
 		return nil, err
 	}
 
-	//写入登录态白名单（多端登录：每个 token 独立 key；Redis 不可用时忽略，不影响登录）
-	//值为登录时间戳（毫秒），供按账号维度限制同时在线设备数使用
-	_ = s.redisRepo.Set(ctx, jwt.AdminTokenKey(admin.ID, token), time.Now().UnixMilli(), config.Get().JWT.ExpireHours)
-	//限制每账号同时在线设备数：先插入再清理，超限时踢掉最旧的 token
-	//s.evictOldestSessions(ctx, admin.ID)
+	//单端黑名单：新登录顶号——拉黑上一会话 jti 后覆盖会话标记（Redis 不可用时忽略，不影响登录）
+	key := jwt.AdminSessionKey(admin.ID)
+	var oldJTI string
+	if err := s.redisRepo.Get(ctx, key, &oldJTI); err == nil && oldJTI != "" && oldJTI != jti {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("admin", oldJTI), jwt.ReasonKicked, config.Get().JWT.ExpireHours)
+	}
+	_ = s.redisRepo.Set(ctx, key, jti, config.Get().JWT.ExpireHours)
 
 	//查询角色名称
 	role, err := s.adminRepo.FindRoleNameByRoleID(ctx, admin.RoleID)
@@ -261,37 +262,4 @@ func (s *authService) UpdatePassword(ctx context.Context, adminID uint, req *req
 		return err
 	}
 	return s.adminRepo.UpdatePassword(ctx, adminID, string(hashed))
-}
-
-// maxAdminDevices 每个管理员账号同时在线设备数上限，超过后最早登录的会被顶下线
-const maxAdminDevices = 3
-
-// evictOldestSessions 按账号维度清理超限的登录态：超过 maxAdminDevices 台时删除最旧的多余 token。
-// 新插入的 token 时间戳最新，不会被误删；Redis 异常时静默降级，不影响登录。
-func (s *authService) evictOldestSessions(ctx context.Context, adminID uint) {
-	keys, err := s.redisRepo.ScanKeys(ctx, jwt.AdminTokenPrefix(adminID))
-	if err != nil || len(keys) <= maxAdminDevices {
-		return
-	}
-
-	type tokenItem struct {
-		key string
-		ts  int64
-	}
-	items := make([]tokenItem, 0, len(keys))
-	for _, k := range keys {
-		var ts int64
-		if err := s.redisRepo.Get(ctx, k, &ts); err != nil {
-			continue // 已被删除或过期，跳过
-		}
-		items = append(items, tokenItem{key: k, ts: ts})
-	}
-	if len(items) <= maxAdminDevices {
-		return
-	}
-
-	sort.Slice(items, func(i, j int) bool { return items[i].ts < items[j].ts })
-	for _, it := range items[:len(items)-maxAdminDevices] {
-		_ = s.redisRepo.Del(ctx, it.key)
-	}
 }

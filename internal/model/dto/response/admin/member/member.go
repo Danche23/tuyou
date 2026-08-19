@@ -15,7 +15,7 @@ type MemberListItem struct {
 	Avatar       string `json:"avatar"`
 	Nickname     string `json:"nickname"`
 	Phone        string `json:"phone"`
-	Status       bool   `json:"status"`
+	Status       string `json:"status"` // "禁用" / "启用" / "已注销"
 	Bio          string `json:"bio"`
 	BgImg        string `json:"bg_img"`
 	Role         string `json:"role"`
@@ -32,7 +32,7 @@ type MemberDetail struct {
 	Phone         string `json:"phone"`
 	Bio           string `json:"bio"`
 	Role          string `json:"role"`
-	Status        bool   `json:"status"`
+	Status        string `json:"status"` // "禁用" / "启用" / "已注销"
 	RegisterTime  string `json:"register_time"`
 	LastLogin     string `json:"last_login"`
 	FollowCount   int64  `json:"follow_count"`

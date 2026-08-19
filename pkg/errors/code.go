@@ -26,6 +26,8 @@ const (
 	CodeUserDisabled       = 1004
 	CodeInvalidToken       = 1005
 	CodeTokenExpired       = 1006
+	CodeAccountCancelled   = 1007 // 账号已注销
+	CodePhoneNotMatch      = 1008 // 手机号与当前账号不符
 
 	// 参数错误 2xxx
 	CodeInvalidParam       = 2001
@@ -68,6 +70,8 @@ var codeMessages = map[int]string{
 	CodeUserDisabled:          "用户已被禁用",
 	CodeInvalidToken:          "无效的令牌",
 	CodeTokenExpired:          "令牌已过期",
+	CodeAccountCancelled:      "账号已注销",
+	CodePhoneNotMatch:         "手机号与当前账号不符",
 	CodeInvalidParam:          "参数错误",
 	CodeMissingParam:          "缺少必要参数",
 	CodeParamFormatError:      "参数格式错误",

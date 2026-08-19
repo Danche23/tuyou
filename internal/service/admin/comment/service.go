@@ -213,6 +213,8 @@ func (s *commentService) buildItems(ctx context.Context, comments []entity.Comme
 			Heat:            c.Heat,
 			CreateTime:      c.CreatedAt.Format(timeFormat),
 			Status:          status,
+			IsSensitive:     c.IsSensitive,
+			HitWords:        c.HitWords,
 			DeleteTime:      deleteTime,
 		})
 	}

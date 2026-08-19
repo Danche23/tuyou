@@ -10,6 +10,7 @@ type Activity struct {
 	CoverImg        string    `gorm:"type:varchar(255);column:cover_img;comment:活动封面图片地址" json:"coverImg"`
 	ActivityContent string    `gorm:"type:text;column:activity_content;comment:活动详情正文" json:"activityContent"`
 	Address         string    `gorm:"type:varchar(200);comment:活动线下举办地点" json:"address"`
+	IsSensitive     int       `gorm:"type:tinyint;default:0;index;column:is_sensitive;comment:发布时命中敏感词标记(内容仍存原文) 0=否 1=是" json:"isSensitive"`
 	StartTime       time.Time `gorm:"column:start_time;not null;index;comment:活动开始时间" json:"startTime"`
 	EndTime         time.Time `gorm:"column:end_time;not null;comment:活动结束时间" json:"endTime"`
 	SignUpStart     time.Time `gorm:"column:sign_up_start;not null;comment:报名通道开启时间" json:"signUpStart"`

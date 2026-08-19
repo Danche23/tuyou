@@ -13,6 +13,7 @@ func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		personal.GET("", c.GetProfile)    // 个人主页信息 GET /api/v1/personal
 		personal.PUT("", c.UpdateProfile) // 编辑个人信息 PUT /api/v1/personal
+		personal.GET("/member/:id", c.GetMemberCard) // 他人公开资料卡 GET /api/v1/personal/member/:id
 		personal.GET("/follow", c.GetFollowedMembers)
 		personal.GET("/fans", c.GetFansMembers)
 		personal.POST("/follow/:followeeId", c.ToggleFollow)
