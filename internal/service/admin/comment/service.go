@@ -19,6 +19,7 @@ import (
 	"context"
 	"math"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -124,6 +125,22 @@ func (s *commentService) ListComments(ctx context.Context, req *request.ListComm
 	}, nil
 }
 
+// splitHitWords 把存储用的分号分隔字符串拆成响应数组。
+// 空/未命中返回空数组而非 null，保证 JSON 出参稳定为 []（前端可直接 .join 渲染）。
+func splitHitWords(hitWords string) []string {
+	if hitWords == "" {
+		return []string{}
+	}
+	parts := strings.Split(hitWords, ";")
+	words := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			words = append(words, p)
+		}
+	}
+	return words
+}
+
 // buildItems 组装列表项（批量查用户、目标标题、被回复用户昵称，避免 N+1）
 func (s *commentService) buildItems(ctx context.Context, comments []entity.Comment) ([]response.CommentItem, error) {
 	items := make([]response.CommentItem, 0, len(comments))
@@ -214,7 +231,7 @@ func (s *commentService) buildItems(ctx context.Context, comments []entity.Comme
 			CreateTime:      c.CreatedAt.Format(timeFormat),
 			Status:          status,
 			IsSensitive:     c.IsSensitive,
-			HitWords:        c.HitWords,
+			HitWords:        splitHitWords(c.HitWords),
 			DeleteTime:      deleteTime,
 		})
 	}
