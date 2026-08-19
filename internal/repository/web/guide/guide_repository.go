@@ -249,6 +249,12 @@ func (r *guideRepository) CreateCollect(tx *gorm.DB, strategyID uint, memberID u
 	if res.RowsAffected == 0 {
 		return nil // 已收藏过，不重复计数
 	}
+	// 收藏者收藏数 +1（同事务）
+	if err := tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("favorite_count", gorm.Expr("favorite_count + 1")).Error; err != nil {
+		return err
+	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count + 1")).Error
 }
@@ -261,6 +267,12 @@ func (r *guideRepository) DeleteCollect(tx *gorm.DB, strategyID uint, memberID u
 	}
 	if res.RowsAffected == 0 {
 		return nil // 本来就没收藏，不减计数
+	}
+	// 收藏者收藏数 -1（GREATEST 防减成负数）
+	if err := tx.Model(&entity.Member{}).
+		Where("id = ?", memberID).
+		UpdateColumn("favorite_count", gorm.Expr("GREATEST(favorite_count - 1, 0)")).Error; err != nil {
+		return err
 	}
 	return tx.Model(&entity.Strategy{}).Where("id = ?", strategyID).
 		UpdateColumn("collect_count", gorm.Expr("collect_count - 1")).Error

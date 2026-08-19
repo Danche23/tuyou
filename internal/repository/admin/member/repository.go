@@ -3,10 +3,10 @@ package member
 import (
 	"context"
 	"errors"
+	"tuyou/internal/model/entity"
 
 	"gorm.io/gorm"
 
-	"tuyou/internal/model/entity"
 	response "tuyou/internal/model/dto/response/admin/member"
 	appErrors "tuyou/pkg/errors"
 )
@@ -68,7 +68,8 @@ func (r *memberRepository) List(ctx context.Context, filters map[string]interfac
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
-			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login`)
+			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login,
+			IFNULL(leading_count, 0) AS leading_count`)
 	query = applyFilters(query, filters)
 
 	offset := (page - 1) * size
@@ -179,7 +180,8 @@ func (r *memberRepository) ListAllByRole(ctx context.Context, role int) ([]respo
 			bio, bg_img,
 			CASE role WHEN 0 THEN '领队' WHEN 1 THEN '普通会员' ELSE '未知' END AS role,
 			DATE_FORMAT(create_time, '%Y-%m-%d') AS register_time,
-			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login`).
+			IFNULL(DATE_FORMAT(last_login_time, '%Y-%m-%d %H:%i'), '') AS last_login,
+			IFNULL(leading_count, 0) AS leading_count`).
 		Where("role = ?", role)
 	if err := query.Order("id DESC").Scan(&list).Error; err != nil {
 		return nil, err

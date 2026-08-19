@@ -21,6 +21,7 @@ type MemberListItem struct {
 	Role         string `json:"role"`
 	RegisterTime string `json:"register_time"`
 	LastLogin    string `json:"last_login"`
+	LeadingCount int64  `json:"leading_count"`
 }
 
 // MemberDetail 会员详情
