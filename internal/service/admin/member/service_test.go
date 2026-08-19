@@ -23,6 +23,7 @@ type mockAdminRepo struct {
 	list                 func(ctx context.Context, filters map[string]interface{}, page, size int) ([]response.MemberListItem, error)
 	getDetail            func(ctx context.Context, id uint) (*response.MemberDetail, error)
 	update               func(ctx context.Context, id uint, updates map[string]interface{}) error
+	batchUpdateStatus    func(ctx context.Context, ids []uint, status int) error
 	findActiveByPhoneExc func(ctx context.Context, phone string, exceptID uint) (*entity.Member, error)
 }
 
@@ -37,6 +38,9 @@ func (m *mockAdminRepo) GetDetailByID(ctx context.Context, id uint) (*response.M
 }
 func (m *mockAdminRepo) Update(ctx context.Context, id uint, updates map[string]interface{}) error {
 	return m.update(ctx, id, updates)
+}
+func (m *mockAdminRepo) BatchUpdateStatus(ctx context.Context, ids []uint, status int) error {
+	return m.batchUpdateStatus(ctx, ids, status)
 }
 func (m *mockAdminRepo) FindActiveByPhoneExcept(ctx context.Context, phone string, exceptID uint) (*entity.Member, error) {
 	return m.findActiveByPhoneExc(ctx, phone, exceptID)
@@ -143,5 +147,68 @@ func TestRestoreSuccess(t *testing.T) {
 	}
 	if gotID != 1 || gotUpdates["status"] != 1 {
 		t.Fatalf("期望 Update(1, {status:1})，实际 Update(%d, %v)", gotID, gotUpdates)
+	}
+}
+
+func TestBatchUpdateStatusRejectsCancelled(t *testing.T) {
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			return &response.MemberDetail{ID: "1", Status: "已注销"}, nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	err := svc.BatchUpdateStatus(context.Background(), &request.BatchUpdateStatusReq{IDs: []string{"1", "2"}, Status: "启用"})
+	if err == nil || !strings.Contains(err.Error(), "已注销会员请使用恢复接口") {
+		t.Fatalf("期望'已注销会员请使用恢复接口'，实际 %v", err)
+	}
+}
+
+func TestBatchUpdateStatusNormal(t *testing.T) {
+	var gotIDs []uint
+	var gotStatus int
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			return &response.MemberDetail{ID: "1", Status: "启用"}, nil
+		},
+		batchUpdateStatus: func(ctx context.Context, ids []uint, status int) error {
+			gotIDs = ids
+			gotStatus = status
+			return nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	err := svc.BatchUpdateStatus(context.Background(), &request.BatchUpdateStatusReq{IDs: []string{"1"}, Status: "启用"})
+	if err != nil {
+		t.Fatalf("BatchUpdateStatus: %v", err)
+	}
+	if gotStatus != 1 {
+		t.Fatalf("期望 status=1（启用），实际 %d", gotStatus)
+	}
+	if len(gotIDs) != 1 || gotIDs[0] != 1 {
+		t.Fatalf("期望 ids=[1]，实际 %v", gotIDs)
+	}
+}
+
+func TestBatchUpdateStatusSkipMissing(t *testing.T) {
+	var gotIDs []uint
+	repo := &mockAdminRepo{
+		getDetail: func(ctx context.Context, id uint) (*response.MemberDetail, error) {
+			if id == 1 {
+				return &response.MemberDetail{ID: "1", Status: "启用"}, nil
+			}
+			return nil, appErrors.ErrUserNotFound
+		},
+		batchUpdateStatus: func(ctx context.Context, ids []uint, status int) error {
+			gotIDs = ids
+			return nil
+		},
+	}
+	svc := newTestAdminService(repo)
+	err := svc.BatchUpdateStatus(context.Background(), &request.BatchUpdateStatusReq{IDs: []string{"1", "999"}, Status: "启用"})
+	if err != nil {
+		t.Fatalf("BatchUpdateStatus: %v", err)
+	}
+	if len(gotIDs) != 2 || gotIDs[0] != 1 || gotIDs[1] != 999 {
+		t.Fatalf("期望 ids 原样传给仓储（含不存在的 999），实际 %v", gotIDs)
 	}
 }

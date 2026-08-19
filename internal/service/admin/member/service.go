@@ -167,6 +167,20 @@ func (s *memberService) BatchUpdateStatus(ctx context.Context, req *request.Batc
 	if err != nil {
 		return err
 	}
+	// 守卫：已注销会员的状态只能走 /restore 或 /auth/cancel，批量改禁用/启用都不允许
+	// （防止批量改"启用"绕过恢复接口的手机号占用校验，把已注销号直接复活）
+	for _, id := range ids {
+		detail, err := s.memberRepo.GetDetailByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, appErrors.ErrUserNotFound) {
+				continue // 不存在的 id 由批量更新静默忽略，与原有行为一致
+			}
+			return err
+		}
+		if detail.Status == "已注销" {
+			return appErrors.New(appErrors.CodeConflict, "已注销会员请使用恢复接口")
+		}
+	}
 	status := 1
 	switch req.Status {
 	case "启用":
