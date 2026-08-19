@@ -26,7 +26,7 @@ type activityService struct {
 }
 
 // NewActivityService 创建后台活动服务实例
-// webRepo 复用前台活动仓库的通用写操作（创建活动、发布计数），避免同表操作重复实现
+// webRepo 复用前台活动仓库的通用写操作（创建活动），避免同表操作重复实现
 func NewActivityService(activityRepo repo.ActivityRepository, webRepo webActivityWriter, db *gorm.DB, notifier *serviceMsg.Notifier) ActivityService {
 	return &activityService{activityRepo: activityRepo, webRepo: webRepo, db: db, notifier: notifier}
 }
@@ -149,7 +149,7 @@ func (s *activityService) CreateActivity(ctx context.Context, req *request.Creat
 	signUpStart := now
 	signUpEnd := startTime.Add(-48 * time.Hour)
 
-	// ========== 5. 事务写入（建活动 + 领队发布计数 +1）==========
+	// ========== 5. 事务写入（建活动）==========
 	activity := &entity.Activity{
 		LeaderMemberID:  leader.ID,
 		Title:           req.Title,
@@ -168,10 +168,7 @@ func (s *activityService) CreateActivity(ctx context.Context, req *request.Creat
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.webRepo.Create(tx, activity); err != nil {
-			return err
-		}
-		return s.webRepo.IncrPublishCount(tx, leader.ID)
+		return s.webRepo.Create(tx, activity)
 	})
 	if err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "创建活动失败", err)
@@ -253,18 +250,7 @@ func (s *activityService) UpdateActivity(ctx context.Context, activityID uint, r
 				updates["delete_time"] = nil
 			}
 		}
-		if err := s.activityRepo.Update(tx, activityID, updates); err != nil {
-			return err
-		}
-
-		// 状态变化才同步发布数（活动无评论，不涉及评论状态）
-		if activity.IsDel != isDel {
-			if isDel == 1 { // 正常→下架：发布数 -1
-				return s.webRepo.DecrPublishCount(tx, activity.LeaderMemberID)
-			}
-			return s.webRepo.IncrPublishCount(tx, activity.LeaderMemberID) // 下架→正常：发布数 +1
-		}
-		return nil
+		return s.activityRepo.Update(tx, activityID, updates)
 	})
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "编辑活动失败", err)
@@ -274,7 +260,7 @@ func (s *activityService) UpdateActivity(ctx context.Context, activityID uint, r
 	return s.GetActivityDetail(ctx, activityID)
 }
 
-// DeleteActivity 删除活动（硬删，连带报名记录；仍上架的活动领队发布数 -1）
+// DeleteActivity 删除活动（硬删，连带报名记录）
 func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) error {
 	activity, err := s.activityRepo.FindByID(ctx, activityID)
 	if err != nil {
@@ -290,15 +276,8 @@ func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) e
 		return errors.NewWithErr(errors.CodeInternalError, "查询报名者失败", err)
 	}
 
-	decrPublish := activity.IsDel == 0 // 仍上架（is_del=0）的活动才减发布数
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := s.activityRepo.Delete(tx, activityID); err != nil {
-			return err
-		}
-		if decrPublish {
-			return s.webRepo.DecrPublishCount(tx, activity.LeaderMemberID)
-		}
-		return nil
+		return s.activityRepo.Delete(tx, activityID)
 	}); err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除活动失败", err)
 	}
@@ -308,7 +287,7 @@ func (s *activityService) DeleteActivity(ctx context.Context, activityID uint) e
 	return nil
 }
 
-// BatchDeleteActivities 批量硬删除活动（连带报名记录；不存在的 ID 自动跳过；仍上架的活动领队发布数 -1）
+// BatchDeleteActivities 批量硬删除活动（连带报名记录；不存在的 ID 自动跳过）
 func (s *activityService) BatchDeleteActivities(ctx context.Context, req *request.BatchDeleteReq) error {
 	ids, err := parseActivityIDs(req.IDs)
 	if err != nil {
@@ -335,17 +314,11 @@ func (s *activityService) BatchDeleteActivities(ctx context.Context, req *reques
 		joinMemberMap[a.ID] = memberIDs
 	}
 
-	// 单事务逐条硬删；仍上架（is_del=0）的活动领队发布数 -1（与单个 DeleteActivity 语义一致）
+	// 单事务逐条硬删
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		for i := range activities {
-			a := &activities[i]
-			if err := s.activityRepo.Delete(tx, a.ID); err != nil {
+			if err := s.activityRepo.Delete(tx, activities[i].ID); err != nil {
 				return err
-			}
-			if a.IsDel == 0 {
-				if err := s.webRepo.DecrPublishCount(tx, a.LeaderMemberID); err != nil {
-					return err
-				}
 			}
 		}
 		return nil

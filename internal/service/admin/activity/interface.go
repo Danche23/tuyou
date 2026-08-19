@@ -14,10 +14,6 @@ import (
 type webActivityWriter interface {
 	// Create 创建活动
 	Create(tx *gorm.DB, activity *entity.Activity) error
-	// IncrPublishCount 领队发布计数 +1
-	IncrPublishCount(tx *gorm.DB, memberID uint) error
-	// DecrPublishCount 领队发布计数 -1
-	DecrPublishCount(tx *gorm.DB, memberID uint) error
 	// GetMembersByIDs 批量获取成员信息
 	GetMembersByIDs(ids []uint) ([]entity.Member, error)
 }
@@ -36,10 +32,10 @@ type ActivityService interface {
 	// UpdateActivity 编辑活动（分类/轮播/状态三字段整体覆盖，返回更新后的详情）
 	UpdateActivity(ctx context.Context, activityID uint, req *request.UpdateActivityReq) (*response.ActivityDetailResp, error)
 
-	// DeleteActivity 删除活动（硬删，连带报名记录；仍上架的活动领队发布数 -1）
+	// DeleteActivity 删除活动（硬删，连带报名记录）
 	DeleteActivity(ctx context.Context, activityID uint) error
 
-	// BatchDeleteActivities 批量硬删除活动（连带报名记录；仍上架的活动领队发布数 -1；不存在的 ID 自动跳过）
+	// BatchDeleteActivities 批量硬删除活动（连带报名记录；不存在的 ID 自动跳过）
 	BatchDeleteActivities(ctx context.Context, req *request.BatchDeleteReq) error
 
 	// ExportActivities 按 ID 批量导出活动列表项（不含软删过滤，已下架也导出）

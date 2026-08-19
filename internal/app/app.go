@@ -114,6 +114,7 @@ type App struct {
 	consumer          *stream.Consumer
 	heatTicker        *time.Ticker
 	commentHeatTicker *time.Ticker
+	publishTicker     *time.Ticker
 	remindTicker      *time.Ticker
 }
 
@@ -378,6 +379,8 @@ func (a *App) initDependencies() {
 	a.heatTicker = task.StartHeatJob(a.mysqlDB)
 	// ========== 启动评论热度/评论数校准定时任务 ==========
 	a.commentHeatTicker = task.StartCommentHeatJob(a.mysqlDB)
+	// ========== 启动发布数校准定时任务 ==========
+	a.publishTicker = task.StartMemberPublishJob(a.mysqlDB)
 	// ========== 启动活动快开始提醒定时任务 ==========
 	a.remindTicker = task.StartActivityRemindJob(a.mysqlDB, notifier)
 }
@@ -456,6 +459,10 @@ func (a *App) gracefulShutdown() {
 	// 停止评论热度/评论数校准定时任务
 	if a.commentHeatTicker != nil {
 		a.commentHeatTicker.Stop()
+	}
+	// 停止发布数校准定时任务
+	if a.publishTicker != nil {
+		a.publishTicker.Stop()
 	}
 	// 停止活动快开始提醒定时任务
 	if a.remindTicker != nil {

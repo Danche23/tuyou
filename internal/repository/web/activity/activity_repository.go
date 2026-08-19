@@ -32,18 +32,6 @@ func (r *activityRepository) GetAuthor(memberID uint) (*entity.Member, error) {
 	return &member, nil
 }
 
-// IncrPublishCount 发布计数 +1
-func (r *activityRepository) IncrPublishCount(tx *gorm.DB, memberID uint) error {
-	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
-		UpdateColumn("publish_count", gorm.Expr("publish_count + 1")).Error
-}
-
-// DecrPublishCount 发布计数 -1
-func (r *activityRepository) DecrPublishCount(tx *gorm.DB, memberID uint) error {
-	return tx.Model(&entity.Member{}).Where("id = ?", memberID).
-		UpdateColumn("publish_count", gorm.Expr("publish_count - 1")).Error
-}
-
 // FindByID 根据活动ID查询（未删除）
 func (r *activityRepository) FindByID(activityID uint) (*entity.Activity, error) {
 	var activity entity.Activity

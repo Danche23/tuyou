@@ -176,3 +176,29 @@ func TestIsSensitive(t *testing.T) {
 		t.Fatal("空参应 false")
 	}
 }
+
+func TestValidate_SymbolBypassClosed(t *testing.T) {
+	// 2026-08-19 normalize 扩展：滤除标点后，「赌#博」「赌.博」式符号绕过应被拦
+	m := newTest([]string{"赌博"})
+	for _, content := range []string{"赌#博", "赌@博", "赌*博", "赌.博", "赌-博", "赌,博", "赌＃博", "赌：博", "#赌博", "赌博#"} {
+		if word, hit := m.Validate(content); !hit || word != "赌博" {
+			t.Fatalf("滤标点后 %q 应命中 赌博（got word=%q hit=%v）", content, word, hit)
+		}
+	}
+}
+
+func TestValidate_SymbolJoinTradeoff(t *testing.T) {
+	// 滤标点与去空格同理，属已知取舍：标点拼出的词边界也会命中（硬拦截优先）
+	m := newTest([]string{"色情"})
+	if word, hit := m.Validate("颜色，情调"); !hit || word != "色情" {
+		t.Fatalf("已知取舍：滤标点后「颜色，情调」应命中 色情（got word=%q hit=%v）", word, hit)
+	}
+}
+
+func TestMask_SymbolInsideWordCovered(t *testing.T) {
+	// 「赌#博」normalize 后命中"赌博"，原文跨度含符号 → 符号也打星，保持等长
+	m := newTest([]string{"赌博"})
+	if got, want := m.Mask("赌#博网站"), "***网站"; got != want {
+		t.Fatalf("Mask= %q want %q", got, want)
+	}
+}
