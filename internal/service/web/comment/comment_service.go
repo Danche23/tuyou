@@ -8,7 +8,7 @@ package comment
 // 值得留意的业务设计（也是面试/评审常问的点）：
 //  1. 两级评论模型：所有回复统一落成二级，reply_to_id 永远指向根（一级）评论。
 //  2. 评论列表 = "热评置顶 + 时间倒序分页"：前2条按热度 heat 排，其余按 create_time 倒序。
-//     热评不占分页计数（total 只算其余部分），前端首屏就能看到优质评论。
+//     热评不占分页计数（total=一级评论真实总数，≤2 条时不排除热评），前端首屏就能看到优质评论。
 //  3. 点赞用"行锁 + 先删后插"：锁住评论行（SELECT FOR UPDATE）把并发点赞串行化，
 //     避免"取消再点赞"撞唯一索引 idx_comment_member 报 500。
 //  4. 防 N+1：列表里每个评论都要查用户、点赞态、回复数……全部批量一次查回 map。
@@ -18,13 +18,16 @@ package comment
 // 本项目事务的用法：s.db.Transaction(func(tx) error { ... }) 里所有带 tx 的仓储方法
 // 都在同一个数据库事务里，任一步出错整体回滚。
 import (
+	"context"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	requestComment "tuyou/internal/model/dto/request/web/comment"
 	responseComment "tuyou/internal/model/dto/response/web/comment"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 	repoComment "tuyou/internal/repository/web/comment"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/response"
@@ -45,15 +48,27 @@ type commentService struct {
 	db        *gorm.DB
 	repo      repoComment.CommentRepository
 	sensitive *sensitive.SensitiveMatcher
+	redis     repository.RedisRepository
 	notifier  CommentNotifier
 }
 
-func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher, notifier CommentNotifier) CommentService {
-	return &commentService{db: db, repo: repo, sensitive: sensitive, notifier: notifier}
+func NewCommentService(db *gorm.DB, repo repoComment.CommentRepository, sensitive *sensitive.SensitiveMatcher, redis repository.RedisRepository, notifier CommentNotifier) CommentService {
+	return &commentService{db: db, repo: repo, sensitive: sensitive, redis: redis, notifier: notifier}
 }
 
 // timeFormat 时间格式化样式（与项目其他模块一致）
 const timeFormat = "2006-01-02 15:04:05"
+
+const (
+	// heatQuotaDaily 每用户每天可贡献的热度分上限（全局配额，设计 §2.2）
+	heatQuotaDaily int64 = 50
+	// heatReplyPerComment 单评论每用户最多计入热度的回复数（设计 §2.2）
+	heatReplyPerComment int64 = 3
+	// heatLikeScore 点赞贡献的热度分
+	heatLikeScore int64 = 1
+	// heatReplyScore 回复贡献的热度分
+	heatReplyScore int64 = 2
+)
 
 // idStr uint 转字符串 ID
 func idStr(id uint) string {
@@ -68,25 +83,83 @@ func optionalIDStr(id *uint) string {
 	return idStr(*id)
 }
 
-// commentUser 组装评论用户信息
-func commentUser(m *entity.Member) *responseComment.CommentUser {
+// heatQuotaKey 每日热度配额 key（自然日维度，次日换 key 天然重置）
+func heatQuotaKey(memberID uint) string {
+	return "member:heat:quota:" + time.Now().Format("20060102") + ":" + idStr(memberID)
+}
+
+// consumeHeatQuota 消费热度配额（Redis INCRBY 原子扣减）。返回 true=配额内（可计分），false=已超限（不计分）。
+//   - Redis 不可用：fail-open 返回 true（不限制，与登录白名单降级一致）；
+//   - 超限：回滚本次扣减（用掉的不回涨，超出的部分不占配额）；
+//   - 首次创建 key：顺带设置"当天结束"过期，避免 key 无限堆积。
+func (s *commentService) consumeHeatQuota(memberID uint, score int64) bool {
+	if s.redis == nil {
+		return true
+	}
+	ctx := context.Background()
+	key := heatQuotaKey(memberID)
+	newVal, err := s.redis.IncrBy(ctx, key, score)
+	if err != nil {
+		return true // Redis 不可用 → fail-open
+	}
+	if newVal == score {
+		now := time.Now()
+		endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
+		_ = s.redis.Expire(ctx, key, endOfDay.Sub(now)+time.Second)
+	}
+	if newVal > heatQuotaDaily {
+		_, _ = s.redis.IncrBy(ctx, key, -score)
+		return false
+	}
+	return true
+}
+
+// shouldScoreReply 判断某条回复能否为父级贡献热度：① 未达单评论上限；② 配额有余额。
+// 用掉不回涨：删除已计分回复不恢复名额、不扣父级热度（设计 §2.2）。
+func shouldScoreReply(scoredReplies int64, quotaOK bool) bool {
+	return scoredReplies < heatReplyPerComment && quotaOK
+}
+
+// sensitiveSnapshot 发布时敏感词快照：命中→(is_sensitive=1, 命中词分号连接)；未命中→(0, "")。
+// 内容照常存原文（设计 §8.2），快照供后台筛选。
+func sensitiveSnapshot(m *sensitive.SensitiveMatcher, content string) (int, string) {
+	if m == nil {
+		return 0, ""
+	}
+	words := m.FindWords(content)
+	if len(words) == 0 {
+		return 0, ""
+	}
+	return 1, strings.Join(words, ";")
+}
+
+// maskContent 前台出口统一打星（nil 安全：匹配器未注入时原样返回）
+func (s *commentService) maskContent(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
+}
+
+// commentUser 组装评论用户信息（昵称打星）
+func (s *commentService) commentUser(m *entity.Member) *responseComment.CommentUser {
 	if m == nil {
 		return &responseComment.CommentUser{}
 	}
 	return &responseComment.CommentUser{
 		ID:       idStr(m.ID),
-		Nickname: m.Nickname,
+		Nickname: s.maskContent(m.Nickname),
 		Avatar:   m.Avatar,
 	}
 }
 
-// replyToNickname 取被回复用户的昵称（nil→""）
-func replyToNickname(memberID *uint, members map[uint]*entity.Member) string {
+// replyToNickname 取被回复用户的昵称（nil→""，昵称打星）
+func (s *commentService) replyToNickname(memberID *uint, members map[uint]*entity.Member) string {
 	if memberID == nil {
 		return ""
 	}
 	if m := members[*memberID]; m != nil {
-		return m.Nickname
+		return s.maskContent(m.Nickname)
 	}
 	return ""
 }
@@ -105,18 +178,45 @@ func dedupe(ids []uint) []uint {
 	return result
 }
 
+// hotExcludeIDs 决定分页查询是否排除热评：一级评论总数 >2 时排除前2条热评（沿用原逻辑）；
+// ≤2 时热评即全部，返回 nil 不排除——否则 total 被排空成 0（历史 bug：note60 仅 2 条一级评论时 total=0）。
+func hotExcludeIDs(top []entity.Comment, totalTop int64) []uint {
+	if totalTop <= 2 {
+		return nil
+	}
+	ids := make([]uint, 0, len(top))
+	for _, c := range top {
+		ids = append(ids, c.ID)
+	}
+	return ids
+}
+
+// dedupeComments 按 ID 去重并保持顺序（总数≤2 时不排除热评，rest 与 top 会重复，合并后需去重）
+func dedupeComments(comments []entity.Comment) []entity.Comment {
+	seen := make(map[uint]struct{}, len(comments))
+	result := make([]entity.Comment, 0, len(comments))
+	for _, c := range comments {
+		if _, ok := seen[c.ID]; ok {
+			continue
+		}
+		seen[c.ID] = struct{}{}
+		result = append(result, c)
+	}
+	return result
+}
+
 // buildReplyItems 组装二级评论列表项
-func buildReplyItems(replies []entity.Comment, members map[uint]*entity.Member, likes map[uint]bool, memberID, targetAuthorID uint) []*responseComment.CommentReplyItem {
+func (s *commentService) buildReplyItems(replies []entity.Comment, members map[uint]*entity.Member, likes map[uint]bool, memberID, targetAuthorID uint) []*responseComment.CommentReplyItem {
 	items := make([]*responseComment.CommentReplyItem, 0, len(replies))
 	for _, r := range replies {
 		items = append(items, &responseComment.CommentReplyItem{
 			ID:              idStr(r.ID),
-			User:            commentUser(members[r.MemberID]),
-			Content:         r.Content,
+			User:            s.commentUser(members[r.MemberID]),
+			Content:         s.maskContent(r.Content),
 			LikeCount:       r.LikeCount,
 			IsLiked:         likes[r.ID],
 			ReplyToID:       optionalIDStr(r.ReplyToID),
-			ReplyToNickname: replyToNickname(r.ReplyToMemberID, members),
+			ReplyToNickname: s.replyToNickname(r.ReplyToMemberID, members),
 			CreatedAt:       r.CreatedAt.Format(timeFormat),
 			CanDelete:       r.MemberID == memberID || targetAuthorID == memberID,
 		})
@@ -158,9 +258,11 @@ func (s *commentService) ToggleLike(commentID uint, memberID uint) (*responseCom
 			}
 			isLiked = true
 		}
-		// like_count 变化后重算该评论热度
-		if err := s.repo.RecomputeHeat(tx, commentID); err != nil {
-			return err
+		// 点赞贡献热度（配额内才计分）；取消点赞不回扣（用掉不回涨，设计 §2.2）
+		if isLiked && s.consumeHeatQuota(memberID, heatLikeScore) {
+			if err := s.repo.IncrHeatScore(tx, commentID, heatLikeScore); err != nil {
+				return err
+			}
 		}
 
 		// 最新点赞数 = 锁内读到的值 ± 1（持有行锁，无并发扰动，值准确）；-1 用 max 防负
@@ -193,10 +295,8 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if req.Content == "" {
 		return nil, errors.New(errors.CodeInvalidParam, "评论内容不能为空")
 	}
-	// 敏感词校验：命中即拒绝发布（不暴露具体词，防绕开）
-	if _, hit := s.sensitive.Validate(req.Content); hit {
-		return nil, errors.New(errors.CodeInvalidParam, "内容包含违规词汇")
-	}
+	// 敏感词快照：命中不拦截，is_sensitive/hit_words 落库，内容存原文（设计 §8.4）
+	isSensitive, hitWords := sensitiveSnapshot(s.sensitive, req.Content)
 	// 校验目标存在（笔记/攻略），并取作品作者 memberID 与标题（标题用于一级评论通知正文）
 	targetAuthorID, title, err := s.repo.FindTargetAuthor(req.TargetType, req.TargetID)
 	if err != nil {
@@ -237,6 +337,8 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 		LikeCount:       0,
 		Heat:            0,
 		Status:          1,
+		IsSensitive:     isSensitive,
+		HitWords:        hitWords,
 	}
 	// 事务：写评论 + 目标 comment_count +1 + 重算新评论热度；
 	// 若是回复，父一级评论的 reply_count 变了，同事务重算父评论热度，避免热评榜/回复预览滞后到小时任务
@@ -246,6 +348,20 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 		if replyToID != nil {
 			if _, err := s.repo.LockCommentByID(tx, *replyToID); err != nil {
 				return errors.NewWithErr(errors.CodeNotFound, "被回复的评论不存在", err)
+			}
+			// 回复计分（设计 §2.3）：单评论上限（该用户对根评论已计分回复 <3）+ 全局配额。
+			// 用掉不回涨：删回复不扣父级热度、不恢复配额（heat_scored 标记保持 1）。
+			scoredReplies, err := s.repo.CountScoredReplies(tx, *replyToID, memberID)
+			if err != nil {
+				return err
+			}
+			// 短路求值：上限未过才消费配额（避免上限已满还白白扣配额）
+			quotaOK := scoredReplies < heatReplyPerComment && s.consumeHeatQuota(memberID, heatReplyScore)
+			if shouldScoreReply(scoredReplies, quotaOK) {
+				if err := s.repo.IncrHeatScore(tx, *replyToID, heatReplyScore); err != nil {
+					return err
+				}
+				comment.HeatScored = 1
 			}
 		}
 		if err := s.repo.CreateComment(tx, comment); err != nil {
@@ -274,7 +390,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	if replyToID == nil {
 		s.notifier.NotifyComment(targetAuthorID, memberID, title, comment.ID)
 	} else if replyToMemberID != nil {
-		s.notifier.NotifyCommentReply(*replyToMemberID, memberID, req.Content, comment.ID)
+		s.notifier.NotifyCommentReply(*replyToMemberID, memberID, s.maskContent(req.Content), comment.ID)
 	}
 
 	// 组装响应（作者=自己，canDelete=true）。
@@ -290,13 +406,13 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	var replyToNicknameStr string
 	if replyToMemberID != nil {
 		if m := members[*replyToMemberID]; m != nil {
-			replyToNicknameStr = m.Nickname
+			replyToNicknameStr = s.maskContent(m.Nickname)
 		}
 	}
 	return &responseComment.CommentItem{
 		ID:              idStr(comment.ID),
-		User:            commentUser(members[memberID]),
-		Content:         comment.Content,
+		User:            s.commentUser(members[memberID]),
+		Content:         s.maskContent(comment.Content),
 		LikeCount:       0,
 		IsLiked:         false,
 		ReplyToID:       optionalIDStr(replyToID),
@@ -308,7 +424,7 @@ func (s *commentService) CreateComment(memberID uint, req *requestComment.Create
 	}, nil
 }
 
-// ListComments 评论列表：前2条热评仅第1页展示（不占分页计数）+ 其余按发布时间倒序分页，total=其余评论总数
+// ListComments 评论列表：前2条热评仅第1页展示（分页排除热评）+ 其余按发布时间倒序分页，total=一级评论真实总数（≤2 条时不排除热评）
 func (s *commentService) ListComments(memberID uint, req *requestComment.ListCommentRequest) (*responseComment.CommentListResponse, error) {
 	if req.TargetType != 1 && req.TargetType != 2 {
 		return nil, errors.New(errors.CodeInvalidParam, "目标类型错误")
@@ -324,10 +440,14 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
-	excludeIDs := make([]uint, 0, len(top))
-	for _, c := range top {
-		excludeIDs = append(excludeIDs, c.ID)
+	// 一级评论真实总数（不排除任何评论）——total 必须等于它。
+	// 历史 bug：总数≤2 时热评即全部，旧代码把热评从 total 排除 → total=0（如 note60）。
+	total, err := s.repo.CountCommentPage(req.TargetType, req.TargetID, nil)
+	if err != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
+	// 分页排除热评；总数≤2 时不排除（热评即全部，excludeIDs=nil）
+	excludeIDs := hotExcludeIDs(top, total)
 
 	// 其余按发布时间倒序分页
 	offset := (req.Page - 1) * req.Size
@@ -335,18 +455,16 @@ func (s *commentService) ListComments(memberID uint, req *requestComment.ListCom
 	if err != nil {
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
 	}
-	total, err := s.repo.CountCommentPage(req.TargetType, req.TargetID, excludeIDs)
-	if err != nil {
-		return nil, errors.NewWithErr(errors.CodeInternalError, "查询评论失败", err)
-	}
 
 	// 热评仅第1页展示，第2页起不再重复带出；分页"其余"每页照常排除热评，total/TotalPage 保持一致
 	// Page<=1 而非 ==1：绑定层已保证 min=1，但程序化调用 Page=0 时不应丢热评
+	// 总数≤2 时 excludeIDs 为空，rest 会重复带出 top → 合并后按 ID 去重
 	comments := make([]entity.Comment, 0, len(top)+len(rest))
 	if req.Page <= 1 {
 		comments = append(comments, top...)
 	}
 	comments = append(comments, rest...)
+	comments = dedupeComments(comments)
 
 	items, err := s.buildCommentItems(comments, memberID, targetAuthorID)
 	if err != nil {
@@ -442,14 +560,14 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 	for _, c := range comments {
 		items = append(items, &responseComment.CommentItem{
 			ID:              idStr(c.ID),
-			User:            commentUser(members[c.MemberID]),
-			Content:         c.Content,
+			User:            s.commentUser(members[c.MemberID]),
+			Content:         s.maskContent(c.Content),
 			LikeCount:       c.LikeCount,
 			IsLiked:         likes[c.ID],
 			ReplyToID:       optionalIDStr(c.ReplyToID),
-			ReplyToNickname: replyToNickname(c.ReplyToMemberID, members),
+			ReplyToNickname: s.replyToNickname(c.ReplyToMemberID, members),
 			CreatedAt:       c.CreatedAt.Format(timeFormat),
-			Replies:         buildReplyItems(replyMap[c.ID], members, likes, memberID, targetAuthorID),
+			Replies:         s.buildReplyItems(replyMap[c.ID], members, likes, memberID, targetAuthorID),
 			ReplyCount:      replyCounts[c.ID],
 			CanDelete:       c.MemberID == memberID || targetAuthorID == memberID,
 		})
@@ -506,7 +624,8 @@ func (s *commentService) DeleteComment(commentID uint, memberID uint) error {
 		if err := s.repo.DecrTargetCommentCount(tx, comment.TargetType, comment.TargetID, 1); err != nil {
 			return err
 		}
-		return s.repo.RecomputeHeat(tx, *comment.ReplyToID)
+		// 删除回复不重算父级热度：热度只由 heat_score（删除不回扣）与时间驱动（设计 §2.2）
+		return nil
 	})
 	if err != nil {
 		return errors.NewWithErr(errors.CodeInternalError, "删除评论失败", err)
@@ -574,6 +693,6 @@ func (s *commentService) ListReplies(commentID uint, memberID uint, page, size i
 		return nil, errors.NewWithErr(errors.CodeInternalError, "查询点赞状态失败", err)
 	}
 
-	items := buildReplyItems(replies, members, likes, memberID, targetAuthorID)
+	items := s.buildReplyItems(replies, members, likes, memberID, targetAuthorID)
 	return response.NewPageResponse(items, total, page, size), nil
 }

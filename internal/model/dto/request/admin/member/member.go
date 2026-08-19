@@ -7,6 +7,7 @@ type ListMemberReq struct {
 	Phone         string `form:"phone"`
 	RegisterStart string `form:"register_start"`
 	RegisterEnd   string `form:"register_end"`
+	Status        string `form:"status"` // 0/1/2，空=全部
 	Page          int    `form:"page" binding:"required,min=1"`
 	Size          int    `form:"size" binding:"required,min=1,max=100"`
 }

@@ -28,6 +28,7 @@ import (
 	apiPermCtrl "tuyou/internal/api/v1/admin/permission/apipermissions"
 	menuCtrl "tuyou/internal/api/v1/admin/permission/menus"
 	roleCtrl "tuyou/internal/api/v1/admin/permission/roles"
+	sensitiveWordAdminCtrl "tuyou/internal/api/v1/admin/sensitiveword"
 	tagAdminCtrl "tuyou/internal/api/v1/admin/tag"
 	workbenchCtrl "tuyou/internal/api/v1/admin/workbench"
 	uploadCtrl "tuyou/internal/api/v1/upload"
@@ -56,6 +57,7 @@ import (
 	repoAdminApiPerm "tuyou/internal/repository/admin/permission/apipermissions"
 	repoAdminMenu "tuyou/internal/repository/admin/permission/menus"
 	repoAdminRole "tuyou/internal/repository/admin/permission/roles"
+	repoAdminSensitiveWord "tuyou/internal/repository/admin/sensitiveword"
 	repoAdminTag "tuyou/internal/repository/admin/tag"
 	repoAdminWorkbench "tuyou/internal/repository/admin/workbench"
 	repoActivity "tuyou/internal/repository/web/activity"
@@ -80,6 +82,7 @@ import (
 	serviceAdminApiPerm "tuyou/internal/service/admin/permission/apipermissions"
 	serviceAdminMenu "tuyou/internal/service/admin/permission/menus"
 	serviceAdminRole "tuyou/internal/service/admin/permission/roles"
+	serviceAdminSensitiveWord "tuyou/internal/service/admin/sensitiveword"
 	serviceAdminTag "tuyou/internal/service/admin/tag"
 	serviceAdminWorkbench "tuyou/internal/service/admin/workbench"
 	serviceUpload "tuyou/internal/service/upload"
@@ -229,6 +232,16 @@ func (a *App) initDatabase() error {
 		logger.Info("数据库迁移完成")
 	}
 
+	// 放开 member.phone 唯一索引：注销后手机号可被重新注册，唯一性改代码级校验（WHERE phone=? AND status<>2）。
+	// 幂等：仅当索引仍存在时删除（AutoMigrate 不会自动删索引，需显式迁移）。
+	if a.mysqlDB.Migrator().HasIndex(&entity.Member{}, "idx_member_phone") {
+		if err := a.mysqlDB.Migrator().DropIndex(&entity.Member{}, "idx_member_phone"); err != nil {
+			logger.Warn("删除 member.phone 唯一索引失败", zap.Error(err))
+		} else {
+			logger.Info("已删除 member.phone 唯一索引 idx_member_phone")
+		}
+	}
+
 	// 初始化 Redis（可选，失败不影响核心功能）
 	rs, err := database.InitRedis(&a.cfg.Database.Redis)
 	if err != nil {
@@ -284,10 +297,16 @@ func (a *App) initDependencies() {
 	// ========== 创建互动消息通知器（供点赞/关注/报名等服务使用） ==========
 	notifier := serviceMsg.NewNotifier(msgRepo, a.mysqlDB, sseHub)
 
+	// 敏感词匹配器：启动时从 sensitive_word 表加载启用词构建 trie（加载失败不带病上线）
+	sensitiveMatcher, err := sensitive.NewFromDB(a.mysqlDB)
+	if err != nil {
+		logger.Fatal("敏感词库加载失败", zap.Error(err))
+	}
+
 	// ========== 创建 Service ==========
-	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo)
+	authSvc := serviceAuth.NewAuthService(memberRepo, redisRepo, sensitiveMatcher)
 	adminAuthSvc := serviceAdmin.NewAdminAuthService(adminRepo, redisRepo, adminMsgRepo, adminSSEHub)
-	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, notifier)
+	noteSvc := serviceNote.NewNoteService(noteRepo, a.mysqlDB, sensitiveMatcher, notifier)
 	adminMemberSvc := serviceAdminMember.NewMemberService(adminMemberRepo, redisRepo)
 	adminCenterSvc := serviceAdminCenter.NewCenterService(adminCenterRepo, adminRepo, adminMsgRepo, adminSSEHub)
 	adminPermSvc := serviceAdminPerm.NewAdminService(adminPermRepo, redisRepo)
@@ -298,24 +317,22 @@ func (a *App) initDependencies() {
 	adminGuideSvc := serviceAdminGuide.NewGuideService(adminGuideRepo, a.mysqlDB, notifier)
 	adminActivitySvc := serviceAdminActivity.NewActivityService(adminActivityRepo, activityRepo, a.mysqlDB, notifier)
 	adminTagSvc := serviceAdminTag.NewTagService(adminTagRepo)
-	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, notifier)
-	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, notifier)
-	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, notifier)
-	// 敏感词匹配器：启动时从 sensitive_word 表加载启用词构建 trie（加载失败不带病上线）
-	sensitiveMatcher, err := sensitive.NewFromDB(a.mysqlDB)
-	if err != nil {
-		logger.Fatal("敏感词库加载失败", zap.Error(err))
-	}
+	guideSvc := serviceGuide.NewGuideService(guideRepo, a.mysqlDB, sensitiveMatcher, notifier)
+	activitySvc := serviceActivity.NewActivityService(activityRepo, a.mysqlDB, sensitiveMatcher, notifier)
+	personalSvc := servicePersonal.NewPersonalService(a.mysqlDB, personalRepo, noteRepo, guideRepo, activityRepo, sensitiveMatcher, notifier)
+	// 后台敏感词管理：增删后热更 shared 的 sensitiveMatcher（评论等服务同实例共享）
+	sensitiveWordRepo := repoAdminSensitiveWord.NewSensitiveWordRepository(a.mysqlDB)
+	sensitiveWordSvc := serviceAdminSensitiveWord.NewSensitiveWordService(sensitiveWordRepo, sensitiveMatcher)
 
 	// 评论服务 ×2：service 层需要 db 才能开事务（s.db.Transaction）。
 	// commentSvc（web）= 业务规则（谁能删、热评置顶、两级模型、敏感词校验）；
 	// commentAdminSvc（admin）= 管理（筛选、看状态、硬删清理）。
-	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher, notifier)
+	commentSvc := serviceComment.NewCommentService(a.mysqlDB, commentRepo, sensitiveMatcher, redisRepo, notifier)
 	commentAdminSvc := serviceAdminComment.NewCommentService(commentAdminRepo, a.mysqlDB)
 	tagSvc := serviceTag.NewTagService(tagRepo)
-	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo)
+	homeSvc := serviceHome.NewHomeService(homeRepo, noteRepo, guideRepo, sensitiveMatcher)
 	searchSvc := serviceSearch.NewSearchService(searchRepo, homeSvc, activitySvc)
-	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc)
+	msgSvc := serviceMsg.NewMessageService(msgRepo, a.mysqlDB, sseHub, commentSvc, sensitiveMatcher)
 	uploadSvc := serviceUpload.NewUploadService(store)
 	adminWorkbenchSvc := serviceAdminWorkbench.NewWorkbenchService(adminWorkbenchRepo)
 	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)
@@ -339,6 +356,7 @@ func (a *App) initDependencies() {
 	guideAdminC := guideAdminCtrl.NewController(adminGuideSvc, redisRepo, a.mysqlDB)
 	activityAdminC := activityAdminCtrl.NewController(adminActivitySvc, redisRepo, a.mysqlDB)
 	tagAdminC := tagAdminCtrl.NewController(adminTagSvc, redisRepo, a.mysqlDB)
+	sensitiveWordC := sensitiveWordAdminCtrl.NewController(sensitiveWordSvc, redisRepo, a.mysqlDB)
 	guideCtrl := guide.NewController(guideSvc, redisRepo)
 	activityCtrl := activity.NewController(activitySvc, redisRepo)
 	tagC := tagCtrl.NewController(tagSvc, redisRepo)
@@ -351,7 +369,7 @@ func (a *App) initDependencies() {
 	adminMsgC := adminMsgCtrl.NewController(adminMsgSvc, redisRepo, a.mysqlDB)
 
 	// ========== 创建 Router ==========
-	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC)
+	a.router = api.NewRouter(noteCtrl, personalCtrl, commentC, authHandler, adminAuthHandler, memberC, adminPermC, menuC, apiPermC, roleC, guideCtrl, centerC, commentAdminC, activityCtrl, noteAdminC, guideAdminC, activityAdminC, tagAdminC, tagC, webMemberC, homeC, searchC, msgC, uploadC, workbenchC, adminMsgC, sensitiveWordC)
 
 	// ========== 启动浏览量消费者 ==========
 	a.consumer = stream.NewConsumer(redisRepo, a.mysqlDB)

@@ -18,4 +18,7 @@ type WebAuthService interface {
 	Logout(ctx context.Context, userID uint, jti string) error
 	ChangePhone(ctx context.Context, userID uint, req *request.ChangePhoneRequest) (*response.MessageResponse, error)
 	UpdatePassword(ctx context.Context, userID uint, req *request.UpdatePasswordRequest) (*response.MessageResponse, error)
+
+	// Cancel 注销账号（密码 + 短信验证码双重校验，成功后 status=2 并删除登录态）
+	Cancel(ctx context.Context, userID uint, req *request.CancelRequest) (*response.MessageResponse, error)
 }

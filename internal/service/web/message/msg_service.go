@@ -14,6 +14,7 @@ import (
 	repoMsg "tuyou/internal/repository/web/message"
 	serviceComment "tuyou/internal/service/web/comment"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 )
 
 // 消息类型（与 msg_info.msg_type 约定一致）
@@ -27,11 +28,12 @@ type msgService struct {
 	db         *gorm.DB
 	hub        *stream.SSEHub
 	commentSvc serviceComment.CommentService // 回复评论时复用评论模块的发表评论逻辑
+	sensitive  *sensitive.SensitiveMatcher
 }
 
 // NewMessageService 创建消息服务实例
-func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub, commentSvc serviceComment.CommentService) MessageService {
-	return &msgService{msgRepo: msgRepo, db: db, hub: hub, commentSvc: commentSvc}
+func NewMessageService(msgRepo repoMsg.MessageRepository, db *gorm.DB, hub *stream.SSEHub, commentSvc serviceComment.CommentService, matcher *sensitive.SensitiveMatcher) MessageService {
+	return &msgService{msgRepo: msgRepo, db: db, hub: hub, commentSvc: commentSvc, sensitive: matcher}
 }
 
 // GetInteractions 获取互动消息列表
@@ -193,7 +195,7 @@ func (s *msgService) buildItems(rows []repoMsg.MessageRow, memberID uint) []resp
 		if r.SenderID > 0 {
 			item.Sender = &responseMsg.Sender{
 				ID:       strconv.FormatUint(uint64(r.SenderID), 10),
-				Nickname: r.Nickname,
+				Nickname: s.mask(r.Nickname),
 				Avatar:   r.Avatar,
 			}
 		}
@@ -231,7 +233,7 @@ func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *response
 	msg := &responseMsg.CommentMessage{
 		CommentID: strconv.FormatUint(uint64(c.ID), 10),
 		Sender:    "you",
-		Content:   c.Content,
+		Content:   s.mask(c.Content),
 		SendTime:  c.CreatedAt.Format("2006-01-02 15:04:05"),
 		LikeCount: c.LikeCount,
 		IsLiked:   likes[c.ID],
@@ -240,11 +242,19 @@ func (s *msgService) buildComment(r repoMsg.MessageRow, memberID uint) *response
 		msg.Replies = append(msg.Replies, &responseMsg.CommentMessage{
 			CommentID: strconv.FormatUint(uint64(tc.ID), 10),
 			Sender:    "me",
-			Content:   tc.Content,
+			Content:   s.mask(tc.Content),
 			SendTime:  tc.CreatedAt.Format("2006-01-02 15:04:05"),
 			LikeCount: tc.LikeCount,
 			IsLiked:   likes[tc.ID],
 		})
 	}
 	return msg
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *msgService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

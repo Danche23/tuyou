@@ -17,6 +17,7 @@ import (
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
+	"tuyou/pkg/sensitive"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,11 +26,12 @@ import (
 type authService struct {
 	memberRepo auth.MemberRepository
 	redisRepo  repository.RedisRepository
+	sensitive  *sensitive.SensitiveMatcher
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(memberRepo auth.MemberRepository, redisRepo repository.RedisRepository) WebAuthService {
-	return &authService{memberRepo: memberRepo, redisRepo: redisRepo}
+func NewAuthService(memberRepo auth.MemberRepository, redisRepo repository.RedisRepository, matcher *sensitive.SensitiveMatcher) WebAuthService {
+	return &authService{memberRepo: memberRepo, redisRepo: redisRepo, sensitive: matcher}
 }
 
 // Register 注册
@@ -50,8 +52,8 @@ func (s *authService) Register(ctx context.Context, req *request.RegisterRequest
 		return nil, appErrors.ErrSmsCodeInvalid
 	}
 
-	//检查手机号是否已经被注册
-	exist, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+	//检查手机号是否已经被注册（仅看在用的 status<>2；已注销号可重新注册）
+	exist, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
 	if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
 		return nil, err
 	}
@@ -100,8 +102,8 @@ func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest
 	//按场景做发送端业务检查
 	switch sms.Scene(req.Scene) {
 	case sms.SceneRegister, sms.SceneChangePhone:
-		//注册/改绑手机号：手机号已注册则拒发
-		exist, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+		//注册/改绑手机号：在用的手机号已注册则拒发（已注销号不再占用）
+		exist, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
 		if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
 			return nil, err
 		}
@@ -110,8 +112,19 @@ func (s *authService) SendCode(ctx context.Context, req *request.SendCodeRequest
 		}
 	case sms.SceneLogin, sms.SceneResetPwd:
 		//登录/重置密码：手机号未注册则拒发
-		if _, err := s.memberRepo.FindByPhone(ctx, req.Phone); err != nil {
+		if _, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone); err != nil {
 			if errors.Is(err, appErrors.ErrUserNotFound) {
+				return nil, appErrors.ErrPhoneNotRegistered
+			}
+			return nil, err
+		}
+	case sms.SceneCancelAccount:
+		//注销：手机号必须已注册（同 login/reset-pwd），且非已注销（已注销拒发）
+		if _, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone); err != nil {
+			if errors.Is(err, appErrors.ErrUserNotFound) {
+				if _, cerr := s.memberRepo.FindCancelledByPhone(ctx, req.Phone); cerr == nil {
+					return nil, appErrors.ErrAccountCancelled // 已注销拒发
+				}
 				return nil, appErrors.ErrPhoneNotRegistered
 			}
 			return nil, err
@@ -155,18 +168,24 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 	if err := b64c.Identify(req.CaptchaId, req.Captcha); err != nil {
 		return nil, appErrors.ErrCaptchaInvalid
 	}
-	//检查用户是否存在
-	member, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+	//检查用户是否存在（仅查"在用的手机号"；若该号只剩已注销账号则区分提示）
+	member, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrUserNotFound) {
+			if _, cerr := s.memberRepo.FindCancelledByPhone(ctx, req.Phone); cerr == nil {
+				return nil, appErrors.ErrAccountCancelled // 已注销账号，明确提示
+			}
 			return nil, appErrors.ErrPhoneNotRegistered
 		}
 		return nil, err
 	}
 
-	//检查状态
+	//检查状态：禁用拒登；已注销拒登（防御：FindActiveByPhone 已过滤 status=2，这里显式留一道）
 	if member.Status == 0 {
 		return nil, appErrors.ErrUserDisabled
+	}
+	if member.Status == 2 {
+		return nil, appErrors.ErrAccountCancelled
 	}
 
 	//验证密码
@@ -192,7 +211,7 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 		Token: token,
 		Member: response.MemberInfo{
 			ID:       strconv.Itoa(int(member.ID)),
-			Nickname: member.Nickname,
+			Nickname: s.mask(member.Nickname),
 			Phone:    member.Phone,
 			Avatar:   member.Avatar,
 		},
@@ -211,9 +230,12 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		return nil, appErrors.ErrSmsCodeInvalid
 	}
 
-	member, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+	member, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrUserNotFound) {
+			if _, cerr := s.memberRepo.FindCancelledByPhone(ctx, req.Phone); cerr == nil {
+				return nil, appErrors.ErrAccountCancelled
+			}
 			return nil, appErrors.ErrPhoneNotRegistered
 		}
 		return nil, err
@@ -221,6 +243,9 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 
 	if member.Status == 0 {
 		return nil, appErrors.ErrUserDisabled
+	}
+	if member.Status == 2 {
+		return nil, appErrors.ErrAccountCancelled // 防御
 	}
 	go func() {
 		_ = s.memberRepo.UpdateLastLoginTime(context.Background(), member.ID)
@@ -238,7 +263,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		Token: token,
 		Member: response.MemberInfo{
 			ID:       strconv.Itoa(int(member.ID)),
-			Nickname: member.Nickname,
+			Nickname: s.mask(member.Nickname),
 			Phone:    member.Phone,
 			Avatar:   member.Avatar,
 		},
@@ -259,7 +284,7 @@ func (s *authService) ResetPassword(ctx context.Context, req *request.ResetPassw
 	}
 
 	//查找用户
-	member, err := s.memberRepo.FindByPhone(ctx, req.Phone)
+	member, err := s.memberRepo.FindActiveByPhone(ctx, req.Phone)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +309,8 @@ func (s *authService) ChangePhone(ctx context.Context, userID uint, req *request
 		return nil, err
 	}
 
-	//新手机号已注册则拒改（含与原号相同，原号查 phone 必然命中自己）
-	exist, err := s.memberRepo.FindByPhone(ctx, req.NewPhone)
+	//新手机号已注册则拒改（仅看在用的 status<>2；含与原号相同，原号查在用的手机号必然命中自己）
+	exist, err := s.memberRepo.FindActiveByPhone(ctx, req.NewPhone)
 	if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
 		return nil, err
 	}
@@ -354,6 +379,52 @@ func (s *authService) Logout(ctx context.Context, userID uint, jti string) error
 	return nil
 }
 
+// Cancel 注销账号：密码 + 短信验证码双重校验，成功后 status=2 并删除登录态
+func (s *authService) Cancel(ctx context.Context, userID uint, req *request.CancelRequest) (*response.MessageResponse, error) {
+	// 1. 手机号格式
+	if err := sms.ValidatorPhone(req.Phone); err != nil {
+		return nil, err
+	}
+
+	// 2. 取当前账号
+	member, err := s.memberRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 手机号归属校验：必须本人手机号（防拿他人手机号的验证码注销自己）
+	if req.Phone != member.Phone {
+		return nil, appErrors.ErrPhoneNotMatch
+	}
+
+	// 4. 验证码（复用登录/注册的 sms 机制，场景 cancel-account，fail closed）
+	if err := sms.Receive(req.Phone, req.Code, sms.SceneCancelAccount); err != nil {
+		return nil, appErrors.ErrSmsCodeInvalid
+	}
+
+	// 5. 密码
+	if err := bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.Password)); err != nil {
+		return nil, appErrors.ErrInvalidCredentials
+	}
+
+	// 6. 置为已注销（数据全部保留，只改状态）
+	if err := s.memberRepo.UpdateStatus(ctx, userID, 2); err != nil {
+		return nil, err
+	}
+
+	// 7. 拉黑当前 jti 并清会话标记（MemberAuth 查黑名单，拉黑后立即失效；Redis 异常忽略）
+	if key := jwt.MemberSessionKey(userID); key != "" {
+		var jti string
+		if err := s.redisRepo.Get(ctx, key, &jti); err == nil && jti != "" {
+			_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
+			_ = s.redisRepo.Del(ctx, key)
+		}
+	}
+
+	// 8. 返回
+	return &response.MessageResponse{Message: "注销成功"}, nil
+}
+
 // GetBaseInfo 获取会员基础信息（id/昵称/头像/角色）
 func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error) {
 	member, err := s.memberRepo.FindByID(ctx, userID)
@@ -362,7 +433,7 @@ func (s *authService) GetBaseInfo(ctx context.Context, userID uint) (*memberResp
 	}
 	return &memberResp.MemberBaseInfo{
 		ID:       strconv.Itoa(int(member.ID)),
-		Nickname: member.Nickname,
+		Nickname: s.mask(member.Nickname),
 		Avatar:   member.Avatar,
 		Role:     roleName(member.Role),
 	}, nil
@@ -378,4 +449,12 @@ func roleName(role int) string {
 	default:
 		return "未知"
 	}
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *authService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

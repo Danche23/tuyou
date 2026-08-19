@@ -12,6 +12,7 @@ import (
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
 	"tuyou/pkg/logger"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -23,12 +24,13 @@ var difficultyIntToStr = map[int]string{1: "入门", 2: "中等", 3: "中高等"
 type guideService struct {
 	guideRepo repoGuide.GuideRepository
 	db        *gorm.DB
+	sensitive *sensitive.SensitiveMatcher
 	notifier  *serviceMsg.Notifier
 }
 
 // NewGuideService 创建攻略服务实例
-func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, notifier *serviceMsg.Notifier) GuideService {
-	return &guideService{guideRepo: guideRepo, db: db, notifier: notifier}
+func NewGuideService(guideRepo repoGuide.GuideRepository, db *gorm.DB, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) GuideService {
+	return &guideService{guideRepo: guideRepo, db: db, sensitive: matcher, notifier: notifier}
 }
 
 // CreateGuide 发布攻略
@@ -61,6 +63,12 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 
 	// ========== 写入（事务内） ==========
 
+	// 敏感词快照：命中置 is_sensitive=1，内容存原文（设计 §8.5）
+	isSensitive := 0
+	if s.sensitive.IsSensitive(req.Title, req.Content, req.Transport) {
+		isSensitive = 1
+	}
+
 	strategy := &entity.Strategy{
 		MemberID:    memberID,
 		Title:       req.Title,
@@ -74,6 +82,7 @@ func (s *guideService) CreateGuide(memberID uint, req *requestGuide.CreateGuideR
 		Duration:    req.Duration,
 		Difficulty:  difficulty,
 		Transport:   req.Transport,
+		IsSensitive: isSensitive,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -173,14 +182,14 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 	return &responseGuide.GuideDetailResponse{
 		ID:           strconv.FormatUint(uint64(strategy.ID), 10),
 		Type:         "guide",
-		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: member.Nickname, Avatar: member.Avatar},
+		Author:       &responseGuide.AuthorInfo{ID: strconv.FormatUint(uint64(member.ID), 10), Nickname: s.mask(member.Nickname), Avatar: member.Avatar},
 		IsFollowed:   isFollowed,
 		IsOwner:      strategy.MemberID == memberID,
-		Title:        strategy.Title,
+		Title:        s.mask(strategy.Title),
 		CoverImg:     coverImg,
 		Images:       images,
 		VideoURL:     strategy.VideoURL,
-		Content:      strategy.Content,
+		Content:      s.mask(strategy.Content),
 		ViewCount:    strategy.ViewCount,
 		LikeCount:    likeCount,
 		CollectCount: strategy.CollectCount,
@@ -194,7 +203,7 @@ func (s *guideService) GetGuideDetail(strategyID uint, memberID uint) (*response
 			Distance:   strategy.Distance,
 			Duration:   strategy.Duration,
 			Difficulty: difficulty,
-			Transport:  strategy.Transport,
+			Transport:  s.mask(strategy.Transport),
 		},
 	}, nil
 }
@@ -350,4 +359,12 @@ func (s *guideService) DeleteGuide(strategyID uint, memberID uint) error {
 	}
 
 	return nil
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *guideService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

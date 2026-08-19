@@ -16,6 +16,7 @@ import (
 	repoPersonal "tuyou/internal/repository/web/personal"
 	serviceMsg "tuyou/internal/service/web/message"
 	"tuyou/pkg/errors"
+	"tuyou/pkg/sensitive"
 
 	"gorm.io/gorm"
 )
@@ -28,12 +29,13 @@ type personalService struct {
 	noteRepo     repoNote.NoteRepository
 	guideRepo    repoGuide.GuideRepository
 	activityRepo repoActivity.ActivityRepository
+	sensitive    *sensitive.SensitiveMatcher
 	notifier     *serviceMsg.Notifier
 }
 
 // NewPersonalService 创建服务实例
-func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository, notifier *serviceMsg.Notifier) PersonalService {
-	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo, notifier: notifier}
+func NewPersonalService(db *gorm.DB, repo repoPersonal.PersonalRepository, noteRepo repoNote.NoteRepository, guideRepo repoGuide.GuideRepository, activityRepo repoActivity.ActivityRepository, matcher *sensitive.SensitiveMatcher, notifier *serviceMsg.Notifier) PersonalService {
+	return &personalService{db: db, repo: repo, noteRepo: noteRepo, guideRepo: guideRepo, activityRepo: activityRepo, sensitive: matcher, notifier: notifier}
 }
 
 // strOr 空串返回默认值，非空返回原值
@@ -68,13 +70,60 @@ func (s *personalService) GetProfile(memberID uint) (*responsePersonal.Profile, 
 
 	return &responsePersonal.Profile{
 		ID:           strconv.FormatUint(uint64(member.ID), 10),
-		Nickname:     strOr(member.Nickname, "用户"+strconv.FormatUint(uint64(member.ID), 10)),
+		Nickname:     strOr(s.mask(member.Nickname), "用户"+strconv.FormatUint(uint64(member.ID), 10)),
 		Avatar:       strOr(member.Avatar, entity.DefaultAvatar),
-		Bio:          strOr(member.Bio, entity.DefaultBio),
+		Bio:          strOr(s.mask(member.Bio), entity.DefaultBio),
 		BgImg:        strOr(member.BgImg, entity.DefaultBgImg),
 		PublishCount: member.PublishCount,
 		FollowCount:  member.FollowCount,
 		FansCount:    member.FansCount,
+	}, nil
+}
+
+// GetMemberCard 他人公开资料卡（登录即可查任意用户；不返回 phone/password；已注销/禁用仍返回资料卡）
+func (s *personalService) GetMemberCard(currentMemberID, targetID uint) (*responsePersonal.MemberCard, error) {
+	member, err := s.repo.FindByID(targetID)
+	if err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// 我关注了 TA？ TA 关注了我？（互关判断）
+	myFollowed, err := s.repo.FindFollowedIDs(currentMemberID)
+	if err != nil {
+		return nil, err
+	}
+	targetFollowed, err := s.repo.FindFollowedIDs(targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	roleStr := "普通会员"
+	if member.Role == 0 {
+		roleStr = "领队"
+	}
+	leadingCount := int64(0)
+	if member.LeadingCount != nil {
+		leadingCount = *member.LeadingCount
+	}
+
+	return &responsePersonal.MemberCard{
+		ID:            strconv.FormatUint(uint64(member.ID), 10),
+		Nickname:      strOr(s.mask(member.Nickname), "用户"+strconv.FormatUint(uint64(member.ID), 10)),
+		Avatar:        strOr(member.Avatar, entity.DefaultAvatar),
+		Bio:           strOr(s.mask(member.Bio), entity.DefaultBio),
+		BgImg:         strOr(member.BgImg, entity.DefaultBgImg),
+		Role:          roleStr,
+		Status:        member.Status,
+		FollowCount:   member.FollowCount,
+		FansCount:     member.FansCount,
+		PublishCount:  member.PublishCount,
+		FavoriteCount: member.FavoriteCount,
+		LeadingCount:  leadingCount,
+		IsFollowed:    myFollowed[targetID],
+		IsFollower:    targetFollowed[currentMemberID],
 	}, nil
 }
 
@@ -119,9 +168,9 @@ func (s *personalService) GetFollowedMembers(memberID uint, page, size int) ([]r
 	for _, m := range members {
 		result = append(result, responsePersonal.FollowedMember{
 			FolloweeID: strconv.FormatUint(uint64(m.ID), 10),
-			Nickname:   m.Nickname,
+			Nickname:   s.mask(m.Nickname),
 			Avatar:     m.Avatar,
-			Bio:        m.Bio,
+			Bio:        s.mask(m.Bio),
 			IsFollowed: true, // 关注列表里的人都是我已经关注的
 		})
 	}
@@ -145,9 +194,9 @@ func (s *personalService) GetFansMembers(memberID uint, page, size int) ([]respo
 	for _, m := range members {
 		result = append(result, responsePersonal.FansMember{
 			FollowerID: strconv.FormatUint(uint64(m.ID), 10),
-			Nickname:   m.Nickname,
+			Nickname:   s.mask(m.Nickname),
 			Avatar:     m.Avatar,
-			Bio:        m.Bio,
+			Bio:        s.mask(m.Bio),
 			IsFollowed: followed[m.ID],
 		})
 	}
@@ -300,20 +349,53 @@ func (s *personalService) GetMyStrategys(memberID uint, page, size int) ([]respo
 	return cards, total, nil
 }
 
-// GetPublishActivities 当前用户发布的活动列表（分页）
-func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([]responseActivity.ActivityListItem, int64, error) {
+// GetPublishActivities 当前用户发布的活动列表（分页；列表项带全量报名人，含手机号，仅领队本人可见）
+func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([]responsePersonal.PublishActivityItem, int64, error) {
 	activities, total, err := s.repo.FindPublishActivities(memberID, page, size)
 	if err != nil {
 		return nil, 0, err
 	}
 	if len(activities) == 0 {
-		return []responseActivity.ActivityListItem{}, total, nil
+		return []responsePersonal.PublishActivityItem{}, total, nil
 	}
-	list, err := s.buildActivityCards(activities, false)
+
+	baseList, err := s.buildActivityCards(activities, false)
 	if err != nil {
 		return nil, total, err
 	}
+
+	// 批量查报名人（本接口请求者即发布者 = 领队，手机号安全）
+	activityIDs := make([]uint, 0, len(activities))
+	for _, a := range activities {
+		activityIDs = append(activityIDs, a.ID)
+	}
+	participantsMap, err := s.repo.FindParticipantsByActivityIDs(activityIDs)
+	if err != nil {
+		return nil, total, err
+	}
+
+	list := make([]responsePersonal.PublishActivityItem, 0, len(baseList))
+	for i, item := range baseList {
+		list = append(list, responsePersonal.PublishActivityItem{
+			ActivityListItem: item,
+			Participants:     s.buildParticipants(participantsMap[activities[i].ID]),
+		})
+	}
 	return list, total, nil
+}
+
+// buildParticipants 报名人组装（昵称打星；手机号透传——仅领队可见出口调用）
+func (s *personalService) buildParticipants(members []entity.Member) []responsePersonal.ParticipantInfo {
+	list := make([]responsePersonal.ParticipantInfo, 0, len(members))
+	for _, m := range members {
+		list = append(list, responsePersonal.ParticipantInfo{
+			ID:       strconv.FormatUint(uint64(m.ID), 10),
+			Avatar:   m.Avatar,
+			Nickname: s.mask(m.Nickname),
+			Phone:    m.Phone,
+		})
+	}
+	return list
 }
 
 // GetJoinActivities 当前用户报名参加的活动列表（分页）
@@ -384,7 +466,7 @@ func (s *personalService) buildNoteCards(notes []entity.Note, memberID uint) ([]
 		if m, ok := memberMap[n.MemberID]; ok {
 			author = &responsePersonal.AuthorInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
@@ -394,7 +476,7 @@ func (s *personalService) buildNoteCards(notes []entity.Note, memberID uint) ([]
 			Author:    author,
 			CoverImg:  cover,
 			IsVideo:   n.VideoURL != "",
-			Title:     n.Title,
+			Title:     s.mask(n.Title),
 			Tag:       tag,
 			LikeCount: n.LikeCount,
 			IsLiked:   likedMap[n.ID],
@@ -453,7 +535,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 		if m, ok := memberMap[g.MemberID]; ok {
 			author = &responsePersonal.AuthorInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
@@ -463,7 +545,7 @@ func (s *personalService) buildStrategyCards(strategies []entity.Strategy, membe
 			Author:    author,
 			CoverImg:  cover,
 			IsVideo:   g.VideoURL != "",
-			Title:     g.Title,
+			Title:     s.mask(g.Title),
 			Tag:       tag,
 			LikeCount: g.LikeCount,
 			IsLiked:   likedMap[g.ID],
@@ -513,7 +595,7 @@ func (s *personalService) buildActivityItems(activities []entity.Activity, membe
 		if m, ok := memberMap[a.LeaderMemberID]; ok {
 			leader = &responseActivity.LeaderInfo{
 				ID:       strconv.FormatUint(uint64(m.ID), 10),
-				Nickname: m.Nickname,
+				Nickname: s.mask(m.Nickname),
 				Avatar:   m.Avatar,
 			}
 		}
@@ -528,10 +610,10 @@ func (s *personalService) buildActivityItems(activities []entity.Activity, membe
 		list = append(list, responseActivity.ActivityListItem{
 			ID:             strconv.FormatUint(uint64(a.ID), 10),
 			Leader:         leader,
-			Title:          a.Title,
+			Title:          s.mask(a.Title),
 			CoverImg:       a.CoverImg,
 			Category:       activityCategoryIntToStr[a.ActivityType],
-			Address:        a.Address,
+			Address:        s.mask(a.Address),
 			StartTime:      a.StartTime.Format("2006-01-02 15:04:05"),
 			EndTime:        a.EndTime.Format("2006-01-02 15:04:05"),
 			SignUpEnd:      a.SignUpEnd.Format("2006-01-02 15:04:05"),
@@ -636,4 +718,12 @@ var activityCategoryIntToStr = map[int]string{
 // activityDifficultyIntToStr 活动难度数值 → 名称
 var activityDifficultyIntToStr = map[int]string{
 	1: "入门", 2: "中等", 3: "中高等", 4: "高等",
+}
+
+// mask 前台文本出口统一打星（nil 安全）
+func (s *personalService) mask(content string) string {
+	if s.sensitive == nil {
+		return content
+	}
+	return s.sensitive.Mask(content)
 }

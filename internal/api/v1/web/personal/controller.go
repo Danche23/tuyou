@@ -38,6 +38,27 @@ func (c *Controller) GetProfile(ctx *gin.Context) {
 	response.Success(ctx, profile)
 }
 
+// GetMemberCard 用户详情（他人公开资料卡）
+// GET /api/v1/personal/member/:id
+func (c *Controller) GetMemberCard(ctx *gin.Context) {
+	memberID := middleware.GetUserID(ctx)
+	if memberID == 0 {
+		response.Error(ctx, http.StatusUnauthorized, "未登录")
+		return
+	}
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.BadRequest(ctx, "参数错误")
+		return
+	}
+	card, err := c.personalSvc.GetMemberCard(memberID, uint(id))
+	if err != nil {
+		response.BizError(ctx, err)
+		return
+	}
+	response.Success(ctx, card)
+}
+
 // UpdateProfile 编辑个人信息
 // PUT /api/v1/personal
 func (c *Controller) UpdateProfile(ctx *gin.Context) {

@@ -480,3 +480,29 @@ func (r *personalRepository) FindLikedStrategyIDs(strategyIDs []uint, memberID u
 	}
 	return result, nil
 }
+
+// FindParticipantsByActivityIDs 批量查询多个活动的报名人（activity_join JOIN member）
+// 返回 activityID -> 报名用户列表，按报名时间升序；手机号字段由调用方保证只用于"领队本人"可见出口。
+func (r *personalRepository) FindParticipantsByActivityIDs(activityIDs []uint) (map[uint][]entity.Member, error) {
+	result := make(map[uint][]entity.Member)
+	if len(activityIDs) == 0 {
+		return result, nil
+	}
+	type joinRow struct {
+		ActivityID uint
+		entity.Member
+	}
+	var rows []joinRow
+	if err := r.db.Table("activity_join").
+		Select("activity_join.activity_id, member.id, member.nickname, member.avatar, member.phone").
+		Joins("JOIN member ON member.id = activity_join.member_id").
+		Where("activity_join.activity_id IN ? AND activity_join.is_cancel = 0 AND member.delete_time IS NULL", activityIDs).
+		Order("activity_join.create_time ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.ActivityID] = append(result[row.ActivityID], row.Member)
+	}
+	return result, nil
+}

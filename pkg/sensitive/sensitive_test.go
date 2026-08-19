@@ -107,3 +107,72 @@ func TestReload(t *testing.T) {
 		t.Fatal("Reload 后新词应生效")
 	}
 }
+
+func TestMask_NoHitUnchanged(t *testing.T) {
+	m := newTest([]string{"赌博"})
+	for _, c := range []string{"今天去爬山", "123", ""} {
+		if got := m.Mask(c); got != c {
+			t.Fatalf("未命中应原样返回，got %q want %q", got, c)
+		}
+	}
+}
+
+func TestMask_EqualLength(t *testing.T) {
+	m := newTest([]string{"赌博", "毒品"})
+	cases := []struct{ in, want string }{
+		{"这个赌博网站真恶心", "这个**网站真恶心"},
+		{"贩卖毒品违法", "贩卖**违法"},
+		{"在线赌博赌博", "在线****"}, // 两处命中各自等长
+	}
+	for _, tc := range cases {
+		if got := m.Mask(tc.in); got != tc.want {
+			t.Fatalf("Mask(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestMask_SpaceInsideWordCovered(t *testing.T) {
+	// 「赌 博」normalize 后命中"赌博"，原文跨度含空格 → 空格也打星，保持等长
+	m := newTest([]string{"赌博"})
+	if got, want := m.Mask("赌 博网站"), "***网站"; got != want {
+		t.Fatalf("Mask= %q want %q", got, want)
+	}
+}
+
+func TestMask_FullWidth(t *testing.T) {
+	// 全角 ASCII 命中后，原文全角字符被等长打星
+	m := newTest([]string{"fuck"})
+	if got, want := m.Mask("ｆｕｃｋ you"), "**** you"; got != want {
+		t.Fatalf("Mask= %q want %q", got, want)
+	}
+}
+
+func TestFindWords_UniqueOrdered(t *testing.T) {
+	m := newTest([]string{"赌博", "毒品"})
+	got := m.FindWords("贩卖毒品和赌博，毒品害人")
+	want := []string{"毒品", "赌博"} // 首次出现顺序，去重
+	if len(got) != len(want) {
+		t.Fatalf("FindWords= %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("FindWords= %v want %v", got, want)
+		}
+	}
+	if got := m.FindWords("正常内容"); len(got) != 0 {
+		t.Fatalf("未命中应返回空，got %v", got)
+	}
+}
+
+func TestIsSensitive(t *testing.T) {
+	m := newTest([]string{"赌博"})
+	if !m.IsSensitive("在线赌博", "正常") {
+		t.Fatal("任一字段命中即 true")
+	}
+	if m.IsSensitive("爬山", "吃火锅") {
+		t.Fatal("全不命中应 false")
+	}
+	if m.IsSensitive() {
+		t.Fatal("空参应 false")
+	}
+}

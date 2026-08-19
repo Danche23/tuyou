@@ -1,5 +1,24 @@
 package personal
 
+// MemberCard 他人公开资料卡（用户详情，GET /personal/member/:id）
+// 不含 phone/password；status：0=禁用 1=正常 2=已注销（已注销仍返回资料卡）
+type MemberCard struct {
+	ID            string `json:"id"`
+	Nickname      string `json:"nickname"`
+	Avatar        string `json:"avatar"`
+	Bio           string `json:"bio"`
+	BgImg         string `json:"bgImg"`
+	Role          string `json:"role"`
+	Status        int    `json:"status"`
+	FollowCount   int64  `json:"followCount"`
+	FansCount     int64  `json:"fansCount"`
+	PublishCount  int64  `json:"publishCount"`
+	FavoriteCount int64  `json:"favoriteCount"`
+	LeadingCount  int64  `json:"leadingCount"`
+	IsFollowed    bool   `json:"isFollowed"` // 我是否关注 TA
+	IsFollower    bool   `json:"isFollower"` // TA 是否关注我（互关判断）
+}
+
 // Profile 个人主页信息
 type Profile struct {
 	ID           string `json:"id"`

@@ -2,6 +2,7 @@ package member
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strconv"
 	request "tuyou/internal/model/dto/request/admin/member"
@@ -44,6 +45,13 @@ func (s *memberService) ListMembers(ctx context.Context, role *int, req *request
 	if req.RegisterEnd != "" {
 		filters["register_end"] = req.RegisterEnd + " 23:59:59"
 	}
+	if req.Status != "" {
+		v, err := strconv.Atoi(req.Status)
+		if err != nil {
+			return nil, appErrors.ErrInvalidParam
+		}
+		filters["status"] = v
+	}
 
 	total, err := s.memberRepo.Count(ctx, filters)
 	if err != nil {
@@ -85,6 +93,14 @@ func (s *memberService) UpdateMember(ctx context.Context, id uint, req *request.
 	updates := make(map[string]interface{})
 
 	if req.Status != nil {
+		// 守卫：已注销会员的状态只能走 /restore 或 /auth/cancel，改绑/禁用/启用都不允许
+		detail, err := s.memberRepo.GetDetailByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if detail.Status == "已注销" {
+			return appErrors.New(appErrors.CodeConflict, "已注销会员请使用恢复接口")
+		}
 		switch *req.Status {
 		case "启用":
 			updates["status"] = 1
@@ -151,6 +167,20 @@ func (s *memberService) BatchUpdateStatus(ctx context.Context, req *request.Batc
 	if err != nil {
 		return err
 	}
+	// 守卫：已注销会员的状态只能走 /restore 或 /auth/cancel，批量改禁用/启用都不允许
+	// （防止批量改"启用"绕过恢复接口的手机号占用校验，把已注销号直接复活）
+	for _, id := range ids {
+		detail, err := s.memberRepo.GetDetailByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, appErrors.ErrUserNotFound) {
+				continue // 不存在的 id 由批量更新静默忽略，与原有行为一致
+			}
+			return err
+		}
+		if detail.Status == "已注销" {
+			return appErrors.New(appErrors.CodeConflict, "已注销会员请使用恢复接口")
+		}
+	}
 	status := 1
 	switch req.Status {
 	case "启用":
@@ -175,4 +205,24 @@ func (s *memberService) ExportMembers(ctx context.Context, role int) ([]response
 		return nil, appErrors.ErrInternalError
 	}
 	return list, nil
+}
+
+// Restore 恢复已注销会员：status 2→1；若手机号已被其他在用账号占用则拒绝
+func (s *memberService) Restore(ctx context.Context, id uint) error {
+	detail, err := s.memberRepo.GetDetailByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if detail.Status != "已注销" {
+		return appErrors.New(appErrors.CodeConflict, "该会员未注销，无需恢复")
+	}
+	// 手机号占用校验：恢复后该手机号不能已被其他在用账号占用
+	occupied, err := s.memberRepo.FindActiveByPhoneExcept(ctx, detail.Phone, id)
+	if err == nil && occupied != nil {
+		return appErrors.New(appErrors.CodeConflict, "手机号已被占用，无法恢复")
+	}
+	if err != nil && !errors.Is(err, appErrors.ErrUserNotFound) {
+		return err
+	}
+	return s.memberRepo.Update(ctx, id, map[string]interface{}{"status": 1})
 }

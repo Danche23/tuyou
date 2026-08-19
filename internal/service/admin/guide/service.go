@@ -175,6 +175,7 @@ func (s *guideService) GetGuideDetail(ctx context.Context, id uint) (*response.G
 			Heat:         int64(g.Heat),
 			IsSlide:      isSlide,
 			Status:       status,
+			IsSensitive:  g.IsSensitive,
 		},
 		Content:    g.Content,
 		Distance:   g.Distance,
@@ -418,6 +419,7 @@ func (s *guideService) buildListItems(ctx context.Context, strategies []entity.S
 			Heat:         int64(g.Heat),
 			IsSlide:      isSlide,
 			Status:       status,
+			IsSensitive:  g.IsSensitive,
 		})
 	}
 
