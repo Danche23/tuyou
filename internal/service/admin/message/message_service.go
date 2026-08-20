@@ -33,9 +33,11 @@ var interactionTypeMap = map[string][]uint{
 }
 
 // 系统消息：后台类型 → template_id 集合（筛选翻译用）
+// 前端系统消息筛选项值为「系统」，与展示名「系统通知」对齐两种都收。
 var systemTypeMap = map[string][]uint{
 	"活动":   {6, 8, 9, 11}, // 报名通知/报名成功/活动开始/活动删除
-	"系统通知": {5},           // 手动发布
+	"系统":   {5},           // 手动发布
+	"系统通知": {5},           // 手动发布（别名）
 }
 
 type msgService struct {
