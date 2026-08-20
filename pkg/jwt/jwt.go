@@ -17,15 +17,23 @@ var (
 	ErrTokenExpired = errors.New("token 已过期")
 )
 
+// 登录身份类型（写进 token 的 scope 声明，中间件据此校验端身份）
+const (
+	ScopeAdmin  = "admin"  // 后台管理员
+	ScopeMember = "member" // 前台会员
+)
+
 // GenerateToken 生成 JWT Token，返回 (token, jti, err)。
-// jti 每次签发唯一，用于单端登录的会话标记与黑名单。
-func GenerateToken(userID uint, username string) (string, string, error) {
+// jti 每次签发唯一，用于单端登录的会话标记与黑名单；scope 标记身份类型（admin/member），
+// 中间件据此隔离前后台接口，防止跨端使用 token。
+func GenerateToken(userID uint, username, scope string) (string, string, error) {
 	cfg := config.Get().JWT
 	jti := newJTI()
 
 	claims := CustomClaims{
 		UserID:   userID,
 		Username: username,
+		Scope:    scope,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cfg.ExpireHours)),
@@ -76,7 +84,7 @@ func RefreshToken(tokenString string) (string, error) {
 		return "", err
 	}
 
-	token, _, err := GenerateToken(claims.UserID, claims.Username)
+	token, _, err := GenerateToken(claims.UserID, claims.Username, claims.Scope)
 	return token, err
 }
 

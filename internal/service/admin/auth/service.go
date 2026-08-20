@@ -85,7 +85,7 @@ func (s *authService) Login(ctx context.Context, req *request.LoginRequest, user
 	}()
 
 	//获取登录token
-	token, jti, err := jwt.GenerateToken(admin.ID, admin.Username)
+	token, jti, err := jwt.GenerateToken(admin.ID, admin.Username, jwt.ScopeAdmin)
 	if err != nil {
 		return nil, err
 	}

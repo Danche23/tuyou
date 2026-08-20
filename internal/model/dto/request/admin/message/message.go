@@ -4,7 +4,7 @@ package message
 type ListMessageReq struct {
 	Page       int    `form:"page" binding:"required,min=1"`         // 页码，从1开始
 	Size       int    `form:"size" binding:"required,min=1,max=100"` // 每页条数
-	Type       string `form:"type"`                                  // 消息类型筛选：互动=点赞/关注/评论/收藏；系统=活动/系统通知
+	Type       string `form:"msg_type"`                              // 消息类型筛选：互动=点赞/关注/评论/收藏；系统=活动/系统通知
 	BeginTime  string `form:"begin_time"`                            // 发送时间起始 yyyy-MM-dd
 	FinishTime string `form:"finish_time"`                           // 发送时间结束 yyyy-MM-dd
 }
