@@ -199,7 +199,7 @@ func (s *authService) passwordLogin(ctx context.Context, req *request.LoginReque
 	}()
 
 	//生成JWT
-	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname)
+	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname, jwt.ScopeMember)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (s *authService) codeLogin(ctx context.Context, req *request.LoginRequest) 
 		_ = s.memberRepo.UpdateLastLoginTime(context.Background(), member.ID)
 	}()
 
-	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname)
+	token, jti, err := jwt.GenerateToken(member.ID, member.Nickname, jwt.ScopeMember)
 	if err != nil {
 		return nil, err
 	}

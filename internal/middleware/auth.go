@@ -50,6 +50,21 @@ func blacklistAuth(c *gin.Context, redisRepo repository.RedisRepository, scopes 
 		return
 	}
 
+	// 身份类型校验：token 的 scope（admin/member）必须命中本接口允许的端，
+	// 防止后台管理员 token 访问前台接口（或反之）。
+	scopeMatched := false
+	for _, scope := range scopes {
+		if claims.Scope == scope {
+			scopeMatched = true
+			break
+		}
+	}
+	if !scopeMatched {
+		response.Unauthorized(c, "令牌与接口身份不符，请使用对应端账号登录")
+		c.Abort()
+		return
+	}
+
 	// 黑名单校验（fail-open：Redis 不可用时跳过，退化为纯 JWT 校验）
 	if redisRepo != nil && redisRepo.Available(c.Request.Context()) {
 		for _, scope := range scopes {
@@ -87,7 +102,7 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 		repo = redisRepo[0]
 	}
 	return func(c *gin.Context) {
-		blacklistAuth(c, repo, "admin")
+		blacklistAuth(c, repo, jwt.ScopeAdmin)
 	}
 }
 
@@ -95,7 +110,7 @@ func Auth(redisRepo ...repository.RedisRepository) gin.HandlerFunc {
 // 校验 JWT 签名 + 黑名单；Redis 不可用时 fail-open。
 func MemberAuth(redisRepo repository.RedisRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		blacklistAuth(c, redisRepo, "member")
+		blacklistAuth(c, redisRepo, jwt.ScopeMember)
 	}
 }
 
@@ -158,7 +173,7 @@ func PermissionAuth(db *gorm.DB) gin.HandlerFunc {
 // Redis 不可用时 fail-open，退化为纯 JWT 校验。
 func UploadAuth(redisRepo repository.RedisRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		blacklistAuth(c, redisRepo, "admin", "member")
+		blacklistAuth(c, redisRepo, jwt.ScopeAdmin, jwt.ScopeMember)
 	}
 }
 

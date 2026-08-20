@@ -6,6 +6,7 @@ import "github.com/golang-jwt/jwt/v5"
 type CustomClaims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
+	Scope    string `json:"scope"` // 身份类型：admin=后台管理员，member=前台会员
 	jwt.RegisteredClaims
 }
 
