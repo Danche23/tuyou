@@ -364,11 +364,17 @@ func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([
 		return nil, total, err
 	}
 
-	// 批量查报名人（本接口请求者即发布者 = 领队，手机号安全）
+	// 查询当前用户对这些活动的实际报名状态
 	activityIDs := make([]uint, 0, len(activities))
 	for _, a := range activities {
 		activityIDs = append(activityIDs, a.ID)
 	}
+	joinedMap, err := s.activityRepo.FindJoinedActivityIDs(activityIDs, memberID)
+	if err != nil {
+		return nil, total, err
+	}
+
+	// 批量查报名人（本接口请求者即发布者 = 领队，手机号安全）
 	participantsMap, err := s.repo.FindParticipantsByActivityIDs(activityIDs)
 	if err != nil {
 		return nil, total, err
@@ -376,6 +382,7 @@ func (s *personalService) GetPublishActivities(memberID uint, page, size int) ([
 
 	list := make([]responsePersonal.PublishActivityItem, 0, len(baseList))
 	for i, item := range baseList {
+		item.Joined = joinedMap[activities[i].ID]
 		list = append(list, responsePersonal.PublishActivityItem{
 			ActivityListItem: item,
 			Participants:     s.buildParticipants(participantsMap[activities[i].ID]),
