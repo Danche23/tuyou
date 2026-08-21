@@ -528,11 +528,14 @@ func (s *commentService) buildCommentItems(comments []entity.Comment, memberID, 
 			tmp[pid] = append(grouped, r) // 整体已按 heat DESC 排，每父前2即热度最高前2
 		}
 	}
-	// 展示门限：仅当该父热度最高的二级评论点赞数 >10 才展示摘要
+	// 展示门限：前2条热回复热度均 >10 才展示摘要，否则不展示
 	replyMap := make(map[uint][]entity.Comment, len(commentIDs))
 	allReplies := make([]entity.Comment, 0, len(commentIDs)*2)
 	for parentID, topReplies := range tmp {
-		if len(topReplies) > 0 && topReplies[0].LikeCount > 10 {
+		if len(topReplies) < 2 {
+			continue // 不足2条不展示
+		}
+		if topReplies[0].Heat > 10 && topReplies[1].Heat > 10 {
 			replyMap[parentID] = topReplies
 			allReplies = append(allReplies, topReplies...)
 		}
