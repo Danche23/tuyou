@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"errors"
 	"time"
 
 	"tuyou/internal/model/entity"
@@ -41,24 +42,24 @@ func (r *activityRepository) FindByID(activityID uint) (*entity.Activity, error)
 	return &activity, nil
 }
 
-// FindJoinedMembers 查询已报名成员列表（activity_join JOIN member）
+// FindJoinedMembers 查询已报名成员列表（activity_join JOIN member，仅有效报名）
 func (r *activityRepository) FindJoinedMembers(activityID uint) ([]entity.Member, error) {
 	var members []entity.Member
 	if err := r.db.Table("activity_join").
 		Select("member.id, member.nickname, member.avatar").
 		Joins("JOIN member ON member.id = activity_join.member_id").
-		Where("activity_join.activity_id = ? AND member.delete_time IS NULL", activityID).
+		Where("activity_join.activity_id = ? AND activity_join.is_cancel = 0 AND member.delete_time IS NULL", activityID).
 		Find(&members).Error; err != nil {
 		return nil, err
 	}
 	return members, nil
 }
 
-// ExistsJoin 检查用户是否已报名该活动
+// ExistsJoin 检查用户是否已报名该活动（仅计算有效报名，is_cancel=0）
 func (r *activityRepository) ExistsJoin(activityID uint, memberID uint) (bool, error) {
 	var count int64
 	if err := r.db.Model(&entity.ActivityJoin{}).
-		Where("activity_id = ? AND member_id = ?", activityID, memberID).
+		Where("activity_id = ? AND member_id = ? AND is_cancel = 0", activityID, memberID).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -82,18 +83,35 @@ func (r *activityRepository) UpdateActivityStatus(activityID uint, status int) e
 		UpdateColumn("activity_status", status).Error
 }
 
-// CreateJoin 创建报名记录（INSERT IGNORE：重复报名不报错，返回是否新插入）
-// 并发双击时唯一索引兜底：第二次插入被忽略，返回 false，事务外层不再加人数、不发通知
+// CreateJoin 创建报名记录。
+// 若已有取消记录（is_cancel=1）则恢复报名（is_cancel=0），否则新建记录。
+// 并发双击时唯一索引兜底：第二次插入被忽略，返回 false，事务外层不再加人数、不发通知。
 func (r *activityRepository) CreateJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error) {
+	// 先尝试恢复已取消的记录
+	res := tx.Model(&entity.ActivityJoin{}).
+		Where("activity_id = ? AND member_id = ? AND is_cancel = 1", activityID, memberID).
+		UpdateColumn("is_cancel", 0)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected > 0 {
+		return true, nil // 恢复成功
+	}
+
+	// 没有取消记录，尝试新建
 	result := tx.Clauses(clause.OnConflict{DoNothing: true}).
 		Create(&entity.ActivityJoin{ActivityID: activityID, MemberID: memberID})
 	return result.RowsAffected > 0, result.Error
 }
 
-// DeleteJoin 删除报名记录（硬删除，支持取消后重新报名）；返回是否实际删除了记录
+// DeleteJoin 取消报名（软删：is_cancel=1，cancel_count+1）；返回是否实际取消了记录
 func (r *activityRepository) DeleteJoin(tx *gorm.DB, activityID uint, memberID uint) (bool, error) {
-	res := tx.Unscoped().Where("activity_id = ? AND member_id = ?", activityID, memberID).
-		Delete(&entity.ActivityJoin{})
+	res := tx.Model(&entity.ActivityJoin{}).
+		Where("activity_id = ? AND member_id = ? AND is_cancel = 0", activityID, memberID).
+		Updates(map[string]interface{}{
+			"is_cancel":    1,
+			"cancel_count": gorm.Expr("cancel_count + 1"),
+		})
 	if res.Error != nil {
 		return false, res.Error
 	}
@@ -172,7 +190,7 @@ func (r *activityRepository) GetMembersByIDs(ids []uint) ([]entity.Member, error
 	return members, nil
 }
 
-// FindJoinedActivityIDs 查询当前用户已报名的活动ID集合
+// FindJoinedActivityIDs 查询当前用户已报名的活动ID集合（仅有效报名）
 func (r *activityRepository) FindJoinedActivityIDs(activityIDs []uint, memberID uint) (map[uint]bool, error) {
 	result := make(map[uint]bool)
 	if len(activityIDs) == 0 {
@@ -181,7 +199,7 @@ func (r *activityRepository) FindJoinedActivityIDs(activityIDs []uint, memberID 
 
 	var joins []entity.ActivityJoin
 	if err := r.db.Model(&entity.ActivityJoin{}).
-		Where("activity_id IN ? AND member_id = ?", activityIDs, memberID).
+		Where("activity_id IN ? AND member_id = ? AND is_cancel = 0", activityIDs, memberID).
 		Find(&joins).Error; err != nil {
 		return nil, err
 	}
@@ -190,4 +208,18 @@ func (r *activityRepository) FindJoinedActivityIDs(activityIDs []uint, memberID 
 		result[j.ActivityID] = true
 	}
 	return result, nil
+}
+
+// GetCancelCount 查询用户对某活动的累计取消次数
+func (r *activityRepository) GetCancelCount(activityID uint, memberID uint) (int, error) {
+	var join entity.ActivityJoin
+	if err := r.db.Select("cancel_count").
+		Where("activity_id = ? AND member_id = ?", activityID, memberID).
+		First(&join).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return join.CancelCount, nil
 }

@@ -228,6 +228,14 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		if realStatusInt != 1 {
 			return nil, errors.New(errors.CodeInvalidParam, "活动已开始，无法取消报名")
 		}
+		// 检查取消次数：累计取消 >= 2 次后不可再取消
+		cancelCount, ccErr := s.activityRepo.GetCancelCount(activityID, memberID)
+		if ccErr != nil {
+			return nil, errors.New(errors.CodeInternalError, "查询取消次数失败")
+		}
+		if cancelCount >= 2 {
+			return nil, errors.New(errors.CodeInvalidParam, "无法取消报名,请联系管理员")
+		}
 		err = s.db.Transaction(func(tx *gorm.DB) error {
 			deleted, err := s.activityRepo.DeleteJoin(tx, activityID, memberID)
 			if err != nil {
