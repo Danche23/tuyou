@@ -188,7 +188,7 @@ func (s *msgService) buildItems(rows []repoMsg.MessageRow, memberID uint) []resp
 		item := responseMsg.MessageItem{
 			ID:       strconv.FormatUint(uint64(r.ID), 10),
 			MsgType:  r.MsgType,
-			Content:  r.Content,
+			Content:  s.mask(r.Content),
 			SendTime: r.SendTime.Format("2006-01-02 15:04:05"),
 			IsRead:   r.IsRead,
 		}
