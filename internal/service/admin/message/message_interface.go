@@ -14,7 +14,7 @@ type MessageService interface {
 	// ListSystem 分页查询系统消息（msg_type=2）
 	ListSystem(ctx context.Context, req *request.ListMessageReq) (*response.ListMessageResp, error)
 	// PublishSystemMsg 发布系统消息：全体/指定会员，落库后推前台未读数
-	PublishSystemMsg(ctx context.Context, senderID uint, req *request.PublishSystemMsgReq) error
+	PublishSystemMsg(ctx context.Context, req *request.PublishSystemMsgReq) error
 	// Delete 硬删除一条消息（连带其全部接收记录）
 	Delete(ctx context.Context, id uint) error
 }

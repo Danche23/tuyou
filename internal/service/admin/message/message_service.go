@@ -97,7 +97,7 @@ func (s *msgService) list(ctx context.Context, msgType int, req *request.ListMes
 }
 
 // PublishSystemMsg 发布系统消息：校验 → 确定接收者 → 事务落库 → 推前台未读数
-func (s *msgService) PublishSystemMsg(ctx context.Context, senderID uint, req *request.PublishSystemMsgReq) error {
+func (s *msgService) PublishSystemMsg(ctx context.Context, req *request.PublishSystemMsgReq) error {
 	// 1. 校验
 	content := strings.TrimSpace(req.Content)
 	if content == "" {
@@ -122,11 +122,11 @@ func (s *msgService) PublishSystemMsg(ctx context.Context, senderID uint, req *r
 		memberIDs = req.MemberIDs
 	}
 
-	// 3. 组装消息并事务落库（template_id=5 系统通知模板，sender=当前管理员）
+	// 3. 组装消息并事务落库（template_id=5 系统通知模板，sender=0 系统）
 	info := &entity.MsgInfo{
 		MsgType:        msgTypeSystem, // 2 系统消息
 		ReceiveObjType: req.ReceiveType,
-		SenderID:       senderID,
+		SenderID:       0, // 0=系统
 		TemplateID:     5, // 系统通知模板
 		MsgContent:     content,
 		SendTime:       time.Now(),

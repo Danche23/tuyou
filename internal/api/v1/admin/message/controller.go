@@ -4,7 +4,6 @@ import (
 	"gorm.io/gorm"
 	"strconv"
 
-	"tuyou/internal/middleware"
 	request "tuyou/internal/model/dto/request/admin/message"
 	"tuyou/internal/repository"
 	service "tuyou/internal/service/admin/message"
@@ -65,7 +64,7 @@ func (c *Controller) PublishSystemMsg(ctx *gin.Context) {
 		response.BadRequest(ctx, "参数校验失败")
 		return
 	}
-	if err := c.msgSvc.PublishSystemMsg(ctx, middleware.GetUserID(ctx), &req); err != nil {
+	if err := c.msgSvc.PublishSystemMsg(ctx, &req); err != nil {
 		response.BizError(ctx, err)
 		return
 	}
