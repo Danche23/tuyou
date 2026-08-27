@@ -165,6 +165,7 @@ func (s *activityService) CreateActivity(ctx context.Context, req *request.Creat
 		ActivityStatus:  1,
 		Difficulty:      difficulty,
 		ActivityType:    activityType,
+		WechatQR:        req.WechatQR,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {

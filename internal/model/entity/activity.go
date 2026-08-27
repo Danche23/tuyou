@@ -23,6 +23,7 @@ type Activity struct {
 	Difficulty      int       `gorm:"type:tinyint;comment:难度（下拉选择 入门、中等、中高等、高等）" json:"difficulty"`
 	ActivityType    int       `gorm:"type:tinyint;column:activity_type;index;comment:活动类型" json:"activityType"`
 	IsSlide         int       `gorm:"type:tinyint;column:is_slide;default:0;index;comment:是否为首页幻灯片推荐：0=否，1=是" json:"isSlide"`
+	WechatQR        string    `gorm:"type:varchar(500);column:wechat_qr;comment:微信群二维码图片地址" json:"wechatQR"`
 }
 
 // TableName 指定表名
