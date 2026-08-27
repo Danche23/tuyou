@@ -20,5 +20,5 @@ type CreateActivityRequest struct {
 	MaxPeople       int     `json:"maxPeople"       binding:"required,min=1"`
 	Difficulty      string  `json:"difficulty"      binding:"required"`
 	ActivityContent string  `json:"activityContent" binding:"required,max=2000"`
-	WechatQR        string  `json:"wechatQR"        binding:"required,max=500"`
+	WechatQR        string  `json:"wechatQR"        binding:"max=500"`
 }

@@ -51,6 +51,11 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		return nil, errors.New(errors.CodeInvalidParam, "难度不合法")
 	}
 
+	// ========== 微信群二维码校验 ==========
+	if req.WechatQR == "" {
+		return nil, errors.New(errors.CodeInvalidParam, "请上传微信群二维码")
+	}
+
 	// ========== 时间解析 ==========
 	startTime, err := time.ParseInLocation("2006-01-02 15:04", req.StartTime, time.Local)
 	if err != nil {
