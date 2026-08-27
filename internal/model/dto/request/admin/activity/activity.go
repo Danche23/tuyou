@@ -17,18 +17,18 @@ type ListActivityReq struct {
 
 // CreateActivityReq 后台创建活动请求
 type CreateActivityReq struct {
-	Title           string  `json:"title" binding:"required"`             // 活动标题
-	LeaderName      string  `json:"leader_name" binding:"required"`       // 领队名称（对应 /admin/leadernames 返回的 leader_name）
-	CoverImg        string  `json:"cover_img"`                            // 活动封面图
-	ActivityType    string  `json:"activity_type" binding:"required"`     // 活动类型中文名
-	Address         string  `json:"address"`                              // 活动地点
-	StartTime       string  `json:"start_time" binding:"required"`        // 活动开始时间 yyyy-MM-dd HH:mm（不含秒）
-	EndTime         string  `json:"end_time" binding:"required"`          // 活动结束时间 yyyy-MM-dd HH:mm（不含秒）
-	MaxPeople       int     `json:"max_people" binding:"required,min=1"`  // 最大报名人数
-	Price           float64 `json:"price"`                                // 费用（元）
-	Difficulty      string  `json:"difficulty" binding:"required"`        // 难度中文名
-	ActivityContent string  `json:"activity_content" binding:"required"`  // 活动详情内容
-	WechatQR        string  `json:"wechat_qr" binding:"required,max=500"` // 微信群二维码图片地址
+	Title           string  `json:"title" binding:"required"`            // 活动标题
+	LeaderName      string  `json:"leader_name" binding:"required"`      // 领队名称（对应 /admin/leadernames 返回的 leader_name）
+	CoverImg        string  `json:"cover_img"`                           // 活动封面图
+	ActivityType    string  `json:"activity_type" binding:"required"`    // 活动类型中文名
+	Address         string  `json:"address"`                             // 活动地点
+	StartTime       string  `json:"start_time" binding:"required"`       // 活动开始时间 yyyy-MM-dd HH:mm（不含秒）
+	EndTime         string  `json:"end_time" binding:"required"`         // 活动结束时间 yyyy-MM-dd HH:mm（不含秒）
+	MaxPeople       int     `json:"max_people" binding:"required,min=1"` // 最大报名人数
+	Price           float64 `json:"price"`                               // 费用（元）
+	Difficulty      string  `json:"difficulty" binding:"required"`       // 难度中文名
+	ActivityContent string  `json:"activity_content" binding:"required"` // 活动详情内容
+	WechatQR        string  `json:"wechat_qr" binding:"max=500"`         // 微信群二维码图片地址
 }
 
 // UpdateActivityReq 后台活动编辑请求（三个字段必传，值未变也要传当前值）
