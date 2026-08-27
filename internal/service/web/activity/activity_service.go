@@ -97,6 +97,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		Difficulty:      difficulty,
 		ActivityType:    activityType,
 		IsSensitive:     isSensitive,
+		WechatQR:        req.WechatQR,
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -125,6 +126,7 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		Price:           activity.Price,
 		Difficulty:      req.Difficulty,
 		Joined:          false,
+		WechatQR:        activity.WechatQR,
 	}, nil
 }
 
@@ -178,10 +180,17 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 		}
 	}
 
+	// 群二维码：领队本人或已报名用户可见
+	isOwner := activity.LeaderMemberID == memberID
+	wechatQR := ""
+	if isOwner || joined {
+		wechatQR = activity.WechatQR
+	}
+
 	return &responseActivity.ActivityDetailResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
 		Leader:          &responseActivity.LeaderInfo{ID: strconv.FormatUint(uint64(leader.ID), 10), Nickname: s.mask(leader.Nickname), Avatar: leader.Avatar, Bio: s.mask(leader.Bio)},
-		IsOwner:         activity.LeaderMemberID == memberID,
+		IsOwner:         isOwner,
 		Title:           s.mask(activity.Title),
 		CoverImg:        activity.CoverImg,
 		Category:        categoryIntToStr[activity.ActivityType],
@@ -199,6 +208,7 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 		IsFollowed:      isFollowed,
 		Joined:          joined,
 		Members:         memberInfos,
+		WechatQR:        wechatQR,
 	}, nil
 }
 
@@ -260,6 +270,7 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return &responseActivity.SignupToggleResponse{
 			IsJoined:      false,
 			CurrentPeople: currentPeople,
+			WechatQR:      "",
 		}, nil
 	}
 
@@ -314,6 +325,7 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return &responseActivity.SignupToggleResponse{
 			IsJoined:      true,
 			CurrentPeople: currentPeople,
+			WechatQR:      activity.WechatQR,
 		}, nil
 	}
 
@@ -325,6 +337,7 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 	return &responseActivity.SignupToggleResponse{
 		IsJoined:      true,
 		CurrentPeople: currentPeople,
+		WechatQR:      activity.WechatQR,
 	}, nil
 }
 

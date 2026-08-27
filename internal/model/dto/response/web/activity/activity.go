@@ -45,6 +45,7 @@ type CreateActivityResponse struct {
 	Price           float64     `json:"price"`
 	Difficulty      string      `json:"difficulty"`
 	Joined          bool        `json:"joined"`
+	WechatQR        string      `json:"wechatQR"`
 }
 
 // MemberInfo 成员简要信息
@@ -76,10 +77,12 @@ type ActivityDetailResponse struct {
 	IsFollowed      bool         `json:"isFollowed"`
 	Joined          bool         `json:"joined"`
 	Members         []MemberInfo `json:"members"`
+	WechatQR        string       `json:"wechatQR"`
 }
 
 // SignupToggleResponse 报名/取消报名响应
 type SignupToggleResponse struct {
-	IsJoined      bool `json:"isJoined"`
-	CurrentPeople int  `json:"currentPeople"`
+	IsJoined      bool   `json:"isJoined"`
+	CurrentPeople int    `json:"currentPeople"`
+	WechatQR      string `json:"wechatQR"`
 }
