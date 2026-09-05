@@ -6,9 +6,9 @@
 *.dylib
 bin/
 dist/
-configs/config.yaml
+config.yaml
 
-# Test binary, built with `go test -c`
+# Test binary, built with `go test -context`
 *.test
 
 # Output of the go coverage tool
@@ -44,3 +44,10 @@ Thumbs.db
 /build/
 /tmp/
 /config.yaml
+/默认模块.md
+/preview.html
+/postman-member-leader-collection.json
+/postman-center-profile-collection.json
+/member_data.sql
+/auth_api.md
+/api-docs.md

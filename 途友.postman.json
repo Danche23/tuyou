@@ -1,0 +1,909 @@
+{
+    "info": {
+        "name": "途友",
+        "description": "根据前端 `src/services/content/guide` 与 `mock/content/guide.ts` 生成的攻略管理 OpenAPI 3.0 文档，可直接导入 Apifox。",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "后台",
+            "description": "",
+            "item": [
+                {
+                    "name": "管理员个人中心",
+                    "description": "",
+                    "item": [
+                        {
+                            "name": "获取个人信息",
+                            "description": "获取当前登录管理员的完整个人信息。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwiaXNzIjoidHV5b3UiLCJleHAiOjE3ODY0OTY2NzQsIm5iZiI6MTc4NjQxMDI3NCwiaWF0IjoxNzg2NDEwMjc0fQ.1FQytUD4qDhyPxko0uHKk3q6AsrjmI2ibm-dxh2hSQo",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "method": "GET",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/auth/me",
+                                    "path": [
+                                        "admin",
+                                        "auth",
+                                        "me"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/auth/me",
+                                            "path": [
+                                                "admin",
+                                                "auth",
+                                                "me"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"获取成功\",\n  \"data\": {\n    \"id\": 1,\n    \"username\": \"admin11\",\n    \"adminname\": \"张三\",\n    \"role\": \"超级管理员\",\n    \"avatar\": \"\",\n    \"status\": true\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "编辑头像",
+                            "description": "更新当前登录管理员头像。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{token}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "method": "PUT",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"avatar\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/avatar",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "avatar"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "disabled": false
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/avatar",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "avatar"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"avatar\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"头像更新成功\",\n  \"data\": {\n    \"id\": 1,\n    \"username\": \"admin11\",\n    \"adminname\": \"张三\",\n    \"role\": \"超级管理员\",\n    \"avatar\": \"https://example.com/avatar/admin11.png\",\n    \"status\": true\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "编辑账号",
+                            "description": "更新当前登录管理员账号名。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{token}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "method": "PUT",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"username\": \"admin\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/profile",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "profile"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "disabled": false
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/profile",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "profile"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"username\": \"admin11\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"用户账号更新成功\",\n  \"data\": {\n    \"id\": 1,\n    \"username\": \"admin11\",\n    \"adminname\": \"张三\",\n    \"role\": \"超级管理员\",\n    \"avatar\": \"\",\n    \"status\": true\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "修改密码",
+                            "description": "修改当前登录管理员密码。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{token}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "method": "PUT",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"old_password\": \"admin123\",\n  \"new_password\": \"123456\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                },
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/auth/password",
+                                    "path": [
+                                        "admin",
+                                        "auth",
+                                        "password"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "disabled": false
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/auth/password",
+                                            "path": [
+                                                "admin",
+                                                "auth",
+                                                "password"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"old_password\": \"123456\",\n  \"new_password\": \"12345678\"\n}",
+                                            "options": {
+                                                "raw": {
+                                                    "language": "json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"密码修改成功\",\n  \"data\": null\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "分页获取消息通知",
+                            "description": "分页获取当前登录管理员的消息通知。type：0 系统通知，1 安全设置提醒，2 设备登录提醒；is_read：0 未读，1 已读。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "GET",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "page",
+                                            "value": "1",
+                                            "description": "当前页，从 1 开始",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "key": "size",
+                                            "value": "10",
+                                            "description": "每页数量，范围 1-100",
+                                            "type": "string"
+                                        }
+                                    ],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [
+                                                {
+                                                    "key": "page",
+                                                    "value": "1",
+                                                    "description": "当前页，从 1 开始",
+                                                    "disabled": false
+                                                },
+                                                {
+                                                    "key": "size",
+                                                    "value": "10",
+                                                    "description": "每页数量，范围 1-100",
+                                                    "disabled": false
+                                                }
+                                            ],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"获取成功\",\n  \"data\": {\n    \"list\": [\n      {\n        \"id\": 75,\n        \"type\": 2,\n        \"content\": \"您的账号于2026-07-29 20:30:39在Windows - Edge上登录，如非本人操作，请尽快修改密码\",\n        \"is_read\": 0,\n        \"created_at\": \"2026-07-29T20:30:39.326+08:00\"\n      }\n    ],\n    \"total\": 5,\n    \"page\": 1,\n    \"size\": 10,\n    \"total_page\": 1\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "获取未读消息数量",
+                            "description": "获取当前登录管理员的未读消息总数。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "GET",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications/unread",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications",
+                                        "unread"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "GET",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/unread",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                "unread"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"获取成功\",\n  \"data\": {\n    \"unread_count\": 3\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "单条消息标记为已读",
+                            "description": "根据消息 ID 将单条消息标记为已读，无请求体。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "PUT",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications/:id/read",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications",
+                                        ":id",
+                                        "read"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": [
+                                        {
+                                            "key": "id",
+                                            "description": "",
+                                            "type": "string"
+                                        }
+                                    ]
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/:id/read",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                ":id",
+                                                "read"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"已标记为已读\",\n  \"data\": null\n}"
+                                },
+                                {
+                                    "name": "消息不存在",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/:id/read",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                ":id",
+                                                "read"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 2004,\n  \"message\": \"消息不存在\",\n  \"data\": null\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "全部标记为已读",
+                            "description": "将当前登录管理员的全部消息标记为已读，无请求体。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "PUT",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications/read-all",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications",
+                                        "read-all"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "PUT",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/read-all",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                "read-all"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"已全部标记为已读\",\n  \"data\": {\n    \"list\": [],\n    \"total\": 5,\n    \"page\": 1,\n    \"size\": 10,\n    \"total_page\": 1\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "删除单条消息",
+                            "description": "根据消息 ID 永久删除单条消息。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "DELETE",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications/:id",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications",
+                                        ":id"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": [
+                                        {
+                                            "key": "id",
+                                            "description": "",
+                                            "type": "string"
+                                        }
+                                    ]
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "DELETE",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/:id",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                ":id"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"消息删除成功\",\n  \"data\": null\n}"
+                                },
+                                {
+                                    "name": "消息不存在",
+                                    "originalRequest": {
+                                        "method": "DELETE",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications/:id",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications",
+                                                ":id"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 2004,\n  \"message\": \"消息不存在\",\n  \"data\": null\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        },
+                        {
+                            "name": "清空所有消息",
+                            "description": "永久清空当前登录管理员的全部消息。此操作不可恢复。",
+                            "event": [],
+                            "auth": {},
+                            "request": {
+                                "auth": {},
+                                "method": "DELETE",
+                                "body": {},
+                                "header": [],
+                                "url": {
+                                    "raw": "{{baseUrl}}/admin/center/notifications",
+                                    "path": [
+                                        "admin",
+                                        "center",
+                                        "notifications"
+                                    ],
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "query": [],
+                                    "variable": []
+                                }
+                            },
+                            "response": [
+                                {
+                                    "name": "成功响应",
+                                    "originalRequest": {
+                                        "method": "DELETE",
+                                        "header": [],
+                                        "url": {
+                                            "raw": "{{baseUrl}}/admin/center/notifications",
+                                            "path": [
+                                                "admin",
+                                                "center",
+                                                "notifications"
+                                            ],
+                                            "host": [
+                                                "{{baseUrl}}"
+                                            ],
+                                            "query": [],
+                                            "variable": []
+                                        },
+                                        "body": {}
+                                    },
+                                    "cookie": [],
+                                    "status": "OK",
+                                    "code": 200,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n  \"code\": 0,\n  \"message\": \"已清空所有消息\",\n  \"data\": {\n    \"list\": [],\n    \"total\": 0,\n    \"page\": 1,\n    \"size\": 10,\n    \"total_page\": 1\n  }\n}"
+                                }
+                            ],
+                            "protocolProfileBehavior": {
+                                "strictSSL": false,
+                                "followRedirects": true
+                            }
+                        }
+                    ],
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [],
+                                "type": "text/javascript",
+                                "packages": {}
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [],
+                                "type": "text/javascript",
+                                "packages": {}
+                            }
+                        }
+                    ],
+                    "auth": {}
+                }
+            ],
+            "event": [
+                {
+                    "listen": "prerequest",
+                    "script": {
+                        "exec": [],
+                        "type": "text/javascript",
+                        "packages": {}
+                    }
+                },
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [],
+                        "type": "text/javascript",
+                        "packages": {}
+                    }
+                }
+            ],
+            "auth": {}
+        }
+    ],
+    "variable": [],
+    "event": [],
+    "auth": {}
+}
