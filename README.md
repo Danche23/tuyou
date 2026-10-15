@@ -280,4 +280,4 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 
 ## License
 
-`LICENSE` 中的 MIT 文本目前是拟议许可；**项目涉及多位贡献者，须在有权人确认授权范围后才能正式对外声明 MIT 授权**。在确认前不要把仓库或文档标成已获 MIT 授权。
+本项目基于 [MIT License](LICENSE) 开源。
