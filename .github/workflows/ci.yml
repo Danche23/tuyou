@@ -1,0 +1,52 @@
+name: CI
+
+# build + vet + test 阻断；lint 初期非阻断（存量 lint 问题尚未清理）。
+# 说明：依赖数据库的集成测试由 TEST_DB 环境变量门控，CI 中未设置时自动 Skip，不会失败。
+
+on:
+  push:
+    branches: [main, develop, "feature/**", "fix/**", "hotfix/**"]
+  pull_request:
+
+env:
+  GOPROXY: https://proxy.golang.org,direct
+
+jobs:
+  build-vet-test:
+    name: build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # 存量代码尚有 15 处历史 lint 问题（errcheck / gofmt / ineffassign / staticcheck），
+      # 初期不阻断合并：step 级 continue-on-error 让检查保持绿色，问题仍完整打印在日志里。
+      # 清理完毕后删掉这一行即可转为强制。
+      - uses: golangci/golangci-lint-action@v7
+        continue-on-error: true
+        with:
+          version: v2.6.0

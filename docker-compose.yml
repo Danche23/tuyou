@@ -1,0 +1,83 @@
+version: "3.8"
+
+services:
+  # ==================== MySQL ====================
+  mysql:
+    image: mysql:8.0
+    container_name: tuyou-mysql
+    restart: always
+    ports:
+      - "127.0.0.1:3308:3306"          # 仅本机可访问
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:?请设置本地 MYSQL_PASSWORD}"
+      MYSQL_DATABASE: tuyou
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql               # 数据持久化
+      # - ./sql:/docker-entrypoint-initdb.d  # 等 SQL 准备好再取消注释
+    command: --default-authentication-plugin=caching_sha2_password
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== Redis ====================
+  redis:
+    image: redis:7-alpine
+    container_name: tuyou-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?请设置本地 REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== 后端 API ====================
+  tuyou-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuyou-api
+    restart: always
+    ports:
+      - "127.0.0.1:9300:9300"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./configs:/app/configs    # 挂载配置，方便修改
+      - api_logs:/app/logs
+    environment:
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?请设置本地 MYSQL_PASSWORD}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?请设置本地 REDIS_PASSWORD}"
+      JWT_SECRET: "${JWT_SECRET:?请设置本地 JWT_SECRET}"
+
+  # ==================== Nginx（前端 + 反向代理）====================
+  nginx:
+    image: nginx:alpine
+    container_name: tuyou-nginx
+    restart: always
+    ports:
+      - "127.0.0.1:80:80"
+      # - "443:443"                   # 开 HTTPS 时取消注释
+    depends_on:
+      - tuyou-api
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html            # 前端打包产物
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf # Nginx 配置
+      # - ./nginx/ssl:/etc/nginx/ssl                      # 证书目录（开 HTTPS 时取消注释）
+
+volumes:
+  mysql_data:
+  redis_data:
+  api_logs:

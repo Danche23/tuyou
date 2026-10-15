@@ -1,0 +1,105 @@
+# ============================================================
+# 生产部署编排
+#
+# 与 docker-compose.yml（本地开发）的三处关键区别：
+#   1. MySQL / Redis 不再映射端口到宿主机
+#      开发版仅映射到 127.0.0.1，不用于公网
+#   2. 所有密码强制从环境变量读取，不写死弱密码；未设置则拒绝启动
+#   3. 后端 API 不再对宿主机暴露端口，只由 Nginx 反向代理进来
+#
+# 用法：
+#   export MYSQL_PASSWORD="$(openssl rand -base64 24)"
+#   export REDIS_PASSWORD="$(openssl rand -base64 24)"
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 需要临时连数据库排查时，不要放开端口，改用：
+#   docker exec -it tuyou-mysql mysql -uroot -p
+# ============================================================
+
+services:
+  # ==================== MySQL ====================
+  mysql:
+    image: mysql:8.0
+    container_name: tuyou-mysql
+    restart: always
+    # 故意不写 ports：只在容器网络内可达
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_PASSWORD:?请在环境中设置 MYSQL_PASSWORD}"
+      MYSQL_DATABASE: tuyou
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=caching_sha2_password
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== Redis ====================
+  redis:
+    image: redis:7-alpine
+    container_name: tuyou-redis
+    restart: always
+    # 故意不写 ports
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?请在环境中设置 REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== 后端 API ====================
+  tuyou-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuyou-api
+    restart: always
+    # 不映射端口：只有同网络的 nginx 能访问 tuyou-api:9300
+    expose:
+      - "9300"
+    # 密钥全部由环境变量注入（变量名与 README 的环境变量表一致），
+    # 这样 config.docker.yaml 里就不必再写真实凭据。
+    # 留空的可选项不会覆盖配置文件中的值 —— 若不需要短信/OSS，不设即可。
+    environment:
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET:?请设置 JWT_SECRET（可用 openssl rand -base64 48 生成）}
+      - SMS_ACCESS_KEY_ID=${SMS_ACCESS_KEY_ID:-}
+      - SMS_ACCESS_KEY_SECRET=${SMS_ACCESS_KEY_SECRET:-}
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID:-}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./configs:/app/configs    # 挂载生产配置（config.docker.yaml）
+      - api_logs:/app/logs
+
+  # ==================== Nginx（前端 + 反向代理）====================
+  nginx:
+    image: nginx:alpine
+    container_name: tuyou-nginx
+    restart: always
+    # 当前尚未配置 HTTPS；仅允许服务器本机访问 HTTP，避免误启动后直接对公网传明文凭据。
+    # 完成 TLS 终止、证书和 80→443 跳转后，再按实际上线架构调整对外端口。
+    ports:
+      - "127.0.0.1:80:80"
+    depends_on:
+      - tuyou-api
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html            # 前端打包产物
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf # Nginx 配置
+      # - ./nginx/ssl:/etc/nginx/ssl                      # 证书目录（开 HTTPS 时取消注释）
+
+volumes:
+  mysql_data:
+  redis_data:
+  api_logs:

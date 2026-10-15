@@ -19,12 +19,14 @@ func Recovery() gin.HandlerFunc {
 				stack := debug.Stack()
 
 				// 记录错误日志
+				path := c.FullPath()
+				if path == "" {
+					path = "<unmatched>"
+				}
 				logger.Error("Panic recovered",
-					zap.Any("error", err),
 					zap.String("stack", string(stack)),
-					zap.String("path", c.Request.URL.Path),
+					zap.String("path", path),
 					zap.String("method", c.Request.Method),
-					zap.String("ip", c.ClientIP()),
 				)
 
 				// 响应客户端

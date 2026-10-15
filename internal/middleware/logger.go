@@ -9,37 +9,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// Logger 日志中间件
+// writeRequestLog 允许测试注入内存日志，生产环境写入统一日志系统。
+var writeRequestLog = logger.Info
+
+// Logger 仅记录请求元信息。查询参数、请求体和原始 URL 都可能包含敏感数据。
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 开始时间
 		start := time.Now()
-		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
-
-		// 处理请求
 		c.Next()
 
-		// 结束时间
-		end := time.Now()
-		latency := end.Sub(start)
-
-		// 记录日志
-		fields := []zap.Field{
+		path := c.FullPath()
+		if path == "" {
+			path = "<unmatched>"
+		}
+		writeRequestLog("HTTP Request",
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),
-			zap.String("query", query),
 			zap.Int("status", c.Writer.Status()),
-			zap.String("ip", c.ClientIP()),
-			zap.String("user_agent", c.Request.UserAgent()),
-			zap.Duration("latency", latency),
-		}
-
-		// 获取错误信息
-		if len(c.Errors) > 0 {
-			fields = append(fields, zap.String("errors", c.Errors.String()))
-		}
-
-		logger.Info("HTTP Request", fields...)
+			zap.Duration("latency", time.Since(start)),
+		)
 	}
 }
