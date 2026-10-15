@@ -50,6 +50,20 @@ func Load(configPath string) (*Config, error) {
 	if val := os.Getenv("JWT_SECRET"); val != "" {
 		config.JWT.Secret = val
 	}
+	// 阿里云短信密钥：生产环境通过环境变量注入，配置文件里只保留占位符
+	if val := os.Getenv("SMS_ACCESS_KEY_ID"); val != "" {
+		config.SMS.AccessKeyId = val
+	}
+	if val := os.Getenv("SMS_ACCESS_KEY_SECRET"); val != "" {
+		config.SMS.AccessKeySecret = val
+	}
+	// 阿里云 OSS 密钥：同上
+	if val := os.Getenv("OSS_ACCESS_KEY_ID"); val != "" {
+		config.Storage.OSS.AccessKeyID = val
+	}
+	if val := os.Getenv("OSS_ACCESS_KEY_SECRET"); val != "" {
+		config.Storage.OSS.AccessKeySecret = val
+	}
 
 	globalConfig = config
 	return config, nil

@@ -1,0 +1,24 @@
+bin/
+logs/
+.git
+.gitignore
+*.md
+Makefile
+.dockerignore
+Dockerfile
+
+# 构建上下文不能包含本机凭据（与 .gitignore 分开生效）
+.env*
+configs/*.yaml
+!configs/config.example.yaml
+
+# 编排与部署文件（运行时挂载，不需要打进镜像）
+docker-compose*.yml
+nginx/
+docs/
+sql/
+
+# 本机 / AI 工作目录
+.idea/
+.superpowers/
+.claude/
