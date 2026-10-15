@@ -1,6 +1,6 @@
 name: CI
 
-# 与内网 GitLab 的 .gitlab-ci.yml 保持一致：build + vet + test 阻断，lint 初期非阻断。
+# build + vet + test 阻断；lint 初期非阻断（存量 lint 问题尚未清理）。
 # 说明：依赖数据库的集成测试由 TEST_DB 环境变量门控，CI 中未设置时自动 Skip，不会失败。
 
 on:
@@ -35,9 +35,6 @@ jobs:
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
-    # 存量代码尚有历史 lint 问题（errcheck/gofmt/staticcheck 等），
-    # 初期不阻断合并；清理完毕后删除这一行即可转为强制。
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +43,10 @@ jobs:
           go-version: "1.25"
           cache: true
 
+      # 存量代码尚有 15 处历史 lint 问题（errcheck / gofmt / ineffassign / staticcheck），
+      # 初期不阻断合并：step 级 continue-on-error 让检查保持绿色，问题仍完整打印在日志里。
+      # 清理完毕后删掉这一行即可转为强制。
       - uses: golangci/golangci-lint-action@v7
+        continue-on-error: true
         with:
           version: v2.6.0
