@@ -32,6 +32,14 @@ jobs:
       - name: go test
         run: go test ./...
 
+  docker-build:
+    name: docker build
+    needs: build-vet-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t tuyou-api:${{ github.sha }} .
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
