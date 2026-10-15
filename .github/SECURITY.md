@@ -7,8 +7,6 @@
 优先使用 GitHub 的 [Private vulnerability reporting](https://docs.github.com/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
 功能：进入仓库的 **Security** 标签页 → **Report a vulnerability**，该通道只有维护者可见。
 
-若无法使用上述通道，请发邮件至：`758773857@qq.com`
-
 ## 请在报告中包含
 
 - 受影响的版本或 commit、部署方式（Docker / 裸机）
