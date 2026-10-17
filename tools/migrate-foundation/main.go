@@ -119,11 +119,7 @@ func exportTable(ctx context.Context, tx *sql.Tx, out io.Writer, spec tableSpec)
 		}
 		encoded := make([]string, len(values))
 		for i, value := range values {
-			if value == nil {
-				encoded[i] = "NULL"
-			} else {
-				encoded[i] = "CONVERT(0x" + hex.EncodeToString(value) + " USING utf8mb4)"
-			}
+			encoded[i] = encodeValue(value)
 		}
 		if _, err := fmt.Fprintf(out, "INSERT INTO %s (%s) VALUES (%s);\n", spec.name, strings.Join(spec.columns, ","), strings.Join(encoded, ",")); err != nil {
 			return err
@@ -135,6 +131,16 @@ func exportTable(ctx context.Context, tx *sql.Tx, out io.Writer, spec tableSpec)
 	}
 	fmt.Fprintf(os.Stderr, "%s: %d rows\n", spec.name, count)
 	return nil
+}
+
+func encodeValue(value sql.RawBytes) string {
+	if value == nil {
+		return "NULL"
+	}
+	if len(value) == 0 {
+		return "''"
+	}
+	return "CONVERT(0x" + hex.EncodeToString(value) + " USING utf8mb4)"
 }
 
 func fail(err error) {
