@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up TuYou database and uploads
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/tuyou/backup.sh

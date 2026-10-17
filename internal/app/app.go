@@ -337,7 +337,7 @@ func (a *App) initDependencies() {
 	adminMsgSvc := serviceAdminMsg.NewMessageService(adminMsgMgrRepo, sseHub)
 
 	// ========== 创建 Handler ==========
-	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo)
+	authHandler := handlerAuth.NewAuthHandler(authSvc, redisRepo, a.redis)
 	adminAuthHandler := handlerAdmin.NewAuthHandler(adminAuthSvc, redisRepo, a.mysqlDB)
 	personalCtrl := personal.NewController(personalSvc, redisRepo)
 	noteCtrl := note.NewController(noteSvc, redisRepo)

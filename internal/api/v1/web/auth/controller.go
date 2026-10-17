@@ -4,24 +4,27 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"tuyou/internal/middleware"
 	request "tuyou/internal/model/dto/request/web/auth"
 	"tuyou/internal/repository"
 	"tuyou/internal/service/web/auth"
 	"tuyou/internal/service/web/auth/sms"
+	appErrors "tuyou/pkg/errors"
 	"tuyou/pkg/jwt"
 	"tuyou/pkg/response"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authSvc   auth.WebAuthService
-	redisRepo repository.RedisRepository
+	authSvc     auth.WebAuthService
+	redisRepo   repository.RedisRepository
+	redisClient *redis.Client
 }
 
 // NewAuthHandler 创建认证处理器
-func NewAuthHandler(authSvc auth.WebAuthService, redisRepo repository.RedisRepository) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc, redisRepo: redisRepo}
+func NewAuthHandler(authSvc auth.WebAuthService, redisRepo repository.RedisRepository, redisClient *redis.Client) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc, redisRepo: redisRepo, redisClient: redisClient}
 }
 
 // Register 注册
@@ -87,6 +90,18 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 			response.Unauthorized(c, "未登录")
 			return
 		}
+	}
+	if err := sms.ValidatorPhone(req.Phone); err != nil {
+		response.BizError(c, err)
+		return
+	}
+	if err := reserveSMS(c.Request.Context(), h.redisClient, req.Phone); err != nil {
+		if _, ok := err.(*appErrors.BizError); ok {
+			response.BizError(c, err)
+		} else {
+			response.InternalError(c, "短信服务暂不可用")
+		}
+		return
 	}
 
 	resp, err := h.authSvc.SendCode(c.Request.Context(), &req)
