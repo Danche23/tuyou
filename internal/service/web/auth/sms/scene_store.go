@@ -15,8 +15,8 @@ const sceneKeyPrefix = "sms:scene:"
 // sceneLockTTL 场景锁有效期 = 验证码有效期 + 60 秒缓冲。
 // 避免出现"阿里云的验证码仍有效、但场景锁已过期"的窗口。
 func sceneLockTTL() time.Duration {
-	validTime := config.Get().SMS.ValidTime // 分钟
-	return time.Duration(validTime)*time.Minute + 60*time.Second
+	validTime := config.Get().SMS.ValidTime // 阿里云 ValidTime 的单位是秒
+	return time.Duration(validTime)*time.Second + 60*time.Second
 }
 
 // sceneKey 生成场景锁 key
