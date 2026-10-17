@@ -54,6 +54,7 @@ sms:
   duplicate_policy: 1
   interval: 60
   code_type: 1
+  case_auth_policy: 1
 
 storage:
   driver: local
