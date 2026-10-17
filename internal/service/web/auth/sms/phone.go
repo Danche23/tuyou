@@ -2,9 +2,11 @@ package sms
 
 import (
 	"errors"
+	"fmt"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dypnsapi20170525 "github.com/alibabacloud-go/dypnsapi-20170525/v3/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
+	"github.com/alibabacloud-go/tea/dara"
 	"github.com/alibabacloud-go/tea/tea"
 	"go.uber.org/zap"
 	response "tuyou/internal/model/dto/response/web/auth"
@@ -136,11 +138,13 @@ func Receive(phone string, code string, scene Scene) (_err error) {
 	}
 
 	checkSmsVerifyCodeRequest := &dypnsapi20170525.CheckSmsVerifyCodeRequest{
-		SchemeName:     tea.String(sms.SchemeName),
-		CountryCode:    tea.String(sms.CountryCode),
-		PhoneNumber:    tea.String(phone),
-		CaseAuthPolicy: tea.Int64(sms.CaseAuthPolicy),
-		VerifyCode:     tea.String(code),
+		SchemeName:  tea.String(sms.SchemeName),
+		CountryCode: tea.String(sms.CountryCode),
+		PhoneNumber: tea.String(phone),
+		VerifyCode:  tea.String(code),
+	}
+	if sms.CaseAuthPolicy > 0 {
+		checkSmsVerifyCodeRequest.CaseAuthPolicy = tea.Int64(sms.CaseAuthPolicy)
 	}
 	runtime := &util.RuntimeOptions{}
 	tryErr := func() (_e error) {
@@ -171,7 +175,17 @@ func Receive(phone string, code string, scene Scene) (_err error) {
 	}()
 
 	if tryErr != nil {
-		logger.Error("校验短信验证码失败", zap.Bool("provider_request_error", !errors.Is(tryErr, appErrors.ErrSmsCodeInvalid)))
+		providerCode := ""
+		var sdkErr *tea.SDKError
+		if errors.As(tryErr, &sdkErr) {
+			providerCode = tea.StringValue(sdkErr.Code)
+		} else {
+			var responseErr dara.ResponseError
+			if errors.As(tryErr, &responseErr) {
+				providerCode = tea.StringValue(responseErr.GetCode())
+			}
+		}
+		logger.Error("校验短信验证码失败", zap.Bool("provider_request_error", !errors.Is(tryErr, appErrors.ErrSmsCodeInvalid)), zap.String("provider_error_type", fmt.Sprintf("%T", tryErr)), zap.String("provider_code", providerCode))
 		return appErrors.ErrSmsCodeInvalid
 	}
 	return nil
