@@ -43,6 +43,10 @@ cors:
 # SMS needs real Aliyun credentials and backend rate limiting before public access.
 sms:
   driver: aliyun
+  scheme_name: "1"
+  sign_name: "\u6052\u521b\u8054\u4f17"
+  template_code: "100001"
+  template_param: '{"code":"##code##","min":"5"}'
   region_id: cn-hangzhou
   country_code: "86"
   code_length: 6
