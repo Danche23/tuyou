@@ -6,12 +6,17 @@ if (( EUID != 0 )); then
   exit 1
 fi
 
-if [[ ! ${SSH_ORIGINAL_COMMAND:-} =~ ^([0-9a-f]{40})[[:space:]]([0-9]+)$ ]]; then
-  echo 'Expected commit SHA and workflow run number' >&2
+if [[ ! ${SSH_ORIGINAL_COMMAND:-} =~ ^([0-9a-f]{40})[[:space:]]([0-9]+)[[:space:]]([1-9][0-9]{0,8})$ ]]; then
+  echo 'Expected commit SHA, workflow run number and archive size' >&2
   exit 1
 fi
 sha=${BASH_REMATCH[1]}
 run_number=${BASH_REMATCH[2]}
+archive_size=${BASH_REMATCH[3]}
+if (( archive_size > 104857600 )); then
+  echo 'API archive exceeds 100 MiB' >&2
+  exit 1
+fi
 root=/opt/tuyou
 cd "$root"
 
@@ -28,9 +33,9 @@ fi
 archive=$(mktemp "$root/.api-upload.XXXXXXXX")
 staging=$(mktemp -d "$root/.api-build.XXXXXXXX")
 trap 'rm -f "$archive"; rm -rf "$staging"' EXIT
-timeout 600 head -c 104857601 > "$archive"
-if (( $(stat -c '%s' "$archive") > 104857600 )); then
-  echo 'API archive exceeds 100 MiB' >&2
+timeout 600 head -c "$archive_size" > "$archive"
+if (( $(stat -c '%s' "$archive") != archive_size )); then
+  echo 'API archive was truncated' >&2
   exit 1
 fi
 

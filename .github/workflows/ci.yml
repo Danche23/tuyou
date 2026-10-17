@@ -96,7 +96,9 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/tuyou-deploy"
           chmod 600 "$HOME/.ssh/tuyou-deploy"
           printf '%s\n' '47.122.110.148 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGg9Z5NuOEdqsh5hnKSpk+p1hJDX53tWqvNHVVTPepLe' > "$HOME/.ssh/known_hosts"
-          tar -czf - tuyou-api | ssh -T -i "$HOME/.ssh/tuyou-deploy" -o BatchMode=yes -o StrictHostKeyChecking=yes tuyou-api-deploy@47.122.110.148 "$GITHUB_SHA $GITHUB_RUN_NUMBER"
+          tar -czf tuyou-api.tar.gz tuyou-api
+          archive_size=$(stat -c '%s' tuyou-api.tar.gz)
+          ssh -T -i "$HOME/.ssh/tuyou-deploy" -o BatchMode=yes -o StrictHostKeyChecking=yes tuyou-api-deploy@47.122.110.148 "$GITHUB_SHA $GITHUB_RUN_NUMBER $archive_size" < tuyou-api.tar.gz
 
   lint:
     name: golangci-lint
