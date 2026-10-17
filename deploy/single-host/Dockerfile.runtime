@@ -1,0 +1,7 @@
+FROM docker.m.daocloud.io/library/alpine:3.20
+
+WORKDIR /app
+COPY tuyou-api /app/tuyou-api
+RUN chmod 755 /app/tuyou-api
+EXPOSE 9300
+CMD ["/app/tuyou-api", "-c", "/app/configs/config.docker.yaml"]

@@ -1,0 +1,58 @@
+app:
+  name: tuyou-api
+  version: 1.0.0
+  mode: release
+  port: 9300
+
+database:
+  mysql:
+    host: mysql
+    port: 3306
+    username: tuyou
+    database: tuyou
+    max_idle_conns: 5
+    max_open_conns: 20
+  redis:
+    host: redis
+    port: 6379
+    db: 0
+    pool_size: 10
+
+jwt:
+  expire_hours: 24h
+
+log:
+  level: info
+  filename: logs/app.log
+  max_size: 20
+  max_backups: 3
+  max_age: 14
+  compress: true
+
+cors:
+  enabled: true
+  allow_origins:
+    - https://tuyou.evenstar.love
+    - https://admin.evenstar.love
+  allow_methods: [GET, POST, PUT, DELETE, OPTIONS]
+  allow_headers: [Origin, Content-Type, Authorization]
+  expose_headers: [Content-Length]
+  allow_credentials: true
+  max_age: 86400
+
+# SMS needs real Aliyun credentials and backend rate limiting before public access.
+sms:
+  driver: aliyun
+  region_id: cn-hangzhou
+  country_code: "86"
+  code_length: 6
+  valid_time: 300
+  duplicate_policy: 1
+  interval: 60
+  code_type: 1
+
+storage:
+  driver: local
+  local:
+    base_dir: /app/uploads
+    base_url: https://tuyou.evenstar.love
