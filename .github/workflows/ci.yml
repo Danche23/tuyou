@@ -7,6 +7,7 @@ on:
   push:
     branches: [main, develop, "feature/**", "fix/**", "hotfix/**"]
   pull_request:
+  workflow_dispatch:
 
 env:
   GOPROXY: https://proxy.golang.org,direct
@@ -67,6 +68,35 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-api:
+    name: deploy API
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build-vet-test, docker-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Build Linux API binary
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o tuyou-api ./cmd/server/main.go
+      - name: Deploy verified API
+        env:
+          DEPLOY_KEY: ${{ secrets.TUYOU_API_DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo '::notice::TuYou API deployment key is not configured; image was published only.'
+            exit 0
+          fi
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/tuyou-deploy"
+          chmod 600 "$HOME/.ssh/tuyou-deploy"
+          printf '%s\n' '47.122.110.148 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGg9Z5NuOEdqsh5hnKSpk+p1hJDX53tWqvNHVVTPepLe' > "$HOME/.ssh/known_hosts"
+          tar -czf - tuyou-api | ssh -T -i "$HOME/.ssh/tuyou-deploy" -o BatchMode=yes -o StrictHostKeyChecking=yes tuyou-api-deploy@47.122.110.148 "$GITHUB_SHA $GITHUB_RUN_NUMBER"
 
   lint:
     name: golangci-lint

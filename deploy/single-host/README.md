@@ -43,6 +43,25 @@ Append `blog-vhosts.conf` to the blog's existing Nginx site config only when
 production SMS and upload flows have been validated. Test with `nginx -t`
 before reloading; preserve the blog's existing server blocks.
 
+For push-triggered H5 delivery, `deploy-h5.sh` is the forced SSH command for
+separate `tuyou-web-deploy` and `tuyou-admin-deploy` users. Each key is bound
+to one target in `authorized_keys`; the workflow streams its tested `dist/`
+archive and commit SHA. The script checks the workflow run number and switches
+the `current` symlink only after a complete extraction. Keep the keys out of
+the repository and store each private key only in its corresponding GitHub
+Actions secret.
+For the initial files already in each site directory, `current` may point to
+`.`. A later release switches it to `releases/<sha>` without copying the
+initial tree into itself. Restore that initial site with a new `current`
+symlink to `.` if the first delivered release must be rolled back.
+
+`deploy-api.sh` is the forced SSH command for a separate `tuyou-api-deploy`
+key. It accepts a single Linux binary archive from the tested main-branch
+workflow, builds a local image from the root-owned runtime Dockerfile, and
+backs up MySQL and uploads before changing `TUYOU_IMAGE`. A failed API health
+check restores the prior image. Keep the prior image and local backups for
+manual recovery if a schema migration itself is incompatible.
+
 After the first certificate is issued into `/opt/tuyou/letsencrypt`, install
 `renew-cert.sh` in `/opt/tuyou` and `tuyou-cert-renew.*` in
 `/etc/systemd/system`, then enable the timer. The renewal job copies the
