@@ -2,7 +2,7 @@
 
 This collection contains 23 notes, 10 guides and four clearly identified TuYou editor profiles. The posts are newly written destination information, not firsthand visitor reviews. They use the actual import date, and no historical likes, comments, registrations or trip participation are fabricated.
 
-The 25 photos are from Wikimedia Commons. `data/photo-credits.json` records each source, author, license and SHA-256. The H5 repository publishes the corresponding images at `/editorial/<key>.jpg`; each article links to its image source and license. Recheck attraction rules, transport and opening hours before publication because they can change.
+The 25 photos are from Wikimedia Commons. `data/photo-credits.json` records each source, author, license and SHA-256. The H5 repository publishes the corresponding images at `/editorial/<key>.jpg`; article photos link to a separate source and license page. Recheck attraction rules, transport and opening hours before publication because they can change.
 
 From the backend repository root, validate without writing:
 

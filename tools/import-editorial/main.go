@@ -168,15 +168,19 @@ func validate(pack contentPack, credits []photoCredit, base string) (map[string]
 				return nil, fmt.Errorf("invalid route details: %s", p.Title)
 			}
 		}
-		if utf8.RuneCountInString(body(p, photoByKey[p.Photo])) > 2000 {
+		if utf8.RuneCountInString(body(p)) > 2000 {
 			return nil, fmt.Errorf("post body too long: %s", p.Title)
 		}
 	}
 	return photoByKey, nil
 }
 
-func body(p post, credit photoCredit) string {
-	return strings.Join(p.Paragraphs, "\n\n") + "\n\n配图：" + credit.Author +
+func body(p post) string {
+	return strings.Join(p.Paragraphs, "\n\n")
+}
+
+func legacyBody(p post, credit photoCredit) string {
+	return body(p) + "\n\n配图：" + credit.Author +
 		"，Wikimedia Commons，[原图](" + credit.Source + ")，许可：[" + credit.License + "](" + credit.LicenseURL + ")。"
 }
 
@@ -247,14 +251,15 @@ func importPack(tx *gorm.DB, pack contentPack, photos map[string]photoCredit, ba
 			return err
 		}
 		url := strings.TrimRight(base, "/") + "/" + p.Photo + ".jpg"
-		content := body(p, photos[p.Photo])
+		content := body(p)
+		oldContent := legacyBody(p, photos[p.Photo])
 		if len(existingNotes)+len(existingGuides) > 0 {
 			if p.Kind == "note" && len(existingNotes) == 1 && len(existingGuides) == 0 &&
-				existingNotes[0].MemberID == memberID && existingNotes[0].Content == content {
+				existingNotes[0].MemberID == memberID && (existingNotes[0].Content == content || existingNotes[0].Content == oldContent) {
 				continue
 			}
 			if p.Kind == "guide" && len(existingGuides) == 1 && len(existingNotes) == 0 &&
-				existingGuides[0].MemberID == memberID && existingGuides[0].Content == content {
+				existingGuides[0].MemberID == memberID && (existingGuides[0].Content == content || existingGuides[0].Content == oldContent) {
 				continue
 			}
 			return fmt.Errorf("title already exists with different data: %s", p.Title)
