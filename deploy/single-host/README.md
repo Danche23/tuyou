@@ -50,6 +50,9 @@ archive and commit SHA. The script checks the workflow run number and switches
 the `current` symlink only after a complete extraction. Keep the keys out of
 the repository and store each private key only in its corresponding GitHub
 Actions secret.
+The H5 Nginx `/editorial/` location serves photos and credits from
+`/opt/tuyou/web/editorial/`, outside release directories. Back up this directory
+separately before replacing the host; H5 deployments do not copy it from Git.
 For the initial files already in each site directory, `current` may point to
 `.`. A later release switches it to `releases/<sha>` without copying the
 initial tree into itself. Restore that initial site with a new `current`
