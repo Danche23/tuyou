@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily TuYou backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=tuyou-backup.service
+
+[Install]
+WantedBy=timers.target

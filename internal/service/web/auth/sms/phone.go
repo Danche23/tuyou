@@ -1,18 +1,18 @@
 package sms
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dypnsapi20170525 "github.com/alibabacloud-go/dypnsapi-20170525/v3/client"
 	util "github.com/alibabacloud-go/tea-utils/v2/service"
+	"github.com/alibabacloud-go/tea/dara"
 	"github.com/alibabacloud-go/tea/tea"
 	"go.uber.org/zap"
-	"strings"
 	response "tuyou/internal/model/dto/response/web/auth"
 	"tuyou/pkg/config"
 	appErrors "tuyou/pkg/errors"
+	"tuyou/pkg/logger"
 )
 
 // Description:
@@ -101,33 +101,17 @@ func Send(phone string, scene Scene) (*response.MessageResponse, error) {
 		}
 		if resp != nil && resp.Body != nil && !tea.BoolValue(resp.Body.Success) {
 			code := tea.StringValue(resp.Body.Code)
-			msg := tea.StringValue(resp.Body.Message)
 			if code == "biz.FREQUENCY" {
 				return appErrors.ErrSmsSendFrequently
 			}
-			return appErrors.New(appErrors.CodeSmsSendFrequently, "短信发送失败："+msg)
+			return appErrors.New(appErrors.CodeSmsSendFrequently, "短信发送失败")
 		}
 
 		return nil
 	}()
-	// 如果调用失败
 	if tryErr != nil {
-		var sdkErr = &tea.SDKError{}
-		if errors.As(tryErr, &sdkErr) {
-			// SDK 错误，尝试解析诊断信息
-			zap.L().Error("send sms verify code error" + sdkErr.Error())
-			var data interface{}
-			d :=
-				json.NewDecoder(strings.NewReader(tea.StringValue(sdkErr.Data)))
-			if err2 := d.Decode(&data); err2 == nil {
-				if m, ok := data.(map[string]interface{}); ok {
-					recommend, _ := m["Recommend"]
-					fmt.Println(recommend)
-				}
-			}
-		}
-		// 无论是不是 SDK 错误，都要返回 tryErr
-		return nil, tryErr
+		logger.Error("发送短信验证码失败")
+		return nil, errors.New("发送短信验证码失败")
 	}
 
 	// 发送成功后写入场景锁，供校验时比对
@@ -143,6 +127,7 @@ func Receive(phone string, code string, scene Scene) (_err error) {
 	// 场景锁校验：发送时未写入场景锁，或场景与本次操作不匹配，一律按验证码错误拒绝（fail closed）
 	storedScene, err := getScene(phone)
 	if err != nil || storedScene != scene {
+		logger.Warn("短信验证码场景校验失败", zap.Bool("redis_error", err != nil), zap.Bool("scene_mismatch", err == nil && storedScene != scene))
 		return appErrors.ErrSmsCodeInvalid
 	}
 
@@ -153,11 +138,13 @@ func Receive(phone string, code string, scene Scene) (_err error) {
 	}
 
 	checkSmsVerifyCodeRequest := &dypnsapi20170525.CheckSmsVerifyCodeRequest{
-		SchemeName:     tea.String(sms.SchemeName),
-		CountryCode:    tea.String(sms.CountryCode),
-		PhoneNumber:    tea.String(phone),
-		CaseAuthPolicy: tea.Int64(sms.CaseAuthPolicy),
-		VerifyCode:     tea.String(code),
+		SchemeName:  tea.String(sms.SchemeName),
+		CountryCode: tea.String(sms.CountryCode),
+		PhoneNumber: tea.String(phone),
+		VerifyCode:  tea.String(code),
+	}
+	if sms.CaseAuthPolicy > 0 {
+		checkSmsVerifyCodeRequest.CaseAuthPolicy = tea.Int64(sms.CaseAuthPolicy)
 	}
 	runtime := &util.RuntimeOptions{}
 	tryErr := func() (_e error) {
@@ -171,37 +158,35 @@ func Receive(phone string, code string, scene Scene) (_err error) {
 			return err
 		}
 
-		if resp != nil && resp.Body != nil && !tea.BoolValue(resp.Body.Success) {
-			return fmt.Errorf("验证码校验失败：%s - %s", tea.StringValue(resp.Body.Code), tea.StringValue(resp.Body.Message))
+		if resp == nil || resp.Body == nil {
+			logger.Warn("短信验证码校验响应为空")
+			return appErrors.ErrSmsCodeInvalid
 		}
-
-		fmt.Printf("[LOG] %v\n", resp)
+		if !tea.BoolValue(resp.Body.Success) || resp.Body.Model == nil || tea.StringValue(resp.Body.Model.VerifyResult) != "PASS" {
+			result := ""
+			if resp.Body.Model != nil {
+				result = tea.StringValue(resp.Body.Model.VerifyResult)
+			}
+			logger.Warn("阿里云短信验证码校验未通过", zap.String("provider_code", tea.StringValue(resp.Body.Code)), zap.String("verify_result", result))
+			return appErrors.ErrSmsCodeInvalid
+		}
 
 		return nil
 	}()
 
 	if tryErr != nil {
-		var err1 = &tea.SDKError{}
-		if errors.As(tryErr, &err1) {
-			// err 已经是 SDKError
+		providerCode := ""
+		var sdkErr *tea.SDKError
+		if errors.As(tryErr, &sdkErr) {
+			providerCode = tea.StringValue(sdkErr.Code)
 		} else {
-			err1.Message = tea.String(tryErr.Error())
+			var responseErr dara.ResponseError
+			if errors.As(tryErr, &responseErr) {
+				providerCode = tea.StringValue(responseErr.GetCode())
+			}
 		}
-		// 此处仅做打印展示，请谨慎对待异常处理，在工程项目中切勿直接忽略异常。
-		// 错误 message
-		fmt.Println(tea.StringValue(err1.Message))
-		// 诊断地址
-		var data interface{}
-		d := json.NewDecoder(strings.NewReader(tea.StringValue(err1.Data)))
-		err := d.Decode(&data)
-		if err != nil {
-			zap.L().Error("receive sms verify code error" + err.Error())
-			return err
-		}
-		if m, ok := data.(map[string]interface{}); ok {
-			recommend, _ := m["Recommend"]
-			fmt.Println(recommend)
-		}
+		logger.Error("校验短信验证码失败", zap.Bool("provider_request_error", !errors.Is(tryErr, appErrors.ErrSmsCodeInvalid)), zap.String("provider_error_type", fmt.Sprintf("%T", tryErr)), zap.String("provider_code", providerCode))
+		return appErrors.ErrSmsCodeInvalid
 	}
-	return tryErr
+	return nil
 }

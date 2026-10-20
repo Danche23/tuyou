@@ -1,0 +1,118 @@
+# ============================================================
+# tuyou-api 配置样例文件
+# ============================================================
+# 用法：
+#   1. 复制本文件为 config.yaml（或 config.docker.yaml），再按需修改
+#        cp configs/config.example.yaml configs/config.yaml
+#   2. 本文件中的所有值都是占位符，不含任何真实凭据。
+#   3. 带「可用环境变量 XXX 覆盖」注释的字段，建议在生产环境用环境变量注入，
+#      不要把真实值写回配置文件（configs/*.yaml 已被 .gitignore 忽略，
+#      但仍应遵循最小暴露原则）。
+#
+# 注意：configs/*.yaml 一律不入库，只有本样例文件会进仓库。
+# ============================================================
+
+app:
+  name: tuyou-api
+  version: 1.0.0
+  mode: release                # debug | release | test，生产用 release
+  port: 9300                   # 与 Dockerfile、Compose 和 Nginx 的 API 端口一致
+
+# ------------------------------------------------------------
+# 数据库
+# ------------------------------------------------------------
+database:
+  mysql:
+    host: 127.0.0.1            # Docker 部署时填服务名，例如 mysql
+    port: 3306                 # 容器内端口，不是宿主机映射端口
+    username: root
+    password: "change-me"      # 可用环境变量 MYSQL_PASSWORD 覆盖
+    database: tuyou
+    max_idle_conns: 10
+    max_open_conns: 100
+  redis:
+    host: 127.0.0.1            # Docker 部署时填服务名，例如 redis
+    port: 6379
+    password: "change-me"      # 可用环境变量 REDIS_PASSWORD 覆盖
+    db: 0
+    pool_size: 10
+
+# ------------------------------------------------------------
+# JWT
+# ------------------------------------------------------------
+jwt:
+  # 必改。生产环境请生成随机串，并用环境变量注入：
+  #   openssl rand -base64 48
+  secret: "change-me-to-a-random-secret"   # 可用环境变量 JWT_SECRET 覆盖
+  expire_hours: 24h
+
+# ------------------------------------------------------------
+# 日志（按大小自动切割轮转）
+# ------------------------------------------------------------
+log:
+  level: info                  # debug | info | warn | error，生产用 info
+  filename: logs/app.log
+  max_size: 100                # 单个日志文件上限（MB）
+  max_backups: 3               # 保留的旧日志数量
+  max_age: 28                  # 保留天数
+  compress: true
+
+# ------------------------------------------------------------
+# 跨域
+# ------------------------------------------------------------
+cors:
+  enabled: true
+  # ⚠️ 不要用 ["*"]。allow_credentials 为 true 时通配符既违反浏览器规范、
+  #    又等于对所有站点开放带凭证请求。生产请填前端实际域名。
+  allow_origins:
+    - "https://your-frontend-domain.example"
+  allow_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allow_headers:
+    - Origin
+    - Content-Type
+    - Authorization
+  expose_headers:
+    - Content-Length
+  allow_credentials: true
+  max_age: 86400
+
+# ------------------------------------------------------------
+# 短信（阿里云号码认证服务）
+# ------------------------------------------------------------
+sms:
+  driver: aliyun               # log = 只打印不发送，适合本地开发；aliyun = 真实发送
+  access_key_id: "your-sms-access-key-id"          # 可用环境变量 SMS_ACCESS_KEY_ID 覆盖
+  access_key_secret: "your-sms-access-key-secret"  # 可用环境变量 SMS_ACCESS_KEY_SECRET 覆盖
+  sign_name: "your-sms-sign-name"
+  template_code: "your-template-code"
+  template_param: '{"code":"##code##","min":"5"}'
+  region_id: "cn-hangzhou"
+  scheme_name: "1"
+  country_code: "86"
+  code_length: 6
+  valid_time: 300              # 验证码有效期（秒）
+  duplicate_policy: 1          # 同号策略：0-不限制 1-拒绝
+  interval: 60                 # 同一手机号发送间隔（秒）
+  code_type: 1
+  case_auth_policy: 1
+
+# ------------------------------------------------------------
+# 文件存储
+# ------------------------------------------------------------
+storage:
+  driver: oss                  # oss | local
+  oss:
+    access_key_id: "your-oss-access-key-id"          # 可用环境变量 OSS_ACCESS_KEY_ID 覆盖
+    access_key_secret: "your-oss-access-key-secret"  # 可用环境变量 OSS_ACCESS_KEY_SECRET 覆盖
+    endpoint: cn-beijing       # 区域名，SDK v2 WithRegion 直接使用区域名
+    bucket: "your-bucket-name"
+  # driver 为 local 时生效
+  local:
+    base_dir: "./uploads"      # 文件落盘根目录
+    base_url: "http://127.0.0.1:9300"   # 对外访问前缀，最终 URL = {base_url}/static/{objectKey}
+    ffmpeg_path: ""            # 留空则从 PATH 查找

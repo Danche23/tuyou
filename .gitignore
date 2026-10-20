@@ -7,6 +7,13 @@
 bin/
 dist/
 config.yaml
+# 配置文件：一律不入库（含真实 AK/SK、数据库密码、JWT 密钥）
+# 只放行不含任何真实值的样例文件
+configs/*.yaml
+!configs/config.example.yaml
+
+# 本地 AI 工具配置（含本机绝对路径，不入库）
+.claude/settings.local.json
 
 # Test binary, built with `go test -context`
 *.test
@@ -21,9 +28,8 @@ vendor/
 # Go workspace file
 go.work
 
-# Environment variables
-.env
-.env.local
+# 环境变量文件（包括 .env.production / .env.test 等，禁止提交真实凭据）
+.env*
 
 # IDE
 .idea/
@@ -51,3 +57,6 @@ Thumbs.db
 /member_data.sql
 /auth_api.md
 /api-docs.md
+
+# CI 的 Go 模块缓存目录（部分 CI 会写在这里）
+.gomodcache/

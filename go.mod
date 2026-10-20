@@ -7,6 +7,7 @@ require (
 	github.com/alibabacloud-go/dypnsapi-20170525/v3 v3.0.0
 	github.com/alibabacloud-go/tea v1.5.3
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.9
+	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.3
 	github.com/gabriel-vasile/mimetype v1.4.12
 	github.com/gin-gonic/gin v1.11.0
@@ -74,6 +75,7 @@ require (
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

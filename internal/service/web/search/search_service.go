@@ -97,7 +97,7 @@ func (s *searchService) Search(memberID uint, req *requestSearch.SearchRequest) 
 	// 记录搜索历史（best-effort：写失败只记日志，不影响搜索；只记第 1 页，避免翻页反复置顶）
 	if req.Page == 1 {
 		if err := s.searchRepo.UpsertSearchHistory(memberID, keyword); err != nil {
-			logger.Errorf("记录搜索历史失败 memberID=%d keyword=%s err=%v", memberID, keyword, err)
+			logger.Errorf("记录搜索历史失败 memberID=%d err=%v", memberID, err)
 		}
 	}
 

@@ -1,0 +1,100 @@
+name: tuyou
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TUYOU_DB_ROOT_PASSWORD:?set TUYOU_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: tuyou
+      MYSQL_USER: tuyou
+      MYSQL_PASSWORD: ${TUYOU_DB_PASSWORD:?set TUYOU_DB_PASSWORD}
+      TZ: Asia/Shanghai
+    command: ["--innodb-buffer-pool-size=128M", "--max-connections=40", "--performance-schema=OFF"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    mem_limit: 96m
+    environment:
+      REDIS_PASSWORD: ${TUYOU_REDIS_PASSWORD:?set TUYOU_REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${TUYOU_IMAGE:?set TUYOU_IMAGE}
+    restart: unless-stopped
+    mem_limit: 384m
+    ports:
+      - "127.0.0.1:9301:9300"
+    env_file:
+      - ./sms.env
+    environment:
+      MYSQL_PASSWORD: ${TUYOU_DB_PASSWORD:?set TUYOU_DB_PASSWORD}
+      REDIS_PASSWORD: ${TUYOU_REDIS_PASSWORD:?set TUYOU_REDIS_PASSWORD}
+      JWT_SECRET: ${TUYOU_JWT_SECRET:?set TUYOU_JWT_SECRET}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config.yaml:/app/configs/config.docker.yaml:ro
+      - api_logs:/app/logs
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9300/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 90s
+
+  web:
+    image: docker.m.daocloud.io/library/nginx:1.27-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    ports:
+      - "127.0.0.1:9080:8080"
+      - "127.0.0.1:9081:8081"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      default:
+      gateway:
+        aliases:
+          - tuyou-h5
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./web:/srv/tuyou/web:ro
+      - ./admin:/srv/tuyou/admin:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+volumes:
+  mysql_data:
+  redis_data:
+  api_logs:
+  uploads:
+
+networks:
+  gateway:
+    name: evenstar_net
+    external: true
