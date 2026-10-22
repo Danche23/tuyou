@@ -12,6 +12,7 @@ func (h *AuthHandler) RegisterRoutes(group *gin.RouterGroup) {
 		authGroup.GET("/captcha", h.GetCaptcha)
 		authGroup.POST("/register", h.Register)
 		authGroup.POST("/login", h.Login)
+		authGroup.POST("/refresh", h.Refresh)
 		authGroup.POST("/logout", h.Logout)
 		authGroup.POST("/reset-password", h.ResetPassword)
 		authGroup.POST("/send-code", h.SendCode)

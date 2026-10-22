@@ -8,6 +8,11 @@ type LoginRequest struct {
 	Captcha   string `json:"captcha" binding:"required"`
 }
 
+// RefreshTokenRequest 刷新访问令牌请求
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 // ResetPasswordRequest 重置密码请求
 type ResetPasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required,min=6"`

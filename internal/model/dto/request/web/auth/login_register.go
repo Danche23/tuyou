@@ -19,6 +19,11 @@ type LoginRequest struct {
 	Captcha   string `json:"captcha"`
 }
 
+// RefreshTokenRequest 刷新访问令牌请求
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 // SendCodeRequest 发送验证码请求
 type SendCodeRequest struct {
 	Phone string `json:"phone" binding:"required"`

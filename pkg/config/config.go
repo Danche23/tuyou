@@ -51,8 +51,43 @@ type RedisConfig struct {
 
 // JWTConfig JWT 配置
 type JWTConfig struct {
-	Secret      string        `mapstructure:"secret"`
+	Secret string `mapstructure:"secret"`
+	// ExpireHours 旧版单 token 的过期时间，现作为访问令牌有效期的兜底配置
 	ExpireHours time.Duration `mapstructure:"expire_hours"`
+	// AccessExpireHours 访问令牌有效期
+	AccessExpireHours time.Duration `mapstructure:"access_expire_hours"`
+	// RefreshExpireHours 刷新令牌有效期
+	RefreshExpireHours time.Duration `mapstructure:"refresh_expire_hours"`
+}
+
+// AccessTTL 访问令牌有效期：优先读取 access_expire_hours，兼容旧的 expire_hours，默认 24 小时
+func (c JWTConfig) AccessTTL() time.Duration {
+	if c.AccessExpireHours > 0 {
+		return c.AccessExpireHours
+	}
+	if c.ExpireHours > 0 {
+		return c.ExpireHours
+	}
+	return 24 * time.Hour
+}
+
+// RefreshTTL 刷新令牌有效期：未配置时默认 7 天
+func (c JWTConfig) RefreshTTL() time.Duration {
+	if c.RefreshExpireHours > 0 {
+		return c.RefreshExpireHours
+	}
+	return 7 * 24 * time.Hour
+}
+
+// BlacklistTTL 访问令牌黑名单保留时长：取访问/刷新令牌有效期的较大值，
+// 保证旧配置下签发的长有效期访问令牌被拉黑后也不会提前解禁。
+func (c JWTConfig) BlacklistTTL() time.Duration {
+	accessTTL := c.AccessTTL()
+	refreshTTL := c.RefreshTTL()
+	if accessTTL > refreshTTL {
+		return accessTTL
+	}
+	return refreshTTL
 }
 
 // LogConfig 日志配置

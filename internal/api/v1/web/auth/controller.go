@@ -75,6 +75,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// Refresh 使用刷新令牌换取新的访问令牌与刷新令牌
+// POST /api/v1/auth/refresh（公开接口，仅凭刷新令牌调用）
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req request.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	resp, err := h.authSvc.Refresh(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		response.BizError(c, err)
+		return
+	}
+	response.Success(c, resp)
+}
+
 // SendCode 发送验证码
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req request.SendCodeRequest

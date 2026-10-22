@@ -1,15 +1,14 @@
 package auth
 
 import (
-	"gorm.io/gorm"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"tuyou/internal/middleware"
 	request "tuyou/internal/model/dto/request/admin/auth"
 	"tuyou/internal/repository"
 	"tuyou/internal/service/admin/auth"
-	"tuyou/pkg/config"
 	"tuyou/pkg/jwt"
 	"tuyou/pkg/response"
 )
@@ -52,19 +51,30 @@ func (c *AdminController) Login(context *gin.Context) {
 	response.Success(context, resp)
 }
 
+// Refresh 使用刷新令牌换取新的访问令牌与刷新令牌
+// POST /api/v1/admin/refresh（公开接口，仅凭刷新令牌调用）
+func (c *AdminController) Refresh(context *gin.Context) {
+	var req request.RefreshTokenRequest
+	if err := context.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(context, err.Error())
+		return
+	}
+
+	resp, err := c.authSvc.Refresh(context.Request.Context(), req.RefreshToken)
+	if err != nil {
+		response.BizError(context, err)
+		return
+	}
+	response.Success(context, resp)
+}
+
 // Logout 退出登录
 // POST /api/v1/admin/logout
-// 拉黑当前 jti 使其立即失效；幂等，token 已失效时也返回成功
+// 拉黑当前访问/刷新令牌使其立即失效；幂等，token 已失效时也返回成功
 func (c *AdminController) Logout(context *gin.Context) {
 	token := strings.TrimPrefix(context.GetHeader("Authorization"), "Bearer ")
 	if claims, err := jwt.ParseToken(token); err == nil {
-		userID := claims.GetUserID()
-		_ = c.redisRepo.Set(context.Request.Context(), jwt.BlacklistKey("admin", claims.ID), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
-		// 仅当会话标记仍是该 jti 时才删除，避免误删新登录的会话
-		var cur string
-		if err := c.redisRepo.Get(context.Request.Context(), jwt.AdminSessionKey(userID), &cur); err == nil && cur == claims.ID {
-			_ = c.redisRepo.Del(context.Request.Context(), jwt.AdminSessionKey(userID))
-		}
+		_ = c.authSvc.Logout(context.Request.Context(), claims.GetUserID(), claims.ID)
 	}
 	response.SuccessWithMessage(context, "退出登录成功", struct{}{})
 }

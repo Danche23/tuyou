@@ -19,7 +19,8 @@ database:
     pool_size: 10
 
 jwt:
-  expire_hours: 24h
+  access_expire_hours: 2h
+  refresh_expire_hours: 168h
 
 log:
   level: info

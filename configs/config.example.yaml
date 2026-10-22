@@ -44,7 +44,9 @@ jwt:
   # 必改。生产环境请生成随机串，并用环境变量注入：
   #   openssl rand -base64 48
   secret: "change-me-to-a-random-secret"   # 可用环境变量 JWT_SECRET 覆盖
-  expire_hours: 24h
+  access_expire_hours: 2h                  # 访问令牌有效期
+  refresh_expire_hours: 168h               # 刷新令牌有效期（7 天）
+  # expire_hours 为旧版单 token 配置，仍兼容；新配置请使用 access_expire_hours
 
 # ------------------------------------------------------------
 # 日志（按大小自动切割轮转）

@@ -20,7 +20,7 @@ const (
 )
 
 // blacklistAuth 单端黑名单校验核心逻辑：
-//   - 校验 JWT 签名；
+//   - 校验访问令牌的 JWT 签名（刷新令牌不能用于接口认证）；
 //   - Redis 可用时，校验 token 的 jti 是否命中 scopes 对应端黑名单，命中 → 401；
 //   - Redis 不可用时 fail-open，退化为纯 JWT 校验。
 //

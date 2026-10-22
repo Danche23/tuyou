@@ -6,6 +6,7 @@
 *.dylib
 bin/
 dist/
+config.yaml
 # 配置文件：一律不入库（含真实 AK/SK、数据库密码、JWT 密钥）
 # 只放行不含任何真实值的样例文件
 configs/*.yaml
@@ -14,7 +15,7 @@ configs/*.yaml
 # 本地 AI 工具配置（含本机绝对路径，不入库）
 .claude/settings.local.json
 
-# Test binary, built with `go test -c`
+# Test binary, built with `go test -context`
 *.test
 
 # Output of the go coverage tool
@@ -49,6 +50,13 @@ Thumbs.db
 /build/
 /tmp/
 /config.yaml
+/默认模块.md
+/preview.html
+/postman-member-leader-collection.json
+/postman-center-profile-collection.json
+/member_data.sql
+/auth_api.md
+/api-docs.md
 
 # CI 的 Go 模块缓存目录（部分 CI 会写在这里）
 .gomodcache/

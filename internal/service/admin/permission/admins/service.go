@@ -133,15 +133,23 @@ func (s *adminService) UpdateAdmin(ctx context.Context, id uint, req *request.Up
 	return s.adminRepo.Update(ctx, id, updates)
 }
 
-// kickAdmin 使管理员全部会话立即失效（单端场景即当前会话）：拉黑 jti 并清会话标记
+// kickAdmin 使管理员全部会话立即失效（单端场景即当前会话）：拉黑访问/刷新令牌并清会话标记
 func (s *adminService) kickAdmin(ctx context.Context, id uint) {
-	key := jwt.AdminSessionKey(id)
-	var jti string
-	if err := s.redisRepo.Get(ctx, key, &jti); err != nil || jti == "" {
-		return
+	cfg := config.Get().JWT
+
+	accessKey := jwt.AdminSessionKey(id)
+	var accessJTI string
+	if err := s.redisRepo.Get(ctx, accessKey, &accessJTI); err == nil && accessJTI != "" {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey(jwt.ScopeAdmin, accessJTI), jwt.ReasonLogout, cfg.BlacklistTTL())
+		_ = s.redisRepo.Del(ctx, accessKey)
 	}
-	_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("admin", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
-	_ = s.redisRepo.Del(ctx, key)
+
+	refreshKey := jwt.RefreshSessionKey(jwt.ScopeAdmin, id)
+	var refreshJTI string
+	if err := s.redisRepo.Get(ctx, refreshKey, &refreshJTI); err == nil && refreshJTI != "" {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey(jwt.ScopeAdmin, refreshJTI), jwt.ReasonLogout, cfg.RefreshTTL())
+		_ = s.redisRepo.Del(ctx, refreshKey)
+	}
 }
 
 // DeleteAdmin 删除管理员

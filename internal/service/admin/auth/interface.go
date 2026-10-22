@@ -10,6 +10,12 @@ type AdminAuthService interface {
 	// Login 登录（userAgent 用于生成设备登录提醒文案）
 	Login(ctx context.Context, req *request.LoginRequest, userAgent string) (*response.LoginResp, error)
 
+	// Refresh 使用刷新令牌换取新的令牌对
+	Refresh(ctx context.Context, refreshToken string) (*response.RefreshResp, error)
+
+	// Logout 退出登录，拉黑当前访问令牌与刷新令牌
+	Logout(ctx context.Context, adminID uint, jti string) error
+
 	// GetCaptcha 获取图形验证码
 	GetCaptcha(ctx context.Context) (*response.CaptchaResp, error)
 

@@ -77,15 +77,23 @@ func (s *memberService) GetMemberDetail(ctx context.Context, id uint) (*response
 	return s.memberRepo.GetDetailByID(ctx, id)
 }
 
-// kickMember 使会员全部会话立即失效（单端场景即当前会话）：拉黑 jti 并清会话标记
+// kickMember 使会员全部会话立即失效（单端场景即当前会话）：拉黑访问/刷新令牌并清会话标记
 func (s *memberService) kickMember(ctx context.Context, id uint) {
-	key := jwt.MemberSessionKey(id)
-	var jti string
-	if err := s.redisRepo.Get(ctx, key, &jti); err != nil || jti == "" {
-		return
+	cfg := config.Get().JWT
+
+	accessKey := jwt.MemberSessionKey(id)
+	var accessJTI string
+	if err := s.redisRepo.Get(ctx, accessKey, &accessJTI); err == nil && accessJTI != "" {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey(jwt.ScopeMember, accessJTI), jwt.ReasonLogout, cfg.BlacklistTTL())
+		_ = s.redisRepo.Del(ctx, accessKey)
 	}
-	_ = s.redisRepo.Set(ctx, jwt.BlacklistKey("member", jti), jwt.ReasonLogout, config.Get().JWT.ExpireHours)
-	_ = s.redisRepo.Del(ctx, key)
+
+	refreshKey := jwt.RefreshSessionKey(jwt.ScopeMember, id)
+	var refreshJTI string
+	if err := s.redisRepo.Get(ctx, refreshKey, &refreshJTI); err == nil && refreshJTI != "" {
+		_ = s.redisRepo.Set(ctx, jwt.BlacklistKey(jwt.ScopeMember, refreshJTI), jwt.ReasonLogout, cfg.RefreshTTL())
+		_ = s.redisRepo.Del(ctx, refreshKey)
+	}
 }
 
 // UpdateMember 编辑会员
