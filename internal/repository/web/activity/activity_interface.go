@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"context"
 	"time"
 
 	"tuyou/internal/model/entity"
@@ -48,6 +49,16 @@ type ActivityRepository interface {
 
 	// GetCurrentPeople 查询活动当前报名人数（返回 DB 真实值）
 	GetCurrentPeople(db *gorm.DB, activityID uint) (int, error)
+
+	// InitSignupSlots 创建活动时初始化报名剩余名额闸门（best-effort）
+	InitSignupSlots(ctx context.Context, activityID uint, slots int)
+
+	// GateSignupSlot 报名闸门（Redis 预扣减）：allowed 是否放行，acquired 是否实际在 Redis 扣到名额（失败回滚需 ReleaseSignupSlot 归还）。
+	// Redis 不可用时返回 allowed=true, acquired=false（降级交给 DB 乐观锁兜底）。
+	GateSignupSlot(ctx context.Context, activityID uint, maxPeople int) (allowed bool, acquired bool, err error)
+
+	// ReleaseSignupSlot 归还一个报名名额（报名回滚/取消报名时）
+	ReleaseSignupSlot(ctx context.Context, activityID uint)
 
 	// SoftDelete 逻辑删除活动（is_del=1）
 	SoftDelete(tx *gorm.DB, activityID uint) error

@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -113,6 +114,9 @@ func (s *activityService) CreateActivity(memberID uint, req *requestActivity.Cre
 		return nil, errors.NewWithErr(errors.CodeInternalError, "创建活动失败", err)
 	}
 
+	// 初始化报名剩余名额闸门（best-effort；Redis 不可用则跳过，报名闸门有缺失回填自愈）
+	s.activityRepo.InitSignupSlots(context.Background(), activity.ID, activity.MaxPeople)
+
 	// ========== 组装响应 ==========
 	return &responseActivity.CreateActivityResponse{
 		ID:              strconv.FormatUint(uint64(activity.ID), 10),
@@ -219,6 +223,8 @@ func (s *activityService) GetActivityDetail(activityID uint, memberID uint) (*re
 
 // ToggleSignup 报名/取消报名
 func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*responseActivity.SignupToggleResponse, error) {
+	ctx := context.Background()
+
 	activity, err := s.activityRepo.FindByID(activityID)
 	if err != nil {
 		return nil, errors.New(errors.CodeNotFound, "活动不存在")
@@ -251,19 +257,26 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		if cancelCount >= 2 {
 			return nil, errors.New(errors.CodeInvalidParam, "无法取消报名,请联系管理员")
 		}
+		cancelled := false
 		err = s.db.Transaction(func(tx *gorm.DB) error {
 			deleted, err := s.activityRepo.DeleteJoin(tx, activityID, memberID)
 			if err != nil {
 				return err
 			}
 			if !deleted {
-				return nil // 本来就没报名/已被并发取消，不减人数
+				return nil // 本来就没报名/已被并发取消，不减人数、也不归还名额
 			}
+			cancelled = true
 			return s.activityRepo.DecrCurrentPeople(tx, activityID)
 		})
 		if err != nil {
 			logger.Errorf("取消报名事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
 			return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
+		}
+
+		// 仅在真正取消（人数已 -1）时才归还一个名额到闸门（best-effort，Redis 不可用则跳过）
+		if cancelled {
+			s.activityRepo.ReleaseSignupSlot(ctx, activityID)
 		}
 
 		// 事务提交后重查真实报名人数（并发下不用旧值±1，保证响应实时准确）
@@ -283,6 +296,23 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 	if realStatusInt != 1 {
 		return nil, errors.New(errors.CodeInvalidParam, "不在报名时间内")
 	}
+
+	// Redis 预扣减闸门：先抢名额再落库，把热门活动开抢的行锁竞争从 MySQL 行搬到 Redis 原子 DECR。
+	// Redis 不可用（acquired=false 且 allowed=true）时降级交给 DB 乐观锁兜底；DB 的 WHERE current_people<max_people 仍是最终防超卖裁判。
+	allowed, acquired, gErr := s.activityRepo.GateSignupSlot(ctx, activityID, activity.MaxPeople)
+	if gErr != nil {
+		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", gErr)
+	}
+	if !allowed {
+		return nil, errors.New(errors.CodeInvalidParam, "活动人数已满")
+	}
+	// 凡是在 Redis 扣到名额(acquired)、但后续未真正报名成功的路径（重复报名/满员回滚/事务失败），都要归还名额
+	releaseIfNotSuccess := func(success bool) {
+		if acquired && !success {
+			s.activityRepo.ReleaseSignupSlot(ctx, activityID)
+		}
+	}
+
 	var bizErr error
 	alreadyJoined := false
 	err = s.db.Transaction(func(tx *gorm.DB) error {
@@ -308,11 +338,16 @@ func (s *activityService) ToggleSignup(activityID uint, memberID uint) (*respons
 		return nil
 	})
 	if bizErr != nil {
+		releaseIfNotSuccess(false) // 满员/回滚：归还名额
 		return nil, bizErr
 	}
 	if err != nil {
+		releaseIfNotSuccess(false) // 事务失败：归还名额
 		logger.Errorf("报名事务失败 activityID=%d memberID=%d err=%v", activityID, memberID, err)
 		return nil, errors.NewWithErr(errors.CodeInternalError, "报名操作失败", err)
+	}
+	if alreadyJoined {
+		releaseIfNotSuccess(false) // 并发重复报名：未真正新增，归还名额
 	}
 
 	// 事务提交后重查真实报名人数（并发下不用旧值±1，保证响应实时准确）

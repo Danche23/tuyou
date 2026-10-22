@@ -280,14 +280,14 @@ func (a *App) initDependencies() {
 	adminTagRepo := repoAdminTag.NewTagRepository(a.mysqlDB)
 	noteRepo := repoNote.NewNoteRepository(a.mysqlDB, redisRepo)
 	guideRepo := repoGuide.NewGuideRepository(a.mysqlDB, redisRepo)
-	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB)
+	activityRepo := repoActivity.NewActivityRepository(a.mysqlDB, redisRepo)
 	personalRepo := repoPersonal.NewPersonalRepository(a.mysqlDB)
 	// 评论仓储 ×2：同一张 comment 表，前台/后台各一个仓储实现。
 	// commentRepo（web）：默认作用域，自动隐藏软删记录；commentAdminRepo（admin）：Unscoped 连软删一起查。
 	commentRepo := repoComment.NewCommentRepository(a.mysqlDB)
 	commentAdminRepo := repoAdminComment.NewCommentRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
-	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	homeRepo := repoHome.NewHomeRepository(a.mysqlDB, redisRepo)
 	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)

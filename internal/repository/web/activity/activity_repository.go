@@ -1,22 +1,27 @@
 package activity
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type activityRepository struct {
-	db *gorm.DB
+	db        *gorm.DB
+	redisRepo repository.RedisRepository
 }
 
 // NewActivityRepository 创建活动仓储实例
-func NewActivityRepository(db *gorm.DB) ActivityRepository {
-	return &activityRepository{db: db}
+func NewActivityRepository(db *gorm.DB, redisRepo repository.RedisRepository) ActivityRepository {
+	return &activityRepository{db: db, redisRepo: redisRepo}
 }
 
 // Create 创建活动
@@ -126,10 +131,75 @@ func (r *activityRepository) IncrCurrentPeople(tx *gorm.DB, activityID uint, max
 	return result.RowsAffected, result.Error
 }
 
-// DecrCurrentPeople 报名人数 -1
+// DecrCurrentPeople 报名人数 -1（加 current_people>0 下限保护，防并发/异常下被减成负数）
 func (r *activityRepository) DecrCurrentPeople(tx *gorm.DB, activityID uint) error {
-	return tx.Model(&entity.Activity{}).Where("id = ?", activityID).
+	return tx.Model(&entity.Activity{}).Where("id = ? AND current_people > 0", activityID).
 		UpdateColumn("current_people", gorm.Expr("current_people - 1")).Error
+}
+
+// signupSlotsKey 报名剩余名额闸门 key（Redis 预扣减；DB 的 current_people 仍是最终裁判）
+func signupSlotsKey(activityID uint) string {
+	return fmt.Sprintf("activity:signup:slots:%d", activityID)
+}
+
+// InitSignupSlots 创建活动时初始化剩余名额（best-effort；Redis 不可用则跳过，靠闸门缺失回填自愈）
+func (r *activityRepository) InitSignupSlots(ctx context.Context, activityID uint, slots int) {
+	_ = r.redisRepo.Set(ctx, signupSlotsKey(activityID), int64(slots), 0)
+}
+
+// GateSignupSlot 报名闸门（Redis 预扣减）：先 DECR 抢名额，再决定是否放行。
+//   - allowed=true, acquired=true：在 Redis 扣到名额，放行；若后续 DB 事务未成功（重复报名/满员/失败）须调用 ReleaseSignupSlot 归还。
+//   - allowed=true, acquired=false：Redis 不可用（降级），未在 Redis 扣名额，直接交给 DB 乐观锁兜底，无需归还。
+//   - allowed=false：名额已满（含冷启动按 DB 回填后仍满），不放行。
+//
+// 冷启动/漂移自愈：DECR<0 时按 DB 真实剩余名额回填后再扣一次；DB 的 WHERE current_people<max_people 始终做最终防超卖裁判。
+func (r *activityRepository) GateSignupSlot(ctx context.Context, activityID uint, maxPeople int) (allowed bool, acquired bool, err error) {
+	key := signupSlotsKey(activityID)
+	slots, err := r.redisRepo.IncrBy(ctx, key, -1)
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return true, false, nil // Redis 不可用：降级，不闸门
+		}
+		return false, false, err
+	}
+	if slots >= 0 {
+		return true, true, nil // 抢到名额
+	}
+	// slots<0：可能真满，也可能冷启动（key 缺失被扣成负数）。先归还这次多扣，再按 DB 判断
+	_, _ = r.redisRepo.IncrBy(ctx, key, +1)
+
+	current, err := r.GetCurrentPeople(r.db, activityID)
+	if err != nil {
+		return false, false, err
+	}
+	if current >= maxPeople {
+		return false, false, nil // 真满
+	}
+	// DB 还有名额但 Redis 判满 → 冷启动/漂移：回填剩余名额后再扣一次
+	_ = r.redisRepo.Set(ctx, key, int64(maxPeople-current), 0)
+	slots, err = r.redisRepo.IncrBy(ctx, key, -1)
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return true, false, nil
+		}
+		return false, false, err
+	}
+	if slots >= 0 {
+		return true, true, nil
+	}
+	_, _ = r.redisRepo.IncrBy(ctx, key, +1)
+	return false, false, nil
+}
+
+// ReleaseSignupSlot 归还一个名额（报名回滚/取消报名时调用）。
+// key 不存在时不回填，避免冷启动把名额写错（由闸门缺失回填自愈）。
+func (r *activityRepository) ReleaseSignupSlot(ctx context.Context, activityID uint) {
+	key := signupSlotsKey(activityID)
+	var v int64
+	if err := r.redisRepo.Get(ctx, key, &v); err != nil {
+		return // key 不存在或 Redis 不可用：跳过
+	}
+	_, _ = r.redisRepo.IncrBy(ctx, key, +1)
 }
 
 // GetCurrentPeople 查询活动当前报名人数（返回 DB 真实值，供报名/取消后响应使用）

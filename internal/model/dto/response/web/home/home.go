@@ -33,10 +33,16 @@ type FeedItem struct {
 }
 
 // FeedResponse Feed 流响应（分页）
+//
+// 同时提供两套分页信息以兼容新旧前端：
+//   - 游标：next_cursor / has_more（推荐使用，不受翻页期间新增内容影响）
+//   - 页码：total / total_page / page（保留，值仍为真实统计）
 type FeedResponse struct {
-	List      []FeedItem `json:"list"`       // 当前页数据
-	Total     int64      `json:"total"`      // 总条数
-	TotalPage int        `json:"total_page"` // 总页数
-	Page      int        `json:"page"`       // 当前页码
-	Size      int        `json:"size"`       // 每页条数
+	List       []FeedItem `json:"list"`        // 当前页数据
+	Total      int64      `json:"total"`       // 总条数
+	TotalPage  int        `json:"total_page"`  // 总页数
+	Page       int        `json:"page"`        // 当前页码
+	Size       int        `json:"size"`        // 每页条数
+	NextCursor string     `json:"next_cursor"` // 下一页游标；空串表示已到末页
+	HasMore    bool       `json:"has_more"`    // 是否还有下一页
 }
