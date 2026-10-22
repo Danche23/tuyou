@@ -1,20 +1,77 @@
 package home
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
+	responseHome "tuyou/internal/model/dto/response/web/home"
 	"tuyou/internal/model/entity"
+	"tuyou/internal/repository"
 )
 
 type homeRepository struct {
-	db *gorm.DB
+	db        *gorm.DB
+	redisRepo repository.RedisRepository
 }
 
-func NewHomeRepository(db *gorm.DB) HomeRepository {
-	return &homeRepository{db: db}
+func NewHomeRepository(db *gorm.DB, redisRepo repository.RedisRepository) HomeRepository {
+	return &homeRepository{db: db, redisRepo: redisRepo}
+}
+
+const firstFeedCacheTTL = time.Minute
+
+func firstFeedCacheKey(sort string, category, size int) string {
+	return "home:feed:first:v1:" + sort + ":" + strconv.Itoa(category) + ":" + strconv.Itoa(size)
+}
+
+func (r *homeRepository) GetCachedFirstFeed(ctx context.Context, sort string, category, size int) (*responseHome.FeedResponse, bool) {
+	if r.redisRepo == nil {
+		return nil, false
+	}
+	var page responseHome.FeedResponse
+	if err := r.redisRepo.Get(ctx, firstFeedCacheKey(sort, category, size), &page); err != nil {
+		return nil, false
+	}
+	return &page, true
+}
+
+func (r *homeRepository) SetCachedFirstFeed(ctx context.Context, sort string, category, size int, page *responseHome.FeedResponse) {
+	if r.redisRepo != nil {
+		_ = r.redisRepo.Set(ctx, firstFeedCacheKey(sort, category, size), page, firstFeedCacheTTL)
+	}
+}
+
+func (r *homeRepository) FindNoteLikeCounts(ids []uint) (map[uint]int64, error) {
+	result := make(map[uint]int64, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var rows []entity.Note
+	if err := r.db.Select("id", "like_count").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.ID] = row.LikeCount
+	}
+	return result, nil
+}
+
+func (r *homeRepository) FindStrategyLikeCounts(ids []uint) (map[uint]int64, error) {
+	result := make(map[uint]int64, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var rows []entity.Strategy
+	if err := r.db.Select("id", "like_count").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.ID] = row.LikeCount
+	}
+	return result, nil
 }
 
 // ==================== 轮播：管理员已标记 is_slide=1（优先级 ①②③） ====================
@@ -250,6 +307,34 @@ func (r *homeRepository) FindFeedStrategies(category int, order string, limit in
 		order = "CASE WHEN id IN (" + joinUintIDs(hotIDs) + ") THEN 0 ELSE 1 END, " + order
 	}
 	err := q.Order(order).Limit(limit).Find(&list).Error
+	return list, err
+}
+
+// FindFeedNotesKeyset 游标分页取笔记：每表最多取 Limit 条，不随页码增长（对比 FindFeedNotes 的 offset 窗口）
+func (r *homeRepository) FindFeedNotesKeyset(q FeedKeysetQuery) ([]entity.Note, error) {
+	var list []entity.Note
+	db := r.db.Where("status = ?", 1)
+	if q.Category > 0 {
+		db = db.Where("category = ?", q.Category)
+	}
+	if where, args := feedKeysetPredicate(q, false); where != "" {
+		db = db.Where(where, args...)
+	}
+	err := db.Order(feedKeysetOrder(q)).Limit(q.Limit).Find(&list).Error
+	return list, err
+}
+
+// FindFeedStrategiesKeyset 游标分页取攻略：每表最多取 Limit 条，不随页码增长
+func (r *homeRepository) FindFeedStrategiesKeyset(q FeedKeysetQuery) ([]entity.Strategy, error) {
+	var list []entity.Strategy
+	db := r.db.Where("status = ?", 1)
+	if q.Category > 0 {
+		db = db.Where("category = ?", q.Category)
+	}
+	if where, args := feedKeysetPredicate(q, true); where != "" {
+		db = db.Where(where, args...)
+	}
+	err := db.Order(feedKeysetOrder(q)).Limit(q.Limit).Find(&list).Error
 	return list, err
 }
 

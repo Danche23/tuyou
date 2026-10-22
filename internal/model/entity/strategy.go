@@ -6,9 +6,11 @@ import "time"
 type Strategy struct {
 	BaseEntity
 	MemberID     uint      `gorm:"column:member_id;not null;index;comment:发布用户member表id" json:"memberId"`
-	Title        string    `gorm:"type:varchar(100);not null;comment:攻略标题" json:"title"`
+	// title+content 共用全文索引 ft_strategy_title_content（ngram 分词），
+	// 与 repository/web/search 的 MATCH(title, content) 一一对应，改列需同步。
+	Title        string    `gorm:"type:varchar(100);not null;index:ft_strategy_title_content,class:FULLTEXT,option:WITH PARSER ngram,priority:1;comment:攻略标题" json:"title"`
 	VideoURL     string    `gorm:"type:varchar(255);column:video_url;comment:视频地址" json:"videoUrl"`
-	Content      string    `gorm:"type:text;comment:攻略详情内容" json:"content"`
+	Content      string    `gorm:"type:text;index:ft_strategy_title_content,priority:2;comment:攻略详情内容" json:"content"`
 	ViewCount    int64     `gorm:"type:bigint;default:0;column:view_count;comment:浏览总次数" json:"viewCount"`
 	LikeCount    int64     `gorm:"type:bigint;default:0;column:like_count;comment:点赞总数" json:"likeCount"`
 	CollectCount int64     `gorm:"type:bigint;default:0;column:collect_count;comment:收藏总数" json:"collectCount"`

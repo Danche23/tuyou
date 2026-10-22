@@ -6,10 +6,12 @@ import "time"
 type Activity struct {
 	BaseEntity
 	LeaderMemberID  uint      `gorm:"column:leader_member_id;not null;index;comment:发布人member表id，代码校验role=0（领队）" json:"leaderMemberId"`
-	Title           string    `gorm:"type:varchar(50);not null;comment:活动标题" json:"title"`
+	// title+address 共用全文索引 ft_activity_title_address（ngram 分词），
+	// 与 repository/web/search 的 MATCH(title, address) 一一对应，改列需同步。
+	Title           string    `gorm:"type:varchar(50);not null;index:ft_activity_title_address,class:FULLTEXT,option:WITH PARSER ngram,priority:1;comment:活动标题" json:"title"`
 	CoverImg        string    `gorm:"type:varchar(255);column:cover_img;comment:活动封面图片地址" json:"coverImg"`
 	ActivityContent string    `gorm:"type:text;column:activity_content;comment:活动详情正文" json:"activityContent"`
-	Address         string    `gorm:"type:varchar(200);comment:活动线下举办地点" json:"address"`
+	Address         string    `gorm:"type:varchar(200);index:ft_activity_title_address,priority:2;comment:活动线下举办地点" json:"address"`
 	IsSensitive     int       `gorm:"type:tinyint;default:0;index;column:is_sensitive;comment:发布时命中敏感词标记(内容仍存原文) 0=否 1=是" json:"isSensitive"`
 	StartTime       time.Time `gorm:"column:start_time;not null;index;comment:活动开始时间" json:"startTime"`
 	EndTime         time.Time `gorm:"column:end_time;not null;comment:活动结束时间" json:"endTime"`

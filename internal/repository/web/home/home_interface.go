@@ -1,9 +1,17 @@
 package home
 
-import "tuyou/internal/model/entity"
+import (
+	"context"
+	responseHome "tuyou/internal/model/dto/response/web/home"
+	"tuyou/internal/model/entity"
+)
 
 // HomeRepository 前台首页仓储接口
 type HomeRepository interface {
+	GetCachedFirstFeed(ctx context.Context, sort string, category, size int) (*responseHome.FeedResponse, bool)
+	SetCachedFirstFeed(ctx context.Context, sort string, category, size int, page *responseHome.FeedResponse)
+	FindNoteLikeCounts(ids []uint) (map[uint]int64, error)
+	FindStrategyLikeCounts(ids []uint) (map[uint]int64, error)
 	// FindSlideActivities ===== 轮播：管理员已标记 is_slide=1 =====
 	FindSlideActivities() ([]entity.Activity, error)
 	FindSlideNotes() ([]entity.Note, error)
@@ -40,6 +48,12 @@ type HomeRepository interface {
 
 	// FindFeedStrategies 按排序窗口取攻略（limit = offset+size；hotIDs 非空时热门置顶）
 	FindFeedStrategies(category int, order string, limit int, hotIDs []uint) ([]entity.Strategy, error)
+
+	// FindFeedNotesKeyset 游标分页取笔记（每表最多 Limit 条，代价不随页码增长）
+	FindFeedNotesKeyset(q FeedKeysetQuery) ([]entity.Note, error)
+
+	// FindFeedStrategiesKeyset 游标分页取攻略（每表最多 Limit 条，代价不随页码增长）
+	FindFeedStrategiesKeyset(q FeedKeysetQuery) ([]entity.Strategy, error)
 
 	// FindMembersByIDs 批量查询会员信息
 	FindMembersByIDs(memberIDs []uint) (map[uint]*entity.Member, error)

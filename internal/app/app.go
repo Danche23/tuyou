@@ -289,7 +289,7 @@ func (a *App) initDependencies() {
 	commentRepo := repoComment.NewCommentRepository(a.mysqlDB)
 	commentAdminRepo := repoAdminComment.NewCommentRepository(a.mysqlDB)
 	tagRepo := repoTag.NewTagRepository(a.mysqlDB)
-	homeRepo := repoHome.NewHomeRepository(a.mysqlDB)
+	homeRepo := repoHome.NewHomeRepository(a.mysqlDB, redisRepo)
 	searchRepo := repoSearch.NewSearchRepository(a.mysqlDB)
 	msgRepo := repoMsg.NewMessageRepository(a.mysqlDB)
 	adminWorkbenchRepo := repoAdminWorkbench.NewWorkbenchRepository(a.mysqlDB)
