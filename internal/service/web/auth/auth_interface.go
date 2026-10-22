@@ -12,6 +12,7 @@ type WebAuthService interface {
 	Register(ctx context.Context, req *request.RegisterRequest) (*response.MessageResponse, error)
 	GetCaptcha(ctx context.Context) (*response.CaptchaResp, error)
 	Login(ctx context.Context, req *request.LoginRequest) (*response.LoginResponse, error)
+	Refresh(ctx context.Context, refreshToken string) (*response.RefreshResponse, error)
 	ResetPassword(ctx context.Context, req *request.ResetPasswordRequest) (*response.MessageResponse, error)
 	SendCode(ctx context.Context, req *request.SendCodeRequest) (*response.MessageResponse, error)
 	GetBaseInfo(ctx context.Context, userID uint) (*memberResp.MemberBaseInfo, error)

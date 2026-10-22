@@ -11,6 +11,7 @@ func (c *AdminController) RegisterRoutes(group *gin.RouterGroup) {
 	{
 		adminGroup.GET("/captcha", c.GetCaptcha)
 		adminGroup.POST("/login", c.Login)
+		adminGroup.POST("/refresh", c.Refresh)
 		adminGroup.POST("/logout", c.Logout)
 	}
 
