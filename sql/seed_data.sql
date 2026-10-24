@@ -337,24 +337,36 @@ VALUES
 (6, NOW(), NOW(), NULL, 1, 4);   -- 山鹰队长 关注 极星领队
 
 -- ==========================================
--- 24. msg_template（4 条消息模板）
+-- 24. msg_template（15 条消息模板，与 internal/service/web/message/notifier.go 的 templateID 对齐）
+--     注意：4、7 号模板历史上未使用；新增模板时不要复用这两个 ID，避免与线上数据冲突。
 -- ==========================================
 INSERT INTO msg_template (id, create_time, update_time, delete_time, template_name, msg_type, content_template, fixed_tip)
 VALUES
-(1, NOW(), NOW(), NULL, '点赞通知',      0, '{user_name} 赞了你的{content_type}', ''),
-(2, NOW(), NOW(), NULL, '评论通知',      0, '{user_name} 评论了你的{content_type}：{comment_content}', ''),
-(3, NOW(), NOW(), NULL, '关注通知',      0, '{user_name} 关注了你', ''),
-(4, NOW(), NOW(), NULL, '活动提醒',      1, '你报名的活动【{activity_title}】将在{start_time}开始', '请提前做好准备，准时到达集合地点。如有变动请及时联系领队。');
+(1,  NOW(), NOW(), NULL, '点赞通知',       1, '赞了你的内容《{title}》', ''),
+(2,  NOW(), NOW(), NULL, '关注通知',       1, '关注了你', ''),
+(3,  NOW(), NOW(), NULL, '评论通知',       1, '评论了你的内容《{title}》', ''),
+(5,  NOW(), NOW(), NULL, '系统通知',       2, '{content}', ''),
+(6,  NOW(), NOW(), NULL, '报名通知',       2, '报名了你的活动《{title}》', ''),
+(8,  NOW(), NOW(), NULL, '报名成功通知',   2, '你已成功报名活动《{title}》,请到活动详情界面加入群聊', ''),
+(9,  NOW(), NOW(), NULL, '活动快开始提醒', 2, '距离你报名的活动《{title}》还有48小时', ''),
+(10, NOW(), NOW(), NULL, '回复通知',       1, '回复了你的内容 {comment}', ''),
+(11, NOW(), NOW(), NULL, '活动删除通知',   2, '删除了活动《{title}》', ''),
+(12, NOW(), NOW(), NULL, '收藏通知',       1, '收藏了你的内容《{title}》', ''),
+(13, NOW(), NOW(), NULL, '点赞评论通知',   1, '赞了你的评论', ''),
+(14, NOW(), NOW(), NULL, '笔记删除通知',   2, '你的笔记《{title}》已被删除', ''),
+(15, NOW(), NOW(), NULL, '攻略删除通知',   2, '你的攻略《{title}》已被删除', ''),
+(16, NOW(), NOW(), NULL, '笔记下架通知',   2, '你的笔记《{title}》已被下架', ''),
+(17, NOW(), NOW(), NULL, '攻略下架通知',   2, '你的攻略《{title}》已被下架', '');
 
 -- ==========================================
--- 25. msg_info（4 条系统消息）
+-- 25. msg_info（4 条示例消息）
 -- ==========================================
 INSERT INTO msg_info (id, create_time, update_time, delete_time, msg_type, receive_obj_type, sender_id, template_id, msg_content, send_time, is_del)
 VALUES
-(1, NOW(), NOW(), NULL, 1, 1, 2, 1, '行走的骆驼 赞了你的笔记《四姑娘山大峰登顶记》', '2026-07-12 10:30:00', 0),
-(2, NOW(), NOW(), NULL, 1, 1, 3, 2, '背包客小张 评论了你的笔记《四姑娘山大峰登顶记》：请问大峰对新手友好吗？', '2026-07-12 11:15:00', 0),
-(3, NOW(), NOW(), NULL, 1, 1, 2, 3, '行走的骆驼 关注了你', '2026-07-14 16:40:00', 0),
-(4, NOW(), NOW(), NULL, 2, 0, 0, 4, '你报名的活动【【周末】四姑娘山大峰二日登顶挑战】将在2026-08-15 07:00开始', '2026-08-13 09:00:00', 0);
+(1, NOW(), NOW(), NULL, 1, 1, 2, 1, '赞了你的内容《四姑娘山大峰登顶记》', '2026-07-12 10:30:00', 0),
+(2, NOW(), NOW(), NULL, 1, 1, 3, 3, '评论了你的内容《四姑娘山大峰登顶记》', '2026-07-12 11:15:00', 0),
+(3, NOW(), NOW(), NULL, 1, 1, 2, 2, '关注了你', '2026-07-14 16:40:00', 0),
+(4, NOW(), NOW(), NULL, 2, 0, 0, 9, '距离你报名的活动《【周末】四姑娘山大峰二日登顶挑战》还有48小时', '2026-08-13 09:00:00', 0);
 
 -- ==========================================
 -- 26. msg_user_record（消息接收记录）
@@ -386,5 +398,5 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- activity: 3, activity_join: 8
 -- comment: 8, comment_like: 5
 -- follow: 6
--- msg_template: 4, msg_info: 4, msg_user_record: 6
+-- msg_template: 15, msg_info: 4, msg_user_record: 6
 -- ==========================================

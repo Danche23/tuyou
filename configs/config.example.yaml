@@ -68,6 +68,9 @@ cors:
   #    又等于对所有站点开放带凭证请求。生产请填前端实际域名。
   allow_origins:
     - "https://your-frontend-domain.example"
+    # 本地开发时按需保留（Taro H5 devServer 默认端口 10086）
+    - "http://localhost:10086"
+    - "http://127.0.0.1:10086"
   allow_methods:
     - GET
     - POST
