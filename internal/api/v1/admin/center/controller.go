@@ -3,6 +3,7 @@ package center
 import (
 	"encoding/json"
 	"gorm.io/gorm"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -148,6 +149,15 @@ func (c *Controller) Stream(ctx *gin.Context) {
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("X-Accel-Buffering", "no")
+
+	// http.Server 配置了 ReadTimeout / WriteTimeout（各 5 分钟），它们会给连接设置
+	// 绝对读写截止时间。SSE 是长连接，不清除这两个 deadline 的话连接会在 5 分钟后
+	// 被服务端强制断开（表现为前端每 5 分钟重连一次、期间事件可能丢失）。
+	if rc := http.NewResponseController(ctx.Writer); rc != nil {
+		_ = rc.SetReadDeadline(time.Time{})
+		_ = rc.SetWriteDeadline(time.Time{})
+	}
+
 	ctx.Writer.Flush()
 
 	// 连接建立先推当前未读数，兜底断线期间漏掉的消息

@@ -10,6 +10,7 @@ import (
 	"tuyou/internal/model/entity"
 	repoMsg "tuyou/internal/repository/web/message"
 	"tuyou/internal/stream"
+	"tuyou/pkg/logger"
 )
 
 // Notifier 消息通知器：给指定会员生成一条消息（查 msg_template 渲染正文）并推送实时通知。
@@ -148,7 +149,13 @@ func (n *Notifier) sendTo(targetMemberID, senderID uint, templateID uint, event 
 
 	tpl, err := n.findTemplate(templateID)
 	if err != nil {
-		return // 模板不存在，best-effort 跳过
+		// 模板缺失会导致通知被静默跳过；打一条 warn 便于发现种子数据/环境不一致。
+		// 测试环境可能没有初始化 logger，这里判空避免 best-effort 路径 panic。
+		if l := logger.GetSugaredLogger(); l != nil {
+			l.Warnf("消息模板不存在，跳过通知: templateID=%d target=%d sender=%d err=%v",
+				templateID, targetMemberID, senderID, err)
+		}
+		return
 	}
 	content := renderContent(tpl.ContentTemplate, vars)
 
