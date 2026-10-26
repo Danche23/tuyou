@@ -18,7 +18,9 @@ var mysqlDB *gorm.DB
 // InitMySQL 初始化 MySQL 连接
 func InitMySQL(cfg *config.MySQLConfig) (*gorm.DB, error) {
 	// 构建 DSN
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	// loc 控制 Go 读取时间的时区；time_zone 对连接池中的每个连接设置会话时区，
+	// 使 NOW()、日期统计及数据库默认时间与北京时间一致。
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FShanghai&time_zone=%%27%%2B08%%3A00%%27",
 		cfg.Username,
 		cfg.Password,
 		cfg.Host,

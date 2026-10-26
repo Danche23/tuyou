@@ -4,9 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"tuyou/internal/app"
+	"tuyou/pkg/utils"
 )
 
 func main() {
+	utils.InitTimezone()
+
 	// 定义命令行参数
 	configPath := flag.String("c", "", "配置文件路径")
 	flag.Parse()

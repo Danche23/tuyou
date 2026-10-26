@@ -40,8 +40,7 @@ const HistoryLimit = 20
 func (r *searchRepository) UpsertSearchHistory(memberID uint, keyword string) error {
 	history := &entity.SearchHistory{MemberID: memberID, Keyword: keyword}
 	// 唯一键 (member_id, keyword) 命中时只刷新 update_time，实现「同词置顶」
-	// 注意：不能用 gorm.Expr("NOW()")——本 MySQL 服务器时区为 UTC，NOW() 会写成 8 小时前的
-	// UTC 时间，与 GORM 自动时间戳（Go 本地时间）不一致，导致置顶看起来失效。用 time.Now() 同源。
+	// 使用 time.Now()，与 GORM 自动时间戳保持同源。
 	if err := r.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "member_id"}, {Name: "keyword"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
