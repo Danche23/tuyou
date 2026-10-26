@@ -36,7 +36,7 @@ cors:
     - https://tuyou.evenstar.love
     - https://admin.evenstar.love
   allow_methods: [GET, POST, PUT, DELETE, OPTIONS]
-  allow_headers: [Origin, Content-Type, Authorization]
+  allow_headers: [Origin, Content-Type, Authorization, Cache-Control]
   expose_headers: [Content-Length]
   allow_credentials: true
   max_age: 86400

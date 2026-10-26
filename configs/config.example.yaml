@@ -81,6 +81,7 @@ cors:
     - Origin
     - Content-Type
     - Authorization
+    - Cache-Control # SSE fetch 请求携带此头，跨域预检必须允许
   expose_headers:
     - Content-Length
   allow_credentials: true
