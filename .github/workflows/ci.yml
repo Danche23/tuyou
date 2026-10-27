@@ -40,6 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t tuyou-api:${{ github.sha }} .
+      - name: Validate H5 Nginx config
+        run: docker run --rm -v "$PWD/deploy/single-host/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
 
   publish-image:
     name: publish image
